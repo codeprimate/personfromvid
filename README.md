@@ -1,5 +1,7 @@
 # Person From Vid
 
+[![PyPI version](https://badge.fury.io/py/personfromvid.svg)](https://badge.fury.io/py/personfromvid) [![Python versions](https://img.shields.io/pypi/pyversions/personfromvid.svg)](https://pypi.org/project/personfromvid) [![License: GPL-3.0-or-later](https://img.shields.io/pypi/l/personfromvid.svg)](https://github.com/personfromvid/personfromvid/blob/main/LICENSE)
+
 AI-powered video frame extraction and pose categorization tool that analyzes video files to identify and extract high-quality frames containing people in specific poses and head orientations.
 
 ## Features
@@ -48,12 +50,14 @@ choco install ffmpeg  # Using Chocolatey
 
 ### Install Person From Vid
 
-#### From PyPI (when available)
+#### From PyPI
+The recommended way to install is via `pip`:
 ```bash
 pip install personfromvid
 ```
 
 #### From Source
+Alternatively, to install from source:
 ```bash
 git clone https://github.com/personfromvid/personfromvid.git
 cd personfromvid
