@@ -289,10 +289,27 @@ class ConsolidatedFormatter:
             if 'total_assessed' in results and 'quality_passed' in results:
                 self.console.print(f"  • Assessed sharpness and lighting for {results['total_assessed']} faces")
                 self.console.print(f"  • {results['quality_passed']} faces passed quality thresholds")
+            elif 'quality_assessment_summary' in results:
+                # Handle the actual data structure from the step
+                for key, value in results.items():
+                    if key.endswith('_count'):
+                        # Extract and display count information
+                        if 'High quality:' in value or 'Usable quality:' in value:
+                            # Extract just the meaningful part
+                            clean_value = value.replace('📊 ', '').replace(' frames', '')
+                            self.console.print(f"  • {clean_value}")
                 
         elif step_name == "frame_selection":
             if 'total_candidates' in results and 'total_selected' in results:
                 self.console.print(f"  • Selected {results['total_selected']} best frames for output based on pose and quality")
+            elif 'selected_summary' in results:
+                # Handle the actual data structure from the step
+                if 'candidates_summary' in results:
+                    candidates_text = results['candidates_summary'].replace('📊 Candidates: ', '').replace(' frames', '')
+                    self.console.print(f"  • Evaluated {candidates_text} candidate frames")
+                
+                selected_text = results['selected_summary'].replace('✅ Selected ', '').replace(' frames', '')
+                self.console.print(f"  • Selected {selected_text} best frames for output based on pose and quality")
                 
         elif step_name == "output_generation":
             if 'output_files' in results:
@@ -303,6 +320,14 @@ class ConsolidatedFormatter:
                     elif isinstance(file_info, str):
                         # Fallback for simple filename strings
                         self.console.print(f"    - {file_info}")
+            elif 'files_generated' in results:
+                # Handle the actual data structure from the step
+                files_text = results['files_generated'].replace('✅ Generated ', '').replace(' files', '')
+                self.console.print(f"  • Generated {files_text} output files")
+                
+                if 'location_info' in results:
+                    location_text = results['location_info'].replace('📂 Location: ', '')
+                    self.console.print(f"  • Saved to: {location_text}")
     
     def debug(self, message: str) -> None:
         """Print debug message if debug is enabled."""
