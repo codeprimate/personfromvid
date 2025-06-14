@@ -8,7 +8,8 @@ from personfromvid.data.config import (
     DeviceType, 
     get_default_config,
     DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_BATCH_SIZE
+    DEFAULT_BATCH_SIZE,
+    OutputImageConfig
 )
 
 
@@ -32,6 +33,62 @@ def test_config_validation():
     assert config.models.batch_size <= 64
     assert config.models.confidence_threshold >= 0.0
     assert config.models.confidence_threshold <= 1.0
+
+
+def test_resize_config_defaults():
+    """Test resize configuration defaults."""
+    config = Config()
+    
+    # Resize should be None by default (no resizing)
+    assert config.output.image.resize is None
+
+
+def test_resize_config_validation():
+    """Test resize configuration validation."""
+    # Test valid resize values
+    config = Config()
+    config.output.image.resize = 512
+    assert config.output.image.resize == 512
+    
+    config.output.image.resize = 1024
+    assert config.output.image.resize == 1024
+    
+    config.output.image.resize = 2048
+    assert config.output.image.resize == 2048
+    
+    # Test minimum boundary
+    config.output.image.resize = 256
+    assert config.output.image.resize == 256
+    
+    # Test maximum boundary
+    config.output.image.resize = 4096
+    assert config.output.image.resize == 4096
+
+
+def test_resize_config_invalid_values():
+    """Test resize configuration with invalid values."""
+    from pydantic import ValidationError
+    
+    # Test values below minimum
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize=255)
+    
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize=100)
+    
+    # Test values above maximum
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize=4097)
+    
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize=8192)
+    
+    # Test invalid type
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize="invalid")
+    
+    with pytest.raises(ValidationError):
+        config = OutputImageConfig(resize=-1)
 
 
 def test_config_environment_override():

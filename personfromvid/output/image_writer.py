@@ -68,7 +68,9 @@ class ImageWriter:
                     )
                     output_path = self.naming.get_full_output_path(filename)
 
-                    self._save_image(source_image, output_path)
+                    # Apply resize if configured
+                    resized_image = self._apply_resize(source_image)
+                    self._save_image(resized_image, output_path)
                     output_files.append(str(output_path))
                     self.logger.debug(f"Saved full frame: {filename}")
 
@@ -89,6 +91,7 @@ class ImageWriter:
                         )
                         output_path = self.naming.get_full_output_path(filename)
 
+                        # Face crops already handle resize logic in _crop_face, so save directly
                         self._save_image(face_crop, output_path)
                         output_files.append(str(output_path))
                         self.logger.debug(f"Saved face crop: {filename}")
@@ -130,7 +133,7 @@ class ImageWriter:
     def _crop_face(
         self, image: np.ndarray, face_detection: FaceDetection
     ) -> np.ndarray:
-        """Crop face from image with padding and upscale to minimum 512x512.
+        """Crop face from image with padding and upscale to minimum size.
 
         Args:
             image: Source image as numpy array
@@ -157,12 +160,14 @@ class ImageWriter:
         # Crop the image
         cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
 
-        # Upscale if both dimensions are smaller than 512
+        # Determine minimum dimension: use resize value if configured, otherwise default to 512
+        min_dimension = self.config.resize if self.config.resize is not None else 512
+        
+        # Upscale if both dimensions are smaller than the minimum dimension
         crop_height, crop_width = cropped.shape[:2]
-        min_dimension = 512
 
         if crop_height < min_dimension and crop_width < min_dimension:
-            # Calculate scale factor to ensure at least one dimension is 512
+            # Calculate scale factor to ensure at least one dimension equals min_dimension
             scale_factor = min_dimension / max(crop_width, crop_height)
             new_width = int(crop_width * scale_factor)
             new_height = int(crop_height * scale_factor)
@@ -173,7 +178,8 @@ class ImageWriter:
             cropped = np.array(upscaled_pil)
 
             self.logger.debug(
-                f"Upscaled face crop from {crop_width}x{crop_height} to {new_width}x{new_height} (scale: {scale_factor:.2f})"
+                f"Upscaled face crop from {crop_width}x{crop_height} to {new_width}x{new_height} "
+                f"(scale: {scale_factor:.2f}, target: {min_dimension}px)"
             )
 
         # Store crop region in frame metadata for reference
@@ -236,6 +242,12 @@ class ImageWriter:
                     f"JPEG quality must be between 70 and 100, got: {self.config.jpeg.quality}"
                 )
 
+        if self.config.resize is not None:
+            if not (256 <= self.config.resize <= 4096):
+                raise ValueError(
+                    f"Resize dimension must be between 256 and 4096, got: {self.config.resize}"
+                )
+
     def get_output_statistics(self) -> dict:
         """Get statistics about output generation.
 
@@ -249,4 +261,39 @@ class ImageWriter:
             "face_crop_enabled": self.config.face_crop_enabled,
             "full_frame_enabled": self.config.full_frame_enabled,
             "face_crop_padding": self.config.face_crop_padding,
+            "resize": self.config.resize,
         }
+
+    def _apply_resize(self, image: np.ndarray) -> np.ndarray:
+        """Apply resize to image based on configuration.
+
+        Args:
+            image: Image as numpy array
+
+        Returns:
+            Resized image as numpy array
+        """
+        if self.config.resize is None:
+            return image
+            
+        height, width = image.shape[:2]
+        max_dimension = self.config.resize
+        
+        # Only resize if image is larger than the target size
+        if max(width, height) > max_dimension:
+            # Calculate scale factor to ensure the larger dimension equals max_dimension
+            scale_factor = max_dimension / max(width, height)
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            
+            # Convert to PIL for high-quality Lanczos downscaling
+            pil_image = Image.fromarray(image)
+            resized_pil = pil_image.resize((new_width, new_height), Image.LANCZOS)
+            resized_image = np.array(resized_pil)
+            
+            self.logger.debug(
+                f"Resized image from {width}x{height} to {new_width}x{new_height} (scale: {scale_factor:.2f})"
+            )
+            return resized_image
+        else:
+            return image

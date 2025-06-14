@@ -95,6 +95,9 @@ personfromvid video.mp4 \
     --batch-size 16 \
     --max-frames 1000
 
+# Resize output images to a maximum of 1024 pixels
+personfromvid video.mp4 --resize 1024
+
 # Resume an interrupted process
 personfromvid video.mp4 --resume
 ```
@@ -117,6 +120,8 @@ personfromvid video.mp4 --resume
 | `--max-frames`| | Maximum frames to process from the video. | `None` |
 | `--output-format`| | Output image format (`jpeg` or `png`). | `jpeg` |
 | `--output-jpeg-quality`| | Quality for JPEG output (70-100). | `95` |
+| `--resize`| | Maximum dimension for proportional image resizing (256-4096 pixels). | `None` |
+| `--min-frames-per-category`| | Minimum frames to output per pose/angle category (1-10). | `3` |
 | `--no-output-face-crop-enabled`| | Disable generation of cropped face images. | `False` |
 | `--no-output-full-frame-enabled`| | Disable saving of full-frame images. | `False` |
 | `--force` | | Force cleanup of existing temp directory before starting. | `False` |

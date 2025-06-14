@@ -304,6 +304,12 @@ class OutputImageConfig(BaseModel):
     face_crop_padding: float = Field(
         0.2, ge=0.0, le=1.0, description="Padding around face bounding box."
     )
+    resize: Optional[int] = Field(
+        default=None,
+        ge=256,
+        le=4096,
+        description="Maximum dimension for proportional image resizing (None for no resizing)"
+    )
 
     png: PngConfig = Field(default_factory=PngConfig)
     jpeg: JpegConfig = Field(default_factory=JpegConfig)

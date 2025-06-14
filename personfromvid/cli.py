@@ -113,6 +113,11 @@ def signal_handler(signum: int, frame) -> None:
     help="Enable/disable PNG optimization",
 )
 @click.option(
+    "--resize",
+    type=click.IntRange(256, 4096),
+    help="Maximum dimension for proportional image resizing (256-4096 pixels)",
+)
+@click.option(
     "--min-frames-per-category",
     type=click.IntRange(1, 10),
     help="Minimum frames to output per pose/angle category",
@@ -153,6 +158,7 @@ def main(
     output_full_frame_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
     output_png_optimize: Optional[bool],
+    resize: Optional[int],
     min_frames_per_category: Optional[int],
     keep_temp: bool,
     force: bool,
@@ -183,6 +189,8 @@ def main(
         # Use GPU acceleration with custom batch size
         personfromvid video.mp4 --device gpu --batch-size 16
 
+        # Resize output images to max 1024px dimension
+        personfromvid video.mp4 --resize 1024
 
     """
     # Handle version request
@@ -512,6 +520,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["output_png_optimize"] is not None:
         config.output.image.png.optimize = cli_args["output_png_optimize"]
 
+    if cli_args["resize"]:
+        config.output.image.resize = cli_args["resize"]
+
     if cli_args["min_frames_per_category"]:
         config.output.min_frames_per_category = cli_args["min_frames_per_category"]
 
@@ -549,6 +560,9 @@ def show_processing_plan(
 
     if config.frame_extraction.max_frames_per_video:
         details.append(f"Max frames: {config.frame_extraction.max_frames_per_video}")
+
+    if config.output.image.resize:
+        details.append(f"Image resize: {config.output.image.resize}px max dimension")
 
     # Temp directory handling
     if config.storage.keep_temp:
