@@ -312,7 +312,7 @@ class FrameExtractor:
                     
                     # Generate frame ID and filename
                     frame_id = f"frame_{candidate.frame_number:06d}"
-                    filename = f"{frame_id}.jpg"
+                    filename = f"{frame_id}.png"
                     frame_path = output_dir / filename
                     
                     # Check for duplicate frames using perceptual hash
@@ -324,9 +324,9 @@ class FrameExtractor:
                     
                     self.frame_hashes.add(frame_hash)
                     
-                    # Save frame as JPEG
+                    # Save frame as PNG with maximum compression
                     success = cv2.imwrite(str(frame_path), frame, 
-                                        [cv2.IMWRITE_JPEG_QUALITY, 95])
+                                        [cv2.IMWRITE_PNG_COMPRESSION, 4])
                     
                     if not success:
                         self.logger.warning(f"Failed to save frame: {frame_path}")
@@ -400,7 +400,7 @@ class FrameExtractor:
             height=height,
             channels=channels,
             file_size_bytes=file_size,
-            format="JPEG"
+            format="PNG"
         )
         
         return FrameData(
