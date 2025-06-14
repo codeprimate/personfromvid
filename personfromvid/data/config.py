@@ -291,7 +291,7 @@ class JpegConfig(BaseModel):
 
 class OutputImageConfig(BaseModel):
     """Configuration for output generation."""
-    format: str = Field('png', description="The output image format ('png' or 'jpeg').")
+    format: str = Field('jpeg', description="The output image format ('png' or 'jpeg').")
     face_crop_enabled: bool = Field(True, description="Enable generation of cropped face images.")
     full_frame_enabled: bool = Field(True, description="Enable saving of full-frame images.")
     face_crop_padding: float = Field(0.2, ge=0.0, le=1.0, description="Padding around face bounding box.")
