@@ -421,9 +421,9 @@ This project is licensed under the GPL-3.0-or-later - see the [LICENSE](LICENSE)
 
 ## Support
 
-- 📖 [Documentation](https://github.com/personfromvid/personfromvid/docs)
-- 🐛 [Issue Tracker](https://github.com/personfromvid/personfromvid/issues)
-- 💬 [Discussions](https://github.com/personfromvid/personfromvid/discussions)
+- 📖 [Documentation](https://github.com/codeprimate/personfromvid/docs)
+- 🐛 [Issue Tracker](https://github.com/codeprimate/personfromvid/issues)
+- 💬 [Discussions](https://github.com/codeprimate/personfromvid/discussions)
 
 ---
 
