@@ -193,8 +193,11 @@ output:
 processing:
   enable_resume: true
 storage:
-  keep_temp: false
-  force_temp_cleanup: false
+  cache_directory: "~/.cache/personfromvid"  # Override default cache location
+  keep_temp: false                           # Keep temporary files after processing
+  force_temp_cleanup: false                  # Force cleanup before starting
+  cleanup_temp_on_success: true              # Clean up temp files on success
+  cleanup_temp_on_failure: false             # Keep temp files if processing fails
 
 # Logging configuration
 logging:
@@ -303,9 +306,57 @@ python scripts/clean.py
 - JPEG images (configurable quality)
 - JSON metadata files
 
+## Cache and Temporary Files
+
+Person From Vid uses a centralized cache directory to store both AI models and temporary files during video processing. This keeps your video directories clean and makes cache management easier.
+
+### Cache Directory Locations
+
+The cache directory is automatically determined based on your operating system:
+
+- **Linux**: `~/.cache/personfromvid/`
+- **macOS**: `~/Library/Caches/personfromvid/`
+- **Windows**: `C:\Users\{username}\AppData\Local\codeprimate\personfromvid\Cache\`
+
+### Cache Structure
+
+```
+personfromvid/                  # Base cache directory
+├── models/                     # AI model files
+│   ├── yolov8s-face/          # Face detection model
+│   ├── yolov8s-pose/          # Pose estimation model
+│   └── sixdrepnet/            # Head pose model
+└── temp/                      # Temporary processing files
+    └── temp_{video_name}/     # Per-video temporary directory
+        └── frames/            # Extracted frames during processing
+```
+
+### Temporary Files
+
+During video processing, temporary files (extracted frames, intermediate data) are stored in the cache directory under `temp/temp_{video_name}/`. These files are:
+
+- **Automatically cleaned up** after successful processing (configurable)
+- **Kept for debugging** if processing fails or if `--keep-temp` is used
+- **Isolated per video** to allow concurrent processing of multiple videos
+
+### Cache Management
+
+```bash
+# Keep temporary files after processing (for debugging)
+personfromvid video.mp4 --keep-temp
+
+# Force cleanup of existing temp files before starting
+personfromvid video.mp4 --force
+
+# Configure cache location via config file
+personfromvid video.mp4 --config custom_config.yaml
+```
+
+You can manually clean the cache directory to free up disk space, or configure automatic cleanup in your configuration file.
+
 ## AI Models
 
-Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use. Models are stored in a platform-specific user cache directory (e.g., `~/.cache/personfromvid` on Linux, `~/Library/Caches/personfromvid` on macOS, or `C:\\Users\\<user>\\AppData\\Local\\codeprimate\\personfromvid\\Cache` on Windows), but this location can be configured.
+Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use in the cache directory described above.
 
 - **Face Detection**: `yolov8s-face` - A YOLOv8 model trained for face detection.
 - **Pose Estimation**: `yolov8s-pose` - A YOLOv8 model for human pose estimation.

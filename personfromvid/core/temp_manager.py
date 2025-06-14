@@ -17,7 +17,7 @@ from ..utils.logging import get_logger
 from ..utils.exceptions import (
     TempDirectoryError
 )
-from ..data.config import StorageConfig
+from ..data.config import Config
 
 
 class TempManager:
@@ -27,20 +27,36 @@ class TempManager:
     video processing, with automatic cleanup and disk space monitoring.
     """
     
-    def __init__(self, video_path: str):
+    def __init__(self, video_path: str, config: Optional[Config] = None):
         """Initialize temporary directory manager.
         
         Args:
             video_path: Path to the video file being processed
+            config: Application configuration (uses default if None)
         """
         self.video_path = Path(video_path)
         self.logger = get_logger("temp_manager")
         
-        # Calculate temp directory path
-        video_dir = self.video_path.parent
+        # Get config or use default
+        if config is None:
+            from ..data.config import get_default_config
+            self.config = get_default_config()
+        else:
+            self.config = config
+        
+        # Store storage config for convenience
+        self.storage_config = self.config.storage
+        
+        # Calculate temp directory path in cache directory
         video_base_name = self.video_path.stem
-        self.temp_dir_name = f".personfromvid_temp_{video_base_name}"
-        self.temp_dir_path = video_dir / self.temp_dir_name
+        self.temp_dir_name = f"temp_{video_base_name}"
+        
+        # Use configured temp directory or create in cache directory
+        if self.storage_config.temp_directory:
+            self.temp_dir_path = self.storage_config.temp_directory / self.temp_dir_name
+        else:
+            # Create temp directory in cache directory
+            self.temp_dir_path = self.storage_config.cache_directory / "temp" / self.temp_dir_name
         
         # Subdirectory paths
         self.frames_dir: Optional[Path] = None
@@ -60,8 +76,8 @@ class TempManager:
             TempDirectoryError: If temp directory cannot be created
         """
         try:            
-            # Create main temp directory
-            self.temp_dir_path.mkdir(exist_ok=True)
+            # Create main temp directory (and parent directories if needed)
+            self.temp_dir_path.mkdir(parents=True, exist_ok=True)
             self._created_dirs.append(self.temp_dir_path)
             
             # Create subdirectories

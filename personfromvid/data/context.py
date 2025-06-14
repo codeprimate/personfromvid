@@ -49,9 +49,9 @@ class ProcessingContext:
         if not self.video_path.is_file():
             raise ValueError(f"Video path is not a file: {self.video_path}")
         
-        # Initialize TempManager
+        # Initialize TempManager with config
         # We must cast self to object to bypass frozen=True restriction
-        temp_manager = TempManager(str(self.video_path))
+        temp_manager = TempManager(str(self.video_path), self.config)
         temp_manager.create_temp_structure()
         object.__setattr__(self, "temp_manager", temp_manager)
 

@@ -8,6 +8,7 @@ from unittest.mock import patch, Mock
 
 from personfromvid.core import TempManager
 from personfromvid.utils.exceptions import TempDirectoryError
+from personfromvid.data.config import Config, StorageConfig
 
 
 class TestTempManager:
@@ -28,23 +29,44 @@ class TestTempManager:
             temp_path.unlink()
     
     @pytest.fixture
-    def temp_manager(self, temp_video_file):
+    def temp_cache_dir(self):
+        """Create a temporary cache directory for testing."""
+        temp_dir = Path(tempfile.mkdtemp())
+        yield temp_dir
+        
+        # Cleanup
+        import shutil
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    
+    @pytest.fixture
+    def mock_config(self, temp_cache_dir):
+        """Create a mock config with temporary cache directory."""
+        storage_config = StorageConfig(cache_directory=temp_cache_dir)
+        config = Config(storage=storage_config)
+        return config
+    
+    @pytest.fixture
+    def temp_manager(self, temp_video_file, mock_config):
         """Create a TempManager instance for testing."""
-        manager = TempManager(str(temp_video_file))
+        manager = TempManager(str(temp_video_file), mock_config)
         yield manager
         
         # Cleanup temp directory if it exists
         if manager.temp_dir_path.exists():
             manager.cleanup_temp_files()
     
-    def test_temp_manager_initialization(self, temp_video_file):
+    def test_temp_manager_initialization(self, temp_video_file, mock_config):
         """Test TempManager initialization."""
-        manager = TempManager(str(temp_video_file))
+        manager = TempManager(str(temp_video_file), mock_config)
         
         assert manager.video_path == temp_video_file
-        expected_temp_name = f".personfromvid_temp_{temp_video_file.stem}"
+        expected_temp_name = f"temp_{temp_video_file.stem}"
         assert manager.temp_dir_name == expected_temp_name
-        assert manager.temp_dir_path == temp_video_file.parent / expected_temp_name
+        
+        # Check that temp directory is in cache directory
+        expected_temp_path = mock_config.storage.cache_directory / "temp" / expected_temp_name
+        assert manager.temp_dir_path == expected_temp_path
         
         # Initially no subdirectories should be set
         assert manager.frames_dir is None
@@ -163,12 +185,12 @@ class TestTempManager:
         assert "frames" in info["subdirs"]
         assert info["subdirs"]["frames"]["file_count"] == 1
     
-    def test_context_manager(self, temp_video_file):
+    def test_context_manager(self, temp_video_file, mock_config):
         """Test TempManager as context manager."""
         temp_dir_path = None
         
         # Use as context manager
-        with TempManager(str(temp_video_file)) as manager:
+        with TempManager(str(temp_video_file), mock_config) as manager:
             temp_dir_path = manager.temp_dir_path
             assert temp_dir_path.exists()
             assert manager.frames_dir.exists()
@@ -176,12 +198,12 @@ class TestTempManager:
         # Should be cleaned up after exiting
         assert not temp_dir_path.exists()
     
-    def test_context_manager_with_exception(self, temp_video_file):
+    def test_context_manager_with_exception(self, temp_video_file, mock_config):
         """Test TempManager context manager with exception."""
         temp_dir_path = None
         
         try:
-            with TempManager(str(temp_video_file)) as manager:
+            with TempManager(str(temp_video_file), mock_config) as manager:
                 temp_dir_path = manager.temp_dir_path
                 assert temp_dir_path.exists()
                 raise ValueError("Test exception")
@@ -227,9 +249,9 @@ class TestTempManager:
         
         assert frames_count == 2
     
-    def test_create_temp_structure_permission_error(self, temp_video_file):
+    def test_create_temp_structure_permission_error(self, temp_video_file, mock_config):
         """Test handling permission errors during temp structure creation."""
-        manager = TempManager(str(temp_video_file))
+        manager = TempManager(str(temp_video_file), mock_config)
         
         with patch.object(Path, 'mkdir', side_effect=PermissionError("Permission denied")):
             with pytest.raises(TempDirectoryError, match="Cannot create temp directory"):

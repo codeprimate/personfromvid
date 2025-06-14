@@ -64,7 +64,7 @@ class TestProcessingContext:
         assert context.output_directory.exists()
         
         # Verify TempManager was instantiated and used
-        MockTempManager.assert_called_once_with(str(temp_video_file))
+        MockTempManager.assert_called_once_with(str(temp_video_file), context.config)
         context.temp_manager.create_temp_structure.assert_called_once()
     
     def test_processing_context_is_frozen(self, processing_context):

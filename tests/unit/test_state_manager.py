@@ -39,15 +39,30 @@ class TestStateManager:
             state_file.unlink()
     
     @pytest.fixture
-    def processing_context(self, temp_video_file):
+    def temp_cache_dir(self):
+        """Create a temporary cache directory for testing."""
+        temp_dir = Path(tempfile.mkdtemp())
+        yield temp_dir
+        
+        # Cleanup
+        import shutil
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    
+    @pytest.fixture
+    def processing_context(self, temp_video_file, temp_cache_dir):
         """Create ProcessingContext for testing."""
-        config = Config()
+        from personfromvid.data.config import StorageConfig
+        
+        # Create config with temporary cache directory
+        storage_config = StorageConfig(cache_directory=temp_cache_dir)
+        config = Config(storage=storage_config)
         output_dir = temp_video_file.parent / 'test_output'
         
         # We need a real TempManager for StateManager tests as it deals with file paths
         with patch('personfromvid.core.temp_manager.TempManager') as MockTempManager:
             # Create a real temp manager instance to be returned by the mock
-            real_temp_manager = TempManager(str(temp_video_file))
+            real_temp_manager = TempManager(str(temp_video_file), config)
             real_temp_manager.create_temp_structure()
             MockTempManager.return_value = real_temp_manager
 
