@@ -142,13 +142,13 @@ class ImageWriter:
         # Crop the image
         cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
         
-        # Upscale if dimensions are smaller than 512x512
+        # Upscale if both dimensions are smaller than 512
         crop_height, crop_width = cropped.shape[:2]
         min_dimension = 512
         
-        if crop_height < min_dimension or crop_width < min_dimension:
-            # Calculate scale factor to ensure both dimensions are at least 512
-            scale_factor = max(min_dimension / crop_width, min_dimension / crop_height)
+        if crop_height < min_dimension and crop_width < min_dimension:
+            # Calculate scale factor to ensure at least one dimension is 512
+            scale_factor = min_dimension / max(crop_width, crop_height)
             new_width = int(crop_width * scale_factor)
             new_height = int(crop_height * scale_factor)
             
