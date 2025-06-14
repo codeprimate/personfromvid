@@ -24,7 +24,7 @@ AI-powered video frame extraction and pose categorization tool that analyzes vid
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - FFmpeg (for video processing)
 
 #### Installing FFmpeg
@@ -284,13 +284,13 @@ python scripts/clean.py
 ## System Requirements
 
 ### Minimum Requirements
-- Python 3.8+
+- Python 3.10+
 - 4GB RAM
 - 1GB disk space for dependencies and cache
 - FFmpeg
 
 ### Recommended Requirements
-- Python 3.10+
+- Python 3.11+
 - 8GB+ RAM
 - 5GB+ disk space for cache
 - NVIDIA GPU with CUDA support for acceleration
