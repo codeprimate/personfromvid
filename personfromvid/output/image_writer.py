@@ -115,14 +115,14 @@ class ImageWriter:
             raise ImageWriteError(f"Error converting frame image {frame.frame_id} to RGB: {e}") from e
     
     def _crop_face(self, image: np.ndarray, face_detection: FaceDetection) -> np.ndarray:
-        """Crop face from image with padding.
+        """Crop face from image with padding and upscale to minimum 512x512.
         
         Args:
             image: Source image as numpy array
             face_detection: Face detection with bounding box
             
         Returns:
-            Cropped face image as numpy array
+            Cropped and potentially upscaled face image as numpy array
         """
         x1, y1, x2, y2 = face_detection.bbox
         
@@ -141,6 +141,23 @@ class ImageWriter:
         
         # Crop the image
         cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
+        
+        # Upscale if both dimensions are smaller than 512
+        crop_height, crop_width = cropped.shape[:2]
+        min_dimension = 512
+        
+        if crop_height < min_dimension and crop_width < min_dimension:
+            # Calculate scale factor to ensure at least one dimension is 512
+            scale_factor = min_dimension / max(crop_width, crop_height)
+            new_width = int(crop_width * scale_factor)
+            new_height = int(crop_height * scale_factor)
+            
+            # Convert to PIL for high-quality Lanczos upscaling
+            pil_image = Image.fromarray(cropped)
+            upscaled_pil = pil_image.resize((new_width, new_height), Image.LANCZOS)
+            cropped = np.array(upscaled_pil)
+            
+            self.logger.debug(f"Upscaled face crop from {crop_width}x{crop_height} to {new_width}x{new_height} (scale: {scale_factor:.2f})")
         
         # Store crop region in frame metadata for reference
         crop_key = f"face_crop_{face_detection.confidence:.2f}"
