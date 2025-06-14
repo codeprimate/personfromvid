@@ -63,6 +63,8 @@ dev = [
     "flake8==6.1.0",
     "mypy==1.7.1",
     "pre-commit==3.6.0",
+    "build==1.2.2.post1",
+    "twine==6.1.0",
 ]
 gpu = [
     "onnxruntime-gpu>=1.15.0",

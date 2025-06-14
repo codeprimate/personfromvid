@@ -415,19 +415,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 This project is licensed under the GPL-3.0-or-later - see the [LICENSE](LICENSE) file for details.
 
-## Citation
-
-If you use Person From Vid in your research, please cite:
-
-```bibtex
-@software{personfromvid2025,
-  title={Person From Vid: AI-powered video frame extraction and pose categorization},
-  author={codeprimate},
-  year={2025},
-  url={https://github.com/personfromvid/personfromvid}
-}
-```
-
 ## Support
 
 - 📖 [Documentation](https://github.com/personfromvid/personfromvid/docs)
