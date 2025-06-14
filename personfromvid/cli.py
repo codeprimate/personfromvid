@@ -113,6 +113,11 @@ def signal_handler(signum: int, frame) -> None:
     help="Enable/disable PNG optimization",
 )
 @click.option(
+    "--min-frames-per-category",
+    type=click.IntRange(1, 10),
+    help="Minimum frames to output per pose/angle category",
+)
+@click.option(
     "--keep-temp",
     is_flag=True,
     help="Keep temporary files after processing (overrides default cleanup)",
@@ -148,6 +153,7 @@ def main(
     output_full_frame_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
     output_png_optimize: Optional[bool],
+    min_frames_per_category: Optional[int],
     keep_temp: bool,
     force: bool,
     no_structured_output: bool,
@@ -505,6 +511,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
 
     if cli_args["output_png_optimize"] is not None:
         config.output.image.png.optimize = cli_args["output_png_optimize"]
+
+    if cli_args["min_frames_per_category"]:
+        config.output.min_frames_per_category = cli_args["min_frames_per_category"]
 
     # Processing overrides
     config.processing.enable_resume = cli_args["resume"]
