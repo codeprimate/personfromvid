@@ -17,15 +17,23 @@ class OutputGenerationStep(PipelineStep):
         try:
             # Get selected frame IDs from the frame selection step
             frame_selection_progress = self.state.get_step_progress("frame_selection")
-            selected_frame_ids = frame_selection_progress.get_data(ALL_SELECTED_FRAMES_KEY, [])
+            selected_frame_ids = frame_selection_progress.get_data(
+                ALL_SELECTED_FRAMES_KEY, []
+            )
 
             # Map IDs to the actual FrameData objects
             all_frames_map = {frame.frame_id: frame for frame in self.state.frames}
-            selected_frames = [all_frames_map[fid] for fid in selected_frame_ids if fid in all_frames_map]
+            selected_frames = [
+                all_frames_map[fid]
+                for fid in selected_frame_ids
+                if fid in all_frames_map
+            ]
 
             if not selected_frames:
                 if self.formatter:
-                    self.formatter.print_warning("No frames selected for output generation")
+                    self.formatter.print_warning(
+                        "No frames selected for output generation"
+                    )
                 else:
                     self.logger.warning("⚠️ No frames selected for output generation")
                 self.state.get_step_progress(self.step_name).start(0)
@@ -33,9 +41,9 @@ class OutputGenerationStep(PipelineStep):
 
             output_dir = self.pipeline.context.output_directory
             image_writer = ImageWriter(context=self.pipeline.context)
-            
+
             if self.formatter:
-                self.formatter.print_info("📁 Creating output files...", 'files')
+                self.formatter.print_info("📁 Creating output files...", "files")
             else:
                 self.logger.info(f"📁 Generating output in {output_dir}...")
 
@@ -43,7 +51,7 @@ class OutputGenerationStep(PipelineStep):
             self.state.get_step_progress(self.step_name).start(total_frames)
 
             all_output_files = []
-            
+
             def progress_callback(processed_count):
                 self._check_interrupted()
                 self.state.update_step_progress(self.step_name, processed_count)
@@ -51,14 +59,24 @@ class OutputGenerationStep(PipelineStep):
                     self.formatter.update_progress(1)
 
             if self.formatter:
-                with self.formatter.create_progress_bar("Generating files", total_frames):
+                with self.formatter.create_progress_bar(
+                    "Generating files", total_frames
+                ):
                     for i, frame in enumerate(selected_frames):
-                        output_files = image_writer.save_frame_outputs(frame, frame.selections.selected_for_poses, frame.selections.selected_for_head_angles)
+                        output_files = image_writer.save_frame_outputs(
+                            frame,
+                            frame.selections.selected_for_poses,
+                            frame.selections.selected_for_head_angles,
+                        )
                         all_output_files.extend(output_files)
                         progress_callback(i + 1)
             else:
                 for i, frame in enumerate(selected_frames):
-                    output_files = image_writer.save_frame_outputs(frame, frame.selections.selected_for_poses, frame.selections.selected_for_head_angles)
+                    output_files = image_writer.save_frame_outputs(
+                        frame,
+                        frame.selections.selected_for_poses,
+                        frame.selections.selected_for_head_angles,
+                    )
                     all_output_files.extend(output_files)
                     progress_callback(i + 1)
 
@@ -66,12 +84,17 @@ class OutputGenerationStep(PipelineStep):
             self.state.processing_stats["total_output_files"] = len(all_output_files)
 
             if self.formatter:
-                self.state.get_step_progress(self.step_name).set_data("step_results", {
-                    "files_generated": f"✅ Generated {len(all_output_files)} files",
-                    "location_info": f"📂 Location: {output_dir}",
-                })
+                self.state.get_step_progress(self.step_name).set_data(
+                    "step_results",
+                    {
+                        "files_generated": f"✅ Generated {len(all_output_files)} files",
+                        "location_info": f"📂 Location: {output_dir}",
+                    },
+                )
             else:
-                self.logger.info(f"✅ Output generation completed: {len(all_output_files)} files in {output_dir}")
+                self.logger.info(
+                    f"✅ Output generation completed: {len(all_output_files)} files in {output_dir}"
+                )
 
         except Exception as e:
             self.logger.error(f"❌ Output generation failed: {e}")

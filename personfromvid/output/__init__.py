@@ -7,7 +7,4 @@ with standardized naming conventions.
 from .image_writer import ImageWriter
 from .naming_convention import NamingConvention
 
-__all__ = [
-    "ImageWriter",
-    "NamingConvention"
-]
+__all__ = ["ImageWriter", "NamingConvention"]

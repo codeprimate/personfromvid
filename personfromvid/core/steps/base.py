@@ -12,7 +12,7 @@ class PipelineStep(ABC):
 
     def __init__(self, pipeline: "ProcessingPipeline"):
         """Initialize the pipeline step.
-        
+
         Args:
             pipeline: The main ProcessingPipeline instance.
         """
@@ -40,4 +40,4 @@ class PipelineStep(ABC):
     @abstractmethod
     def execute(self) -> None:
         """Execute the logic for this pipeline step."""
-        pass 
+        pass

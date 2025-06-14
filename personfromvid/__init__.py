@@ -15,12 +15,12 @@ from .utils.logging import setup_logging, get_logger
 
 __all__ = [
     "Config",
-    "get_default_config", 
+    "get_default_config",
     "load_config",
     "PersonFromVidError",
     "setup_logging",
     "get_logger",
     "__version__",
     "__author__",
-    "__description__"
+    "__description__",
 ]

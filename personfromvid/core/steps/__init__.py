@@ -18,4 +18,4 @@ __all__ = [
     "QualityAssessmentStep",
     "FrameSelectionStep",
     "OutputGenerationStep",
-] 
+]

@@ -373,7 +373,7 @@ class TestFrameExtractor:
         """Test frame data creation."""
         candidate = FrameCandidate(1.5, 45, ExtractionMethod.I_FRAME, 0.9)
         test_frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-        frame_path = tmp_path / "test_frame.jpg"
+        frame_path = tmp_path / "test_frame.png"
         frame_path.write_bytes(b"fake image data")
         frame_id = "frame_000045"
         
@@ -395,7 +395,7 @@ class TestFrameExtractor:
         assert frame_data.image_properties.width == 640
         assert frame_data.image_properties.height == 480
         assert frame_data.image_properties.channels == 3
-        assert frame_data.image_properties.format == "JPEG"
+        assert frame_data.image_properties.format == "PNG"
     
     def test_get_extraction_statistics(self, frame_extractor):
         """Test extraction statistics calculation."""

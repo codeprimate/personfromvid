@@ -16,7 +16,7 @@ PIPELINE_STEPS = {
     "closeup_detection": "Detect closeup shots and composition",
     "quality_assessment": "Assess frame quality",
     "frame_selection": "Select best frames",
-    "output_generation": "Generate output files (images, JSON, etc.)"
+    "output_generation": "Generate output files (images, JSON, etc.)",
 }
 
 PIPELINE_STEP_NAMES = list(PIPELINE_STEPS.keys())
@@ -33,7 +33,7 @@ def get_pipeline_steps() -> List[Tuple[str, str]]:
 
 def get_pipeline_step_names() -> List[str]:
     """Get the list of pipeline step names.
-    
+
     Returns:
         List of step names in order
     """
@@ -42,7 +42,7 @@ def get_pipeline_step_names() -> List[str]:
 
 def get_total_pipeline_steps() -> int:
     """Get the total number of pipeline steps.
-    
+
     Returns:
         Number of processing steps in the pipeline
     """
@@ -51,13 +51,13 @@ def get_total_pipeline_steps() -> int:
 
 def get_step_index(step_name: str) -> int:
     """Get the index of a pipeline step.
-    
+
     Args:
         step_name: Name of the step
-        
+
     Returns:
         Zero-based index of the step
-        
+
     Raises:
         ValueError: If step name is not found
     """
@@ -69,13 +69,13 @@ def get_step_index(step_name: str) -> int:
 
 def get_step_description(step_name: str) -> str:
     """Get the description for a pipeline step.
-    
+
     Args:
         step_name: Name of the step
-        
+
     Returns:
         Description of the step
-        
+
     Raises:
         ValueError: If step name is not found
     """
@@ -87,11 +87,11 @@ def get_step_description(step_name: str) -> str:
 
 def is_valid_step(step_name: str) -> bool:
     """Check if a step name is valid.
-    
+
     Args:
         step_name: Name of the step to check
-        
+
     Returns:
         True if step name is valid, False otherwise
     """
-    return step_name in PIPELINE_STEP_NAMES 
+    return step_name in PIPELINE_STEP_NAMES

@@ -13,16 +13,13 @@ from .frame_extractor import FrameExtractor
 __all__ = [
     # Pipeline orchestration
     "ProcessingPipeline",
-    "ProcessingResult", 
+    "ProcessingResult",
     "PipelineStatus",
-    
     # State management
     "StateManager",
-    
     # Temporary file management
     "TempManager",
-    
     # Video processing
     "VideoProcessor",
-    "FrameExtractor"
+    "FrameExtractor",
 ]

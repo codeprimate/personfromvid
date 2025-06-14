@@ -17,22 +17,27 @@ class QualityAssessmentStep(PipelineStep):
 
         try:
             frames_for_quality = [
-                frame for frame in self.state.frames
+                frame
+                for frame in self.state.frames
                 if frame.has_faces() and frame.has_poses()
             ]
 
             if not frames_for_quality:
                 if self.formatter:
-                    self.formatter.print_warning("No frames with faces and poses for quality assessment")
+                    self.formatter.print_warning(
+                        "No frames with faces and poses for quality assessment"
+                    )
                 else:
-                    self.logger.warning("⚠️  No frames with faces/poses for quality assessment")
+                    self.logger.warning(
+                        "⚠️  No frames with faces/poses for quality assessment"
+                    )
                 self.state.get_step_progress(self.step_name).start(0)
                 self.state.update_step_progress(self.step_name, 0)
                 return
 
             total_frames = len(frames_for_quality)
             if self.formatter:
-                self.formatter.print_info("🔍 Evaluating frame quality...", 'analysis')
+                self.formatter.print_info("🔍 Evaluating frame quality...", "analysis")
             else:
                 self.logger.info(f"🔍 Assessing quality for {total_frames} frames...")
 
@@ -41,19 +46,21 @@ class QualityAssessmentStep(PipelineStep):
 
             issue_counts = defaultdict(int)
             high_quality_count = 0
-            
+
             def progress_callback(processed_count: int):
                 self._check_interrupted()
                 self.state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
                     self.formatter.update_progress(1)
 
-            if self.formatter and hasattr(self.formatter, 'step_progress_context'):
-                with self.formatter.step_progress_context("Evaluating quality", total_frames) as progress_updater:
+            if self.formatter and hasattr(self.formatter, "step_progress_context"):
+                with self.formatter.step_progress_context(
+                    "Evaluating quality", total_frames
+                ) as progress_updater:
                     for i, frame in enumerate(frames_for_quality):
                         try:
                             quality_assessor.assess_quality_in_frame(frame)
-                            
+
                             # Update stats
                             if frame.quality_metrics:
                                 if frame.quality_metrics.is_high_quality:
@@ -69,7 +76,7 @@ class QualityAssessmentStep(PipelineStep):
                 for i, frame in enumerate(frames_for_quality):
                     try:
                         quality_assessor.assess_quality_in_frame(frame)
-                        
+
                         # Update stats
                         if frame.quality_metrics:
                             if frame.quality_metrics.is_high_quality:
@@ -80,31 +87,39 @@ class QualityAssessmentStep(PipelineStep):
                         # Unload image from memory to conserve resources
                         frame.unload_image()
                         progress_callback(i + 1)
-            
+
             total_assessed = len(frames_for_quality)
             quality_stats = {
                 "high_quality": high_quality_count,
                 "usable": total_assessed - len(issue_counts),
-                "issues": dict(issue_counts)
+                "issues": dict(issue_counts),
             }
 
-            self.state.get_step_progress(self.step_name).set_data("total_assessed", total_assessed)
-            self.state.get_step_progress(self.step_name).set_data("quality_stats", quality_stats)
+            self.state.get_step_progress(self.step_name).set_data(
+                "total_assessed", total_assessed
+            )
+            self.state.get_step_progress(self.step_name).set_data(
+                "quality_stats", quality_stats
+            )
 
-            high = quality_stats.get('high_quality', 0)
-            usable = quality_stats.get('usable', 0)
-            poor = quality_stats.get('poor', 0)
+            high = quality_stats.get("high_quality", 0)
+            usable = quality_stats.get("usable", 0)
+            poor = quality_stats.get("poor", 0)
 
             if self.formatter:
                 results = {
                     "quality_assessment_summary": "✅ Quality assessment complete",
                     "high_quality_count": f"📊 High quality: {high} frames",
                     "usable_quality_count": f"📊 Usable quality: {usable} frames",
-                    "poor_quality_count": f"📊 Poor quality: {poor} frames (excluded)"
+                    "poor_quality_count": f"📊 Poor quality: {poor} frames (excluded)",
                 }
-                self.state.get_step_progress(self.step_name).set_data("step_results", results)
+                self.state.get_step_progress(self.step_name).set_data(
+                    "step_results", results
+                )
             else:
-                self.logger.info(f"✅ Quality assessment completed: {total_assessed}/{total_frames} frames")
+                self.logger.info(
+                    f"✅ Quality assessment completed: {total_assessed}/{total_frames} frames"
+                )
                 self.logger.info(f"   ✨ Usable quality: {usable} frames")
                 self.logger.info(f"   🏆 High quality: {high} frames")
                 if usable == 0:
@@ -113,4 +128,4 @@ class QualityAssessmentStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"❌ Quality assessment failed: {e}")
             self.state.fail_step(self.step_name, str(e))
-            raise 
+            raise

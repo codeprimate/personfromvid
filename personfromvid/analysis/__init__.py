@@ -11,12 +11,12 @@ from .closeup_detector import CloseupDetector
 from .frame_selector import FrameSelector, create_frame_selector, SelectionCriteria
 
 __all__ = [
-    'PoseClassifier',
-    'HeadAngleClassifier',
-    'QualityAssessor',
-    'create_quality_assessor',
-    'CloseupDetector',
-    'FrameSelector',
-    'create_frame_selector',
-    'SelectionCriteria'
+    "PoseClassifier",
+    "HeadAngleClassifier",
+    "QualityAssessor",
+    "create_quality_assessor",
+    "CloseupDetector",
+    "FrameSelector",
+    "create_frame_selector",
+    "SelectionCriteria",
 ]
