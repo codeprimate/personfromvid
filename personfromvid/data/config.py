@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import yaml
 from pydantic import BaseModel, Field, field_validator, field_serializer, ConfigDict
+from platformdirs import user_cache_dir
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
@@ -317,7 +318,7 @@ class OutputConfig(BaseModel):
 class StorageConfig(BaseModel):
     """Configuration for storage and caching."""
     cache_directory: Path = Field(
-        default_factory=lambda: Path.home() / ".cache" / "personfromvid",
+        default_factory=lambda: Path(user_cache_dir("personfromvid", "codeprimate")),
         description="Directory for model and data caching"
     )
     temp_directory: Optional[Path] = Field(

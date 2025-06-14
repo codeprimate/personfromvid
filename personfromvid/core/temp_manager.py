@@ -7,6 +7,8 @@ video processing, including automatic cleanup and disk space monitoring.
 import os
 import shutil
 import tempfile
+import logging
+import stat
 from pathlib import Path
 from typing import Optional, List
 
@@ -15,6 +17,7 @@ from ..utils.logging import get_logger
 from ..utils.exceptions import (
     TempDirectoryError
 )
+from ..data.config import StorageConfig
 
 
 class TempManager:
@@ -243,29 +246,40 @@ class TempManager:
         self._created_dirs.clear()
     
     def _force_cleanup(self) -> None:
-        """Force cleanup using alternative methods."""
+        """Force cleanup by walking the directory and removing items individually."""
+        self.logger.info("Attempting forced cleanup...")
         try:
-            # Try to change permissions and remove again
-            for root, dirs, files in os.walk(self.temp_dir_path):
-                for d in dirs:
-                    try:
-                        os.chmod(os.path.join(root, d), 0o777)
-                    except Exception:
-                        pass
+            # Walk from the bottom up to remove files first, then directories
+            for root, dirs, files in os.walk(self.temp_dir_path, topdown=False):
                 for f in files:
+                    file_path = os.path.join(root, f)
                     try:
-                        file_path = os.path.join(root, f)
-                        os.chmod(file_path, 0o777)
+                        # Make writable and remove
+                        os.chmod(file_path, stat.S_IWRITE)
                         os.remove(file_path)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        self.logger.warning(f"Could not remove file {file_path}: {e}")
+                
+                for d in dirs:
+                    dir_path = os.path.join(root, d)
+                    try:
+                        os.rmdir(dir_path)
+                    except Exception as e:
+                        self.logger.warning(f"Could not remove directory {dir_path}: {e}")
             
-            # Try to remove directory again
-            os.rmdir(self.temp_dir_path)
-            self.logger.info("Force cleanup successful")
+            # Finally, remove the top-level temp directory
+            try:
+                os.rmdir(self.temp_dir_path)
+            except Exception as e:
+                self.logger.warning(f"Could not remove top-level temp directory {self.temp_dir_path}: {e}")
             
+            if not self.temp_dir_path.exists():
+                self.logger.info("Force cleanup successful")
+            else:
+                self.logger.error("Force cleanup failed. Some temp files may remain.")
+
         except Exception as e:
-            self.logger.error(f"Force cleanup failed: {e}")
+            self.logger.error(f"An error occurred during force cleanup: {e}")
     
     def _get_directory_size(self, directory: Path) -> int:
         """Get total size of directory in bytes.

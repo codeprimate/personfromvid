@@ -25,7 +25,6 @@ class ModelFormat(str, Enum):
 
 class ModelProvider(str, Enum):
     """Model sources and providers."""
-    HUGGINGFACE = "huggingface"
     ULTRALYTICS = "ultralytics"
     GITHUB = "github"
     DIRECT_URL = "direct_url"
@@ -250,7 +249,7 @@ class ModelConfigs:
     SIXDREPNET = ModelMetadata(
         name="sixdrepnet",
         version="1.0.0",
-        provider=ModelProvider.HUGGINGFACE,
+        provider=ModelProvider.DIRECT_URL,
         files=[
             ModelFile(
                 filename="sixdrepnet.safetensors",

@@ -18,7 +18,7 @@ from personfromvid.utils.exceptions import ModelNotFoundError, ModelDownloadErro
 TEST_MODELS = {
     "FACE_DETECTION": "scrfd_10g",  # Use actual model name from config
     "POSE_ESTIMATION": "yolov8n-pose",
-    "HEAD_POSE": "hopenet_alpha1"  # Use actual model name from config
+    "HEAD_POSE": "sixdrepnet"  # Use actual default model from config
 }
 
 
@@ -44,7 +44,7 @@ class TestModelConfigs:
         model = ModelConfigs.get_model(TEST_MODELS["FACE_DETECTION"])
         assert model is not None
         assert model.name == TEST_MODELS["FACE_DETECTION"]
-        assert model.provider in [ModelProvider.DIRECT_URL, ModelProvider.HUGGINGFACE, ModelProvider.GITHUB, ModelProvider.ULTRALYTICS]
+        assert model.provider in [ModelProvider.DIRECT_URL, ModelProvider.GITHUB, ModelProvider.ULTRALYTICS]
         assert len(model.files) > 0
         
         # Test non-existing model
@@ -123,7 +123,7 @@ class TestModelMetadata:
         empty_model = ModelMetadata(
             name="test_empty",
             version="1.0.0",
-            provider=ModelProvider.HUGGINGFACE,
+            provider=ModelProvider.DIRECT_URL,
             files=[],  # Empty files list
             supported_devices=[DeviceType.CPU],
             input_size=(640, 640),
@@ -187,8 +187,7 @@ class TestModelManager:
             self.model_manager.download_model("non_existent_model")
     
     @patch('personfromvid.models.model_manager.requests.get')
-    @patch('personfromvid.models.model_manager.hf_hub_download')
-    def test_download_model_success(self, mock_hf_download, mock_requests):
+    def test_download_model_success(self, mock_requests):
         """Test successful model download."""
         # Setup mock responses using test constant
         model_name = TEST_MODELS["FACE_DETECTION"]
@@ -202,11 +201,7 @@ class TestModelManager:
         mock_response.raise_for_status.return_value = None
         mock_requests.return_value = mock_response
         
-        # Create fake file for hf_hub_download to return
-        fake_file = self.temp_dir / model_name / model.get_primary_file().filename
-        fake_file.parent.mkdir(parents=True, exist_ok=True)
-        fake_file.write_bytes(test_file_content)
-        mock_hf_download.return_value = str(fake_file)
+
         
         # Download the model
         result_path = self.model_manager.download_model(model_name)
@@ -316,44 +311,7 @@ class TestModelManager:
 
     # NEW TESTS TO IMPROVE COVERAGE
     
-    @patch('personfromvid.models.model_manager.hf_hub_download')
-    def test_download_from_huggingface_invalid_url(self, mock_hf_download):
-        """Test handling of invalid Hugging Face URLs."""
-        model_name = "TEST_FACE_MODEL"
-        model = ModelConfigs.get_model(model_name)
-        
-        # Create mock file with invalid URL format
-        mock_file = MagicMock()
-        mock_file.url = "https://invalid-url"  # Too few parts
-        mock_file.filename = "test.onnx"
-        
-        file_path = self.temp_dir / "test.onnx"
-        
-        # Mock the fallback download
-        with patch.object(self.model_manager, '_download_from_url') as mock_fallback:
-            self.model_manager._download_from_huggingface(mock_file, file_path)
-            
-            # Should call fallback download due to invalid URL
-            mock_fallback.assert_called_once_with(mock_file, file_path)
-    
-    @patch('personfromvid.models.model_manager.hf_hub_download')
-    @patch('personfromvid.models.model_manager.shutil.move')
-    def test_download_from_huggingface_file_move(self, mock_move, mock_hf_download):
-        """Test file moving when HF download returns different path."""
-        mock_file = MagicMock()
-        mock_file.url = "https://huggingface.co/user/model/resolve/main/test.onnx"
-        mock_file.filename = "test.onnx"
-        
-        file_path = self.temp_dir / "test.onnx"
-        different_path = self.temp_dir / "different.onnx"
-        
-        # Mock HF download returning different path
-        mock_hf_download.return_value = str(different_path)
-        
-        self.model_manager._download_from_huggingface(mock_file, file_path)
-        
-        # Should call move to relocate file
-        mock_move.assert_called_once_with(str(different_path), str(file_path))
+
     
     @patch('personfromvid.models.model_manager.requests.get')
     def test_download_from_url_no_content_length(self, mock_requests):
@@ -378,7 +336,7 @@ class TestModelManager:
         assert file_path.exists()
     
     def test_download_file_direct_provider(self):
-        """Test _download_file with non-HuggingFace provider."""
+        """Test _download_file with any provider (all use direct URL now)."""
         mock_file = MagicMock()
         mock_file.url = "https://example.com/model.bin"
         mock_file.filename = "model.bin"
@@ -386,7 +344,7 @@ class TestModelManager:
         file_path = self.temp_dir / "model.bin"
         
         with patch.object(self.model_manager, '_download_from_url') as mock_url_download:
-            # Test with DIRECT_URL provider (not HUGGINGFACE)
+            # Test with DIRECT_URL provider
             self.model_manager._download_file(mock_file, file_path, ModelProvider.DIRECT_URL)
             
             mock_url_download.assert_called_once_with(mock_file, file_path)

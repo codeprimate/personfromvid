@@ -9,7 +9,7 @@ from typing import Optional, Union, List
 from datetime import datetime
 import logging
 import requests
-from huggingface_hub import hf_hub_download
+
 from tqdm import tqdm
 
 from .model_configs import ModelConfigs, ModelProvider
@@ -90,38 +90,9 @@ class ModelManager:
     
     def _download_file(self, file_info, file_path: Path, provider: ModelProvider) -> None:
         """Download a single model file."""
-        if provider == ModelProvider.HUGGINGFACE:
-            self._download_from_huggingface(file_info, file_path)
-        else:
-            self._download_from_url(file_info, file_path)
+        self._download_from_url(file_info, file_path)
     
-    def _download_from_huggingface(self, file_info, file_path: Path) -> None:
-        """Download file from Hugging Face Hub."""
-        try:
-            # Extract repo_id and filename from URL
-            url_parts = file_info.url.split('/')
-            if len(url_parts) < 6:
-                raise ValueError(f"Invalid Hugging Face URL format: {file_info.url}")
-            
-            repo_id = f"{url_parts[3]}/{url_parts[4]}"
-            filename = url_parts[-1]
-            
-            # Use huggingface_hub to download
-            downloaded_path = hf_hub_download(
-                repo_id=repo_id,
-                filename=filename,
-                local_dir=file_path.parent
-            )
-            
-            # Move to expected location if needed
-            downloaded_path = Path(downloaded_path)
-            if downloaded_path != file_path:
-                shutil.move(str(downloaded_path), str(file_path))
-                
-        except Exception as e:
-            logger.warning(f"Hugging Face download failed: {e}")
-            # Fallback to direct URL download
-            self._download_from_url(file_info, file_path)
+
     
     def _download_from_url(self, file_info, file_path: Path) -> None:
         """Download file from direct URL."""

@@ -74,8 +74,7 @@ personfromvid/
 │   ├── architecture.md               # This file
 │   └── api_reference.md              # API documentation
 ├── scripts/                          # Development and utility scripts
-├── pyproject.toml                    # Package configuration
-├── requirements.txt                  # Dependencies
+├── pyproject.toml                    # Package configuration and dependencies
 └── README.md                         # Project overview
 ```
 

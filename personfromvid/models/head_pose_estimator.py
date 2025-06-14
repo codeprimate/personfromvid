@@ -1152,7 +1152,7 @@ def create_head_pose_estimator(model_name: Optional[str] = None, device: str = "
     if model_name is None:
         # Use default from model configs
         defaults = ModelConfigs.get_default_models()
-        model_name = defaults.get("head_pose_estimation", "hopenet_alpha1")
+        model_name = defaults.get("head_pose_estimation", "sixdrepnet")
     
     return HeadPoseEstimator(
         model_name=model_name,

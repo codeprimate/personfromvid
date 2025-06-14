@@ -275,7 +275,7 @@ mypy personfromvid/
 To remove temporary files, build artifacts, and caches, run the cleaning script:
 
 ```bash
-./scripts/clean.sh
+python scripts/clean.py
 ```
 
 ## System Requirements
@@ -299,12 +299,13 @@ To remove temporary files, build artifacts, and caches, run the cleaning script:
 - MP4, AVI, MOV, MKV, WMV, FLV, WebM, M4V, 3GP, OGV
 
 ### Output Formats
+- PNG images (configurable quality)
 - JPEG images (configurable quality)
 - JSON metadata files
 
 ## AI Models
 
-Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use.
+Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use. Models are stored in a platform-specific user cache directory (e.g., `~/.cache/personfromvid` on Linux, `~/Library/Caches/personfromvid` on macOS, or `C:\\Users\\<user>\\AppData\\Local\\codeprimate\\personfromvid\\Cache` on Windows), but this location can be configured.
 
 - **Face Detection**: `yolov8s-face` - A YOLOv8 model trained for face detection.
 - **Pose Estimation**: `yolov8s-pose` - A YOLOv8 model for human pose estimation.
@@ -361,17 +362,17 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL-3.0-or-later - see the [LICENSE](LICENSE) file for details.
 
 ## Citation
 
 If you use Person From Vid in your research, please cite:
 
 ```bibtex
-@software{personfromvid2024,
+@software{personfromvid2025,
   title={Person From Vid: AI-powered video frame extraction and pose categorization},
-  author={Person From Vid Project},
-  year={2024},
+  author={codeprimate},
+  year={2025},
   url={https://github.com/personfromvid/personfromvid}
 }
 ```

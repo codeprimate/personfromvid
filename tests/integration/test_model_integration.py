@@ -18,7 +18,7 @@ from personfromvid.utils.exceptions import ModelNotFoundError, ModelDownloadErro
 TEST_MODELS = {
     "FACE_DETECTION": "scrfd_10g",  # Use actual model name from config
     "POSE_ESTIMATION": "yolov8n-pose",
-    "HEAD_POSE": "hopenet_alpha1"  # Use actual model name from config
+    "HEAD_POSE": "sixdrepnet"  # Use actual default model from config
 }
 
 

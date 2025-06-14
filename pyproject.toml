@@ -7,14 +7,15 @@ name = "personfromvid"
 version = "1.0.0"
 description = "Extract and categorize high-quality frames containing people in specific poses from video files"
 readme = "README.md"
-license = {text = "PRIVATE"}
+license = {text = "GPL-3.0-or-later"}
 authors = [
-    {name = "Person From Vid Project"}
+    {name = "codeprimate"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -28,39 +29,40 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     # Core libraries
-    "opencv-python>=4.8.0",
-    "ffmpeg-python>=0.2.0",
-    "Pillow>=10.0.0",
-    "numpy>=1.24.0",
+    "opencv-python==4.8.1.78",
+    "ffmpeg-python==0.2.0",
+    "Pillow==10.1.0",
+    "numpy==1.24.4",
     
     # AI/ML libraries
-    "torch>=2.0.0",
-    "torchvision>=0.15.0",
-    "onnxruntime>=1.15.0",
-    "ultralytics>=8.0.0",
-    "huggingface-hub>=0.16.0",
+    "torch==2.1.1",
+    "torchvision==0.16.1",
+    "onnxruntime==1.16.3",
+    "ultralytics==8.0.220",
+    "safetensors==0.5.3",
     
     # CLI and progress
-    "click>=8.1.0",
-    "rich>=13.0.0",
+    "click==8.1.7",
+    "rich==13.7.0",
     
     # Data handling
-    "pydantic>=2.0.0",
-    "PyYAML>=6.0.0",
+    "pydantic==2.5.0",
+    "PyYAML==6.0.1",
     
     # Utilities
-    "requests>=2.31.0",
-    "tqdm>=4.65.0",
+    "requests==2.31.0",
+    "tqdm==4.66.1",
+    "platformdirs==4.2.2",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.5.0",
-    "pre-commit>=3.3.0",
+    "pytest==7.4.3",
+    "pytest-cov==4.1.0",
+    "black==23.11.0",
+    "flake8==6.1.0",
+    "mypy==1.7.1",
+    "pre-commit==3.6.0",
 ]
 gpu = [
     "onnxruntime-gpu>=1.15.0",
@@ -70,10 +72,10 @@ gpu = [
 personfromvid = "personfromvid.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/personfromvid/personfromvid"
-Documentation = "https://github.com/personfromvid/personfromvid/docs"
-Repository = "https://github.com/personfromvid/personfromvid"
-Issues = "https://github.com/personfromvid/personfromvid/issues"
+Homepage = "https://github.com/codeprimate/personfromvid"
+Documentation = "https://github.com/codeprimate/personfromvid/docs"
+Repository = "https://github.com/codeprimate/personfromvid"
+Issues = "https://github.com/codeprimate/personfromvid/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

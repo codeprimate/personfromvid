@@ -25,7 +25,7 @@ from personfromvid.models.model_configs import ModelConfigs, ModelFormat
 from personfromvid.data.config import DeviceType
 
 # Test constants to reduce duplication
-TEST_HEAD_POSE_MODEL = "hopenet_alpha1"  # Use actual model name from config
+TEST_HEAD_POSE_MODEL = "sixdrepnet"  # Use actual default model from config
 
 
 class TestHeadPoseEstimator:
@@ -42,7 +42,7 @@ class TestHeadPoseEstimator:
         self.mock_model_config.input_size = (224, 224)
         self.mock_model_config.is_device_supported.return_value = True
         self.mock_model_config.files = [Mock()]
-        self.mock_model_config.files[0].format = ModelFormat.PICKLE
+        self.mock_model_config.files[0].format = ModelFormat.PYTORCH  # sixdrepnet uses PyTorch format
         
         # Mock model manager
         self.mock_model_manager = Mock()
@@ -143,7 +143,14 @@ class TestHeadPoseEstimator:
     @patch('personfromvid.models.head_pose_estimator.HeadAngleClassifier')
     def test_load_model_pickle_format(self, mock_classifier, mock_get_manager, mock_get_model):
         """Test loading model with PICKLE format."""
-        mock_get_model.return_value = self.mock_model_config
+        # Override the default config for this specific test
+        mock_config = Mock()
+        mock_config.input_size = (224, 224)
+        mock_config.is_device_supported.return_value = True
+        mock_config.files = [Mock()]
+        mock_config.files[0].format = ModelFormat.PICKLE
+        
+        mock_get_model.return_value = mock_config
         mock_get_manager.return_value = self.mock_model_manager
         mock_classifier.return_value = Mock()
         
@@ -235,7 +242,7 @@ class TestHeadPoseEstimator:
         estimator = HeadPoseEstimator(TEST_HEAD_POSE_MODEL)
         
         with patch.object(estimator, '_load_model'):
-            with patch.object(estimator, '_estimate_hopenet') as mock_estimate:
+            with patch.object(estimator, '_estimate_pytorch') as mock_estimate:
                 mock_estimate.return_value = self.sample_head_pose
                 result = estimator.estimate_head_pose(self.test_face)
                 
@@ -270,10 +277,10 @@ class TestHeadPoseEstimator:
         
         estimator = HeadPoseEstimator(TEST_HEAD_POSE_MODEL)
         
-        # Mock _load_model and _estimate_hopenet to prevent actual model loading
+        # Mock _load_model and _estimate_pytorch to prevent actual model loading
         with patch.object(estimator, '_load_model'):
-            with patch.object(estimator, '_estimate_hopenet') as mock_estimate:
-                # Mock _estimate_hopenet to simulate validation error
+            with patch.object(estimator, '_estimate_pytorch') as mock_estimate:
+                # Mock _estimate_pytorch to simulate validation error
                 mock_estimate.side_effect = HeadPoseEstimationError("Face image must be a 3-channel color image")
                 
                 # Create image with invalid shape (not 3 channels)
@@ -294,7 +301,7 @@ class TestHeadPoseEstimator:
         estimator = HeadPoseEstimator(TEST_HEAD_POSE_MODEL)
         
         with patch.object(estimator, '_load_model'):
-            with patch.object(estimator, '_estimate_batch_hopenet') as mock_batch_estimate:
+            with patch.object(estimator, '_estimate_batch_pytorch') as mock_batch_estimate:
                 mock_batch_estimate.return_value = [self.sample_head_pose, self.sample_head_pose]
                 results = estimator.estimate_batch([self.test_face, self.test_face])
                 
@@ -483,7 +490,7 @@ class TestHeadPoseEstimator:
         assert info['device'] == "cpu"
         assert info['confidence_threshold'] == 0.75
         assert info['input_size'] == (224, 224)
-        assert info['model_format'] == 'pkl'
+        assert info['model_format'] == 'pt'  # sixdrepnet uses PyTorch format
         assert 'angle_thresholds' in info
         assert 'forward_facing_thresholds' in info
 
@@ -622,7 +629,7 @@ class TestHeadPoseEstimatorIntegration:
                     mock_config.input_size = (224, 224)
                     mock_config.is_device_supported.return_value = True
                     mock_config.files = [Mock()]
-                    mock_config.files[0].format = ModelFormat.PICKLE
+                    mock_config.files[0].format = ModelFormat.PYTORCH  # sixdrepnet uses PyTorch format
                     
                     mock_get_model.return_value = mock_config
                     mock_get_manager.return_value = Mock()
@@ -633,7 +640,9 @@ class TestHeadPoseEstimatorIntegration:
                     
                     # Mock the inference to return realistic results
                     with patch.object(estimator, '_load_model'):
-                        with patch.object(estimator, '_estimate_hopenet') as mock_estimate:
+                        # Mock the _transform attribute that would be set by _load_model
+                        estimator._transform = Mock()
+                        with patch.object(estimator, '_estimate_pytorch') as mock_estimate:
                             mock_estimate.return_value = HeadPoseResult(
                                 yaw=12.3, pitch=-8.1, roll=3.4, confidence=0.87, direction="looking_left"
                             )
@@ -664,7 +673,7 @@ class TestHeadPoseEstimatorIntegration:
                     mock_config.input_size = (224, 224)
                     mock_config.is_device_supported.return_value = True
                     mock_config.files = [Mock()]
-                    mock_config.files[0].format = ModelFormat.PICKLE
+                    mock_config.files[0].format = ModelFormat.PYTORCH  # sixdrepnet uses PyTorch format
                     
                     mock_get_model.return_value = mock_config
                     mock_get_manager.return_value = Mock()
@@ -675,7 +684,9 @@ class TestHeadPoseEstimatorIntegration:
                     
                     # Mock batch processing
                     with patch.object(estimator, '_load_model'):
-                        with patch.object(estimator, '_estimate_batch_hopenet') as mock_batch_estimate:
+                        # Mock the _transform attribute that would be set by _load_model
+                        estimator._transform = Mock()
+                        with patch.object(estimator, '_estimate_batch_pytorch') as mock_batch_estimate:
                             mock_results = [
                                 HeadPoseResult(yaw=0.0, pitch=0.0, roll=0.0, confidence=0.9, direction="front"),
                                 HeadPoseResult(yaw=30.0, pitch=0.0, roll=0.0, confidence=0.8, direction="looking_left"),
