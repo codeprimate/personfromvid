@@ -6,28 +6,26 @@ descriptive filenames for output images based on frame metadata.
 
 import logging
 from pathlib import Path
-from typing import Dict, Set, Optional
+from typing import Dict, Set
 from collections import defaultdict
 
 from ..data.frame_data import FrameData
+from ..data.context import ProcessingContext
 from ..utils.logging import get_logger
 
 
 class NamingConvention:
     """Generates consistent output filenames based on frame metadata."""
     
-    def __init__(self, video_base_name: str, output_directory: Path):
+    def __init__(self, context: ProcessingContext):
         """Initialize naming convention.
         
         Args:
-            video_base_name: Base name of the video file (without extension)
-            output_directory: Directory where output files will be saved
+            context: ProcessingContext with unified pipeline data
         """
-        self.video_base_name = video_base_name
-        self.output_directory = Path(output_directory)
+        self.video_base_name = context.video_base_name
+        self.output_directory = context.output_directory   
         self.logger = get_logger(__name__)
-        
-        # Track used filenames to handle collisions
         self._used_filenames: Set[str] = set()
         self._sequence_counters: Dict[str, int] = defaultdict(int)
     

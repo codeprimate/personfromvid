@@ -19,11 +19,11 @@ from ..utils.logging import get_logger
 @dataclass
 class SelectionCriteria:
     """Criteria for frame selection."""
-    max_frames_per_category: int = 3
-    min_quality_threshold: float = 0.3
-    face_size_weight: float = 0.3
-    quality_weight: float = 0.7
-    diversity_threshold: float = 0.8  # Minimum diversity score to avoid similar frames
+    min_frames_per_category: int
+    min_quality_threshold: float
+    face_size_weight: float
+    quality_weight: float
+    diversity_threshold: float
 
 
 @dataclass
@@ -59,13 +59,13 @@ class FrameSelector:
     4. Provides detailed selection rationale and metadata
     """
     
-    def __init__(self, criteria: Optional[SelectionCriteria] = None):
+    def __init__(self, criteria: SelectionCriteria):
         """Initialize frame selector with selection criteria.
         
         Args:
-            criteria: Selection criteria, uses defaults if None
+            criteria: Selection criteria (required)
         """
-        self.criteria = criteria or SelectionCriteria()
+        self.criteria = criteria
         self.logger = get_logger(f"{__name__}.FrameSelector")
         
         # Categories we're interested in
@@ -319,7 +319,7 @@ class FrameSelector:
         # Select top frames with diversity consideration
         selected_frames = self._select_diverse_frames(
             scored_frames, 
-            self.criteria.max_frames_per_category
+            self.criteria.min_frames_per_category
         )
         
         # Calculate statistics
@@ -560,11 +560,11 @@ class FrameSelector:
         )
 
 
-def create_frame_selector(criteria: Optional[SelectionCriteria] = None) -> FrameSelector:
+def create_frame_selector(criteria: SelectionCriteria) -> FrameSelector:
     """Factory function to create FrameSelector instance.
     
     Args:
-        criteria: Optional selection criteria
+        criteria: Selection criteria
         
     Returns:
         Configured FrameSelector instance

@@ -10,6 +10,7 @@ This document provides a detailed technical overview of the Person From Vid arch
 personfromvid/
 ├── personfromvid/                    # Main package directory
 │   ├── __init__.py                   # Package initialization
+│   ├── __main__.py                   # Main executable entry point
 │   ├── cli.py                        # Command-line interface entry point
 │   ├── core/                         # Core processing modules
 │   │   ├── __init__.py
@@ -17,10 +18,22 @@ personfromvid/
 │   │   ├── state_manager.py          # Pipeline state persistence and resumption
 │   │   ├── video_processor.py        # Video analysis and frame extraction
 │   │   ├── frame_extractor.py        # Keyframe extraction logic
-│   │   └── temp_manager.py           # Temporary directory management
+│   │   ├── temp_manager.py           # Temporary directory management
+│   │   └── steps/                    # Modular pipeline processing steps
+│   │       ├── __init__.py
+│   │       ├── base.py               # Base class for a pipeline step
+│   │       ├── initialization.py     # Pipeline initialization step
+│   │       ├── frame_extraction.py   # Frame extraction step
+│   │       ├── face_detection.py     # Face detection step
+│   │       ├── pose_analysis.py      # Pose analysis step
+│   │       ├── closeup_detection.py  # Close-up detection step
+│   │       ├── quality_assessment.py # Quality assessment step
+│   │       ├── frame_selection.py    # Frame selection step
+│   │       └── output_generation.py  # Output generation step
 │   ├── models/                       # AI model management
 │   │   ├── __init__.py
 │   │   ├── model_manager.py          # Model downloading and caching
+│   │   ├── model_utils.py            # Utilities for model operations
 │   │   ├── face_detector.py          # Face detection inference
 │   │   ├── pose_estimator.py         # Body pose estimation
 │   │   ├── head_pose_estimator.py    # Head orientation analysis
@@ -35,20 +48,22 @@ personfromvid/
 │   ├── output/                       # Output generation
 │   │   ├── __init__.py
 │   │   ├── image_writer.py           # JPEG encoding and file generation
-│   │   ├── naming_convention.py      # File naming logic
-│   │   └── metadata_writer.py        # Metadata and info file generation
+│   │   └── naming_convention.py      # File naming logic
 │   ├── utils/                        # Utility modules
 │   │   ├── __init__.py
 │   │   ├── progress.py               # Rich progress display management
 │   │   ├── logging.py                # Logging configuration
 │   │   ├── validation.py             # Input validation utilities
-│   │   └── exceptions.py             # Custom exception classes
+│   │   ├── exceptions.py             # Custom exception classes
+│   │   ├── formatting.py             # Text and data formatting utilities
+│   │   └── output_formatter.py       # Formats console output
 │   └── data/                         # Data models and structures
 │       ├── __init__.py
 │       ├── frame_data.py             # Frame metadata structures
 │       ├── detection_results.py      # AI model output structures
 │       ├── pipeline_state.py         # Pipeline state data models
-│       └── config.py                 # Configuration management
+│       ├── config.py                 # Configuration management
+│       └── constants.py              # Project-wide constants
 ├── tests/                            # Test suite
 │   ├── __init__.py
 │   ├── unit/                         # Unit tests
@@ -66,111 +81,115 @@ personfromvid/
 
 ## Processing Pipeline Workflow
 
-### 1. Pipeline Initialization
+The processing pipeline is orchestrated by the `ProcessingPipeline` class in `core/pipeline.py`. It is a modular, stateful, and resumable system built from a series of discrete processing steps. Each step is responsible for a specific phase of the analysis, and its state is saved upon completion, allowing the pipeline to be interrupted and resumed.
 
-The pipeline begins when a user runs the CLI command:
+### 1. Pipeline Initialization (`InitializationStep`)
 
-```bash
-personfromvid video.mp4
-```
+The pipeline begins when a user runs the CLI command. This first step prepares the environment for processing.
 
 **Components Involved:**
-- `cli.py`: Parses command-line arguments and validates input
-- `pipeline.py`: Orchestrates the entire processing workflow
-- `state_manager.py`: Checks for existing processing state
-- `temp_manager.py`: Creates or manages temporary directories
+- `cli.py`: Parses command-line arguments and validates input.
+- `core/pipeline.py`: Orchestrates the entire processing workflow.
+- `core/state_manager.py`: Checks for existing processing state.
+- `core/temp_manager.py`: Creates or manages temporary directories.
+- `core/steps/initialization.py`: The step class that executes this phase.
 
 **Workflow Steps:**
-1. **Input Validation**: Verify video file exists and is readable
-2. **State Discovery**: Look for existing `{video_base}_info.json` file
-3. **Resume Decision**: Determine if processing should resume or start fresh
-4. **Temporary Setup**: Create `.personfromvid_temp` directory structure
-5. **Progress Initialization**: Set up rich console progress displays
+1. **Input Validation**: Verify video file exists and is readable.
+2. **State Discovery**: Look for an existing state file (`{video_base}_info.json`).
+3. **Resume Decision**: Determine if processing should resume or start fresh.
+4. **Environment Setup**: Create temporary directories and initialize the `PipelineState`.
+5. **Video Metadata Extraction**: Get video properties like resolution, duration, and FPS.
 
-### 2. Frame Extraction Phase
+### 2. Frame Extraction (`FrameExtractionStep`)
 
-**Primary Component**: `frame_extractor.py`
+This step extracts frames from the video for further analysis.
 
-**Workflow Steps:**
-1. **Video Analysis**: Extract metadata (duration, FPS, resolution, codec)
-2. **Keyframe Detection**: Use FFmpeg to identify I-frames from compression metadata
-3. **Temporal Sampling**: Extract additional frames at 0.25-second intervals
-4. **Frame Deduplication**: Remove duplicate frames between methods
-5. **Frame Storage**: Save extracted frames to temporary directory
-6. **Metadata Creation**: Initialize frame metadata with source information
-
-**State Updates:**
-- `frame_extraction.total_frames`: Total frames extracted
-- `frame_extraction.completed`: Mark phase as complete
-
-### 3. Face Detection Phase
-
-**Primary Component**: `face_detector.py`
+**Primary Component**: `core/steps/frame_extraction.py` (using `core/frame_extractor.py`)
 
 **Workflow Steps:**
-1. **Model Loading**: Download and cache face detection model (SCRFD/YOLO)
-2. **Batch Processing**: Process frames in efficient batches
-3. **Face Detection**: Run inference to identify face bounding boxes
-4. **Confidence Filtering**: Keep only high-confidence detections
-5. **Metadata Update**: Record face locations and confidence scores
-6. **Frame Filtering**: Continue only with frames containing faces
+1. **Keyframe Detection**: Use FFmpeg to identify I-frames (keyframes).
+2. **Temporal Sampling**: Extract additional frames at regular intervals.
+3. **Frame Deduplication**: Remove duplicate frames to create a unique set.
+4. **Frame Storage**: Save extracted frames to a temporary directory.
+5. **Metadata Creation**: Initialize `FrameData` objects for each extracted frame.
 
-**State Updates:**
-- `face_detection.processed_count`: Frames processed so far
-- `face_detection.faces_found`: Total faces detected
-- `face_detection.completed`: Mark phase as complete
+### 3. Face Detection (`FaceDetectionStep`)
 
-### 4. Pose and Head Angle Analysis Phase
+This step analyzes the extracted frames to find human faces.
 
-**Primary Components**: `pose_estimator.py`, `head_pose_estimator.py`, `pose_classifier.py`, `head_angle_classifier.py`
+**Primary Component**: `core/steps/face_detection.py` (using `models/face_detector.py`)
 
 **Workflow Steps:**
+1. **Model Loading**: Download and cache the face detection model (e.g., SCRFD).
+2. **Batch Processing**: Process frames in batches for efficiency.
+3. **Face Inference**: Run the model to find face bounding boxes.
+4. **Confidence Filtering**: Discard detections below a confidence threshold.
+5. **State Update**: Record face locations and filter out frames with no faces.
 
-**Body Pose Analysis:**
-1. **Model Loading**: Load pose estimation model (YOLOv8-Pose/ViTPose)
-2. **Keypoint Detection**: Extract 2D body landmarks
-3. **Pose Classification**: Classify into `standing`, `sitting`, `squatting` based on joint angles
-4. **Close-up Detection**: Identify close-up shots based on face bounding box size
+### 4. Pose and Head Angle Analysis (`PoseAnalysisStep`)
 
-**Head Pose Analysis:**
-1. **Model Loading**: Load head pose estimation model (HopeNet)
-2. **Angle Estimation**: Predict yaw, pitch, roll angles
-3. **Direction Classification**: Classify into 9 cardinal directions
-4. **Quality Filtering**: Remove excessively tilted heads (roll > 30°)
+This step analyzes faces and bodies to determine pose and orientation.
 
-**State Updates:**
-- `pose_analysis.processed_count`: Frames analyzed
-- `pose_analysis.poses_found`: Counts by pose category
-- `pose_analysis.head_angles_found`: Counts by head direction
-- `pose_analysis.completed`: Mark phase as complete
-
-### 5. Quality Assessment and Selection Phase
-
-**Primary Components**: `quality_assessor.py`, `frame_selector.py`
+**Primary Components**:
+- `core/steps/pose_analysis.py`
+- `models/pose_estimator.py`
+- `models/head_pose_estimator.py`
+- `analysis/pose_classifier.py`
+- `analysis/head_angle_classifier.py`
 
 **Workflow Steps:**
-1. **Quality Metrics**: Calculate multiple blur and quality metrics per frame
-2. **Scoring Algorithm**: Combine metrics into unified quality score
-3. **Category Grouping**: Group frames by pose category and head angle
-4. **Selection Logic**: Select top 3 frames per category based on quality
-5. **Crop Planning**: Define face crop regions for head angle outputs
+1. **Model Loading**: Load pose and head pose estimation models.
+2. **Body Pose Estimation**: Extract 2D body landmarks for each detected person.
+3. **Head Pose Estimation**: Predict yaw, pitch, and roll for each detected face.
+4. **Classification**: Classify body poses (e.g., `standing`, `sitting`) and head angles (e.g., `front`, `left_profile`).
+5. **Quality Filtering**: Remove poor quality results, such as excessively tilted heads.
 
-**State Updates:**
-- `quality_assessment.completed`: Mark phase as complete
+### 5. Close-up Detection (`CloseupDetectionStep`)
 
-### 6. Output Generation Phase
+This step identifies frames that are close-ups of a person.
 
-**Primary Components**: `image_writer.py`, `naming_convention.py`, `metadata_writer.py`
+**Primary Component**: `core/steps/closeup_detection.py` (using `analysis/closeup_detector.py`)
 
 **Workflow Steps:**
-1. **File Naming**: Generate consistent filenames using naming convention
-2. **Image Encoding**: Save full frames and face crops as high-quality JPEG
-3. **Metadata Finalization**: Create comprehensive info JSON file
-4. **File Organization**: Save outputs to video's source directory
-5. **Cleanup**: Remove temporary directory while preserving info file
+1. **Bounding Box Analysis**: Analyze the size of the face bounding box relative to the frame size.
+2. **Classification**: Tag frames as `closeup` or `not_closeup`.
+3. **State Update**: Store the close-up classification in the frame's metadata.
 
-**State Updates:**
-- `output_generation.completed`: Mark processing as complete
+### 6. Quality Assessment (`QualityAssessmentStep`)
+
+This step evaluates the technical quality of each frame.
+
+**Primary Component**: `core/steps/quality_assessment.py` (using `analysis/quality_assessor.py`)
+
+**Workflow Steps:**
+1. **Quality Metrics**: Calculate metrics for blur, brightness, and contrast.
+2. **Scoring Algorithm**: Combine metrics into a single quality score for each frame.
+3. **State Update**: Store the quality score in the frame's metadata.
+
+### 7. Frame Selection (`FrameSelectionStep`)
+
+This step selects the best frames to use for the final output, based on all previously gathered data.
+
+**Primary Component**: `core/steps/frame_selection.py` (using `analysis/frame_selector.py`)
+
+**Workflow Steps:**
+1. **Category Grouping**: Group frames by criteria like pose and head angle.
+2. **Selection Logic**: Select the top N frames from each group based on the quality score.
+3. **Crop Planning**: Define crop regions for face-centric outputs.
+4. **State Update**: Mark the selected frames for output generation.
+
+### 8. Output Generation (`OutputGenerationStep`)
+
+The final step generates the output images and metadata files.
+
+**Primary Component**: `core/steps/output_generation.py` (using `output/image_writer.py` and `output/naming_convention.py`)
+
+**Workflow Steps:**
+1. **File Naming**: Generate filenames based on the project's naming convention.
+2. **Image Encoding**: Save full frames and face crops as high-quality JPEGs.
+3. **Metadata Finalization**: Create the final `info.json` file with all processing metadata.
+4. **Cleanup**: Remove the temporary directory.
 
 ## Major Domain Objects and Classes
 
@@ -183,18 +202,20 @@ personfromvid video.mp4
 
 **Key Public Methods:**
 ```python
-def __init__(self, video_path: str, config: Config)
+def __init__(self, video_path: str, config: Config, formatter: Optional[Any] = None)
 def process() -> ProcessingResult
 def resume() -> ProcessingResult
 def get_status() -> PipelineStatus
 def interrupt_gracefully() -> None
+def is_interrupted() -> bool
 ```
 
 **Key Responsibilities:**
-- Coordinate all processing phases
+- Coordinate all processing steps
 - Handle interruption and resumption logic
+- Manage `PipelineState` via the `StateManager`
 - Manage progress display and user feedback
-- Error handling and recovery
+- Centralized error handling and recovery
 
 #### `StateManager`
 **File**: `core/state_manager.py`
@@ -203,18 +224,20 @@ def interrupt_gracefully() -> None
 
 **Key Public Methods:**
 ```python
-def __init__(self, video_path: str)
+def __init__(self, video_path: str, temp_manager: 'TempManager')
 def load_state() -> Optional[PipelineState]
 def save_state(state: PipelineState) -> None
 def update_step_progress(step: str, progress: Dict) -> None
 def mark_step_complete(step: str) -> None
 def can_resume() -> bool
 def get_resume_point() -> Optional[str]
+def delete_state() -> None
+def get_state_info() -> Optional[Dict[str, Any]]
 ```
 
 **Key Responsibilities:**
-- Read/write info JSON files
-- Validate video file integrity
+- Read/write state file (`..._info.json`) in the temp directory
+- Validate video file integrity using a hash
 - Track step completion status
 - Enable graceful resumption
 
@@ -251,6 +274,8 @@ def create_temp_structure() -> Path
 def cleanup_temp_files() -> None
 def get_temp_path() -> Path
 def get_frames_dir() -> Path
+def get_temp_file_path(filename: str, subdir: Optional[str] = None) -> Path
+def get_temp_usage_info() -> dict
 ```
 
 ### AI Model Classes
@@ -263,11 +288,13 @@ def get_frames_dir() -> Path
 **Key Public Methods:**
 ```python
 def __init__(self, cache_dir: Optional[str] = None)
+def ensure_model_available(model_name: str) -> Path
 def download_model(model_name: str) -> Path
 def get_model_path(model_name: str) -> Path
 def is_model_cached(model_name: str) -> bool
-def get_model_info(model_name: str) -> ModelInfo
-def cleanup_old_versions() -> None
+def list_cached_models() -> List[str]
+def get_cache_size() -> int
+def clear_cache() -> None
 ```
 
 #### `FaceDetector`
@@ -277,7 +304,7 @@ def cleanup_old_versions() -> None
 
 **Key Public Methods:**
 ```python
-def __init__(self, model_path: str, device: str = "cpu")
+def __init__(self, model_name: str, device: str = "cpu", confidence_threshold: float = 0.3)
 def detect_faces(image: np.ndarray) -> List[FaceDetection]
 def detect_batch(images: List[np.ndarray]) -> List[List[FaceDetection]]
 def set_confidence_threshold(threshold: float) -> None
@@ -290,7 +317,7 @@ def set_confidence_threshold(threshold: float) -> None
 
 **Key Public Methods:**
 ```python
-def __init__(self, model_path: str, device: str = "cpu")
+def __init__(self, model_name: str, device: str = "cpu", confidence_threshold: float = 0.3)
 def estimate_pose(image: np.ndarray) -> List[PoseDetection]
 def estimate_batch(images: List[np.ndarray]) -> List[List[PoseDetection]]
 def get_keypoint_names() -> List[str]
@@ -303,7 +330,7 @@ def get_keypoint_names() -> List[str]
 
 **Key Public Methods:**
 ```python
-def __init__(self, model_path: str, device: str = "cpu")
+def __init__(self, model_name: str, device: str = "cpu", confidence_threshold: float = 0.3)
 def estimate_head_pose(face_image: np.ndarray) -> HeadPoseResult
 def estimate_batch(face_images: List[np.ndarray]) -> List[HeadPoseResult]
 def angles_to_direction(yaw: float, pitch: float, roll: float) -> str
@@ -319,11 +346,12 @@ def angles_to_direction(yaw: float, pitch: float, roll: float) -> str
 **Key Public Methods:**
 ```python
 def __init__(self)
-def classify_pose(keypoints: Dict[str, Tuple[float, float, float]]) -> PoseClassification
-def calculate_joint_angles(keypoints: Dict) -> Dict[str, float]
+def classify_pose(pose_detection: PoseDetection, image_shape: Tuple[int, int]) -> List[Tuple[str, float]]
+def classify_poses(pose_detections: List[PoseDetection], image_shape: Tuple[int, int]) -> List[List[Tuple[str, float]]]
 def is_standing(keypoints: Dict) -> bool
 def is_sitting(keypoints: Dict) -> bool
 def is_squatting(keypoints: Dict) -> bool
+def is_closeup(keypoints: Dict, bbox: Tuple, image_shape: Tuple) -> bool
 ```
 
 #### `HeadAngleClassifier`
@@ -335,8 +363,10 @@ def is_squatting(keypoints: Dict) -> bool
 ```python
 def __init__(self)
 def classify_head_angle(yaw: float, pitch: float, roll: float) -> str
+def classify_head_pose(head_pose_result: HeadPoseResult) -> Tuple[str, float]
+def classify_head_poses(head_pose_results: List[HeadPoseResult]) -> List[Tuple[str, float]]
 def is_valid_orientation(roll: float) -> bool
-def get_angle_ranges() -> Dict[str, Tuple[float, float]]
+def get_angle_ranges() -> Dict[str, Dict[str, Tuple[float, float]]]
 ```
 
 #### `QualityAssessor`
@@ -348,10 +378,12 @@ def get_angle_ranges() -> Dict[str, Tuple[float, float]]
 ```python
 def __init__(self)
 def assess_quality(image: np.ndarray) -> QualityMetrics
-def calculate_laplacian_variance(image: np.ndarray) -> float
-def calculate_sobel_variance(image: np.ndarray) -> float
-def assess_brightness(image: np.ndarray) -> float
-def calculate_overall_score(metrics: QualityMetrics) -> float
+def calculate_laplacian_variance(gray_image: np.ndarray) -> float
+def calculate_sobel_variance(gray_image: np.ndarray) -> float
+def assess_brightness(gray_image: np.ndarray) -> float
+def assess_contrast(gray_image: np.ndarray) -> float
+def calculate_overall_score(laplacian_variance: float, sobel_variance: float, brightness_score: float, contrast_score: float) -> float
+def identify_quality_issues(laplacian_variance: float, brightness_score: float, contrast_score: float) -> List[str]
 ```
 
 #### `FrameSelector`
@@ -361,8 +393,8 @@ def calculate_overall_score(metrics: QualityMetrics) -> float
 
 **Key Public Methods:**
 ```python
-def __init__(self)
-def select_best_frames(candidates: List[FrameData], count: int = 3) -> List[FrameData]
+def __init__(self, criteria: SelectionCriteria)
+def select_best_frames(candidate_frames: List[FrameData], progress_callback: Optional[Callable[[str], None]] = None) -> SelectionSummary
 def rank_by_quality(frames: List[FrameData]) -> List[FrameData]
 def group_by_pose(frames: List[FrameData]) -> Dict[str, List[FrameData]]
 def group_by_head_angle(frames: List[FrameData]) -> Dict[str, List[FrameData]]
@@ -381,14 +413,16 @@ def group_by_head_angle(frames: List[FrameData]) -> Dict[str, List[FrameData]]
 class FrameData:
     frame_id: str
     file_path: Path
-    timestamp: float
     source_info: SourceInfo
     image_properties: ImageProperties
     face_detections: List[FaceDetection]
     pose_detections: List[PoseDetection]
     head_poses: List[HeadPoseResult]
     quality_metrics: Optional[QualityMetrics]
+    closeup_detections: List[CloseupDetection]
     selections: SelectionInfo
+    processing_steps: Dict[str, ProcessingStepInfo]
+    processing_timings: ProcessingTimings
 ```
 
 #### `PipelineState`
@@ -412,6 +446,7 @@ class PipelineState:
     step_progress: Dict[str, StepProgress]
     processing_stats: Dict[str, Any]
     config_snapshot: Dict[str, Any]
+    frames: List[FrameData]
 ```
 
 #### `StepProgress`
@@ -449,7 +484,7 @@ class PoseDetection:
     bbox: Tuple[int, int, int, int]
     confidence: float
     keypoints: Dict[str, Tuple[float, float, float]]
-    pose_classification: Optional[str]
+    pose_classifications: List[Tuple[str, float]]
 
 @dataclass
 class HeadPoseResult:
@@ -458,6 +493,29 @@ class HeadPoseResult:
     roll: float
     confidence: float
     direction: str
+
+@dataclass
+class CloseupDetection:
+    is_closeup: bool
+    shot_type: str
+    confidence: float
+    face_area_ratio: float
+
+@dataclass
+class QualityMetrics:
+    laplacian_variance: float
+    sobel_variance: float
+    brightness_score: float
+    contrast_score: float
+    overall_quality: float
+    usable: bool
+
+@dataclass
+class ProcessingTimings:
+    face_detection_ms: Optional[float]
+    pose_estimation_ms: Optional[float]
+    head_pose_estimation_ms: Optional[float]
+    quality_assessment_ms: Optional[float]
 ```
 
 ### Output Classes
@@ -469,10 +527,8 @@ class HeadPoseResult:
 
 **Key Public Methods:**
 ```python
-def __init__(self, quality: int = 95)
-def save_frame(image: np.ndarray, output_path: Path) -> None
-def save_face_crop(image: np.ndarray, face_bbox: Tuple, output_path: Path) -> None
-def save_batch(frames_and_paths: List[Tuple[np.ndarray, Path]]) -> None
+def __init__(self, config: OutputImageConfig, output_directory: Path, video_base_name: str)
+def save_frame_outputs(frame: FrameData, pose_categories: List[str], head_angle_categories: List[str]) -> List[str]
 ```
 
 #### `NamingConvention`
@@ -482,10 +538,9 @@ def save_batch(frames_and_paths: List[Tuple[np.ndarray, Path]]) -> None
 
 **Key Public Methods:**
 ```python
-def __init__(self, video_base_name: str)
-def get_pose_filename(pose: str, sequence: int) -> str
-def get_face_filename(head_angle: str, sequence: int) -> str
-def get_info_filename() -> str
+def __init__(self, video_base_name: str, output_directory: Path)
+def get_full_frame_filename(self, frame: FrameData, category: str, rank: int, extension: str = "png") -> str
+def get_face_crop_filename(self, frame: FrameData, head_angle: str, rank: int, extension: str = "png") -> str
 def validate_filename(filename: str) -> bool
 ```
 
@@ -498,11 +553,13 @@ def validate_filename(filename: str) -> bool
 
 **Key Public Methods:**
 ```python
-def __init__(self)
-def create_main_progress() -> Progress
-def create_step_progress(step_name: str, total: int) -> TaskID
-def update_step_progress(task_id: TaskID, advance: int) -> None
-def add_statistics_panel(stats: Dict[str, Any]) -> None
+def __init__(self, console: Optional[Console] = None)
+def start_pipeline_progress(self, pipeline_state: PipelineState) -> None
+def update_pipeline_state(self, pipeline_state: PipelineState) -> None
+def start_step_progress(self, step_name: str, total_items: int, description: str = "") -> None
+def update_step_progress(self, step_name: str, processed_count: int, extra_info: Optional[Dict[str, Any]] = None) -> None
+def complete_step_progress(self, step_name: str) -> None
+def stop_progress(self) -> None
 def display_final_summary(results: ProcessingResult) -> None
 ```
 
@@ -514,20 +571,47 @@ def display_final_summary(results: ProcessingResult) -> None
 class PersonFromVidError(Exception):
     """Base exception for all Person From Vid errors"""
 
+class ConfigurationError(PersonFromVidError):
+    """Configuration-related errors"""
+
 class VideoProcessingError(PersonFromVidError):
-    """Errors during video analysis and frame extraction"""
+    """Base for video processing errors"""
+
+class FrameExtractionError(VideoProcessingError):
+    """Frame extraction failures"""
 
 class ModelError(PersonFromVidError):
-    """Errors related to AI model loading or inference"""
+    """Base for AI model errors"""
 
-class StateError(PersonFromVidError):
-    """Errors in state management and persistence"""
+class ModelNotFoundError(ModelError):
+    """Model not found"""
 
-class QualityError(PersonFromVidError):
-    """Errors in image quality assessment"""
+class ModelDownloadError(ModelError):
+    """Model download failures"""
+
+class ModelInferenceError(ModelError):
+    """Model inference failures"""
+
+class AnalysisError(PersonFromVidError):
+    """Base for analysis errors"""
+
+class QualityAssessmentError(AnalysisError):
+    """Quality assessment failures"""
+
+class StateManagementError(PersonFromVidError):
+    """Base for state management errors"""
+
+class StateLoadError(StateManagementError):
+    """State loading failures"""
+
+class StateSaveError(StateManagementError):
+    """State saving failures"""
 
 class OutputError(PersonFromVidError):
-    """Errors during output file generation"""
+    """Base for output generation errors"""
+
+class ImageWriteError(OutputError):
+    """Image writing failures"""
 ```
 
 ### Graceful Interruption
@@ -548,4 +632,4 @@ When restarting processing on a previously interrupted video:
 3. **Partial Progress**: Continue from within partially completed steps
 4. **Model Consistency**: Ensure same model versions are used
 
-This architecture provides a robust, modular, and maintainable foundation for the Person From Vid package, with clear separation of concerns and comprehensive error handling. 
+This architecture provides a robust, modular, and maintainable foundation for the Person From Vid package, with clear separation of concerns and comprehensive error handling.

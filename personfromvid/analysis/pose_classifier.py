@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
 from ..data.detection_results import PoseDetection
+from ..data.frame_data import FrameData
 from ..utils.exceptions import PoseClassificationError
 
 logger = logging.getLogger(__name__)
@@ -51,10 +52,7 @@ class PoseClassifier:
     Examples:
         Basic usage:
         >>> classifier = PoseClassifier()
-        >>> pose_class = classifier.classify_pose(pose_detection)
-        
-        Batch classification:
-        >>> pose_classes = classifier.classify_poses(pose_detections)
+        >>> classifier.classify_poses_in_frame(frame_data)
         
         Custom thresholds:
         >>> classifier.set_angle_thresholds(standing_min=165.0, sitting_max=115.0)
@@ -74,7 +72,22 @@ class PoseClassifier:
         
         logger.info("Initialized PoseClassifier with default thresholds")
     
-    def classify_pose(self, pose_detection: PoseDetection, image_shape: Tuple[int, int]) -> List[Tuple[str, float]]:
+    def classify_poses_in_frame(self, frame: FrameData) -> None:
+        """Classifies all pose detections in a given frame and updates them in place.
+
+        Args:
+            frame: The FrameData object containing pose_detections and image_properties.
+        """
+        image_shape = (frame.image_properties.height, frame.image_properties.width)
+        for pose_detection in frame.pose_detections:
+            try:
+                classifications = self._classify_single_pose(pose_detection, image_shape)
+                pose_detection.pose_classifications = classifications
+            except PoseClassificationError:
+                # Assign empty list for failed classifications
+                pose_detection.pose_classifications = []
+
+    def _classify_single_pose(self, pose_detection: PoseDetection, image_shape: Tuple[int, int]) -> List[Tuple[str, float]]:
         """Classify a single pose detection, allowing for multiple classifications.
         
         Args:
@@ -110,27 +123,6 @@ class PoseClassifier:
         except Exception as e:
             logger.error(f"Failed to classify pose: {e}", exc_info=True)
             raise PoseClassificationError(f"Failed to classify pose: {str(e)}") from e
-    
-    def classify_poses(self, pose_detections: List[PoseDetection], image_shape: Tuple[int, int]) -> List[List[Tuple[str, float]]]:
-        """Classify multiple pose detections.
-        
-        Args:
-            pose_detections: List of pose detections
-            image_shape: Image dimensions (height, width)
-            
-        Returns:
-            List of lists, where each inner list contains (pose_classification, confidence_score) tuples for a pose.
-        """
-        results = []
-        for pose_detection in pose_detections:
-            try:
-                classifications = self.classify_pose(pose_detection, image_shape)
-                results.append(classifications)
-            except PoseClassificationError:
-                # Use default classification for failed poses
-                results.append([])
-        
-        return results
     
     def _is_closeup(self, keypoints: Dict[str, Tuple[float, float, float]], 
                    bbox: Tuple[int, int, int, int], image_shape: Tuple[int, int]) -> bool:

@@ -1,5 +1,7 @@
 from .base import PipelineStep
 from ...analysis.quality_assessor import create_quality_assessor
+from ...utils.logging import get_logger
+from collections import defaultdict
 
 
 class QualityAssessmentStep(PipelineStep):
@@ -37,26 +39,55 @@ class QualityAssessmentStep(PipelineStep):
             quality_assessor = create_quality_assessor()
             self.state.get_step_progress(self.step_name).start(total_frames)
 
-            last_processed_count = 0
+            issue_counts = defaultdict(int)
+            high_quality_count = 0
+            
             def progress_callback(processed_count: int):
-                nonlocal last_processed_count
                 self._check_interrupted()
-                advance = processed_count - last_processed_count
-                self.state.update_step_progress(self.step_name, self.state.get_step_progress(self.step_name).processed_count + advance)
-                last_processed_count = processed_count
+                self.state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
-                    self.formatter.update_progress(advance)
-            
+                    self.formatter.update_progress(1)
+
             if self.formatter and hasattr(self.formatter, 'step_progress_context'):
-                with self.formatter.step_progress_context("Evaluating quality", total_frames):
-                    quality_stats, total_assessed = quality_assessor.process_frame_batch(
-                        frames_for_quality, progress_callback
-                    )
+                with self.formatter.step_progress_context("Evaluating quality", total_frames) as progress_updater:
+                    for i, frame in enumerate(frames_for_quality):
+                        try:
+                            quality_assessor.assess_quality_in_frame(frame)
+                            
+                            # Update stats
+                            if frame.quality_metrics:
+                                if frame.quality_metrics.is_high_quality:
+                                    high_quality_count += 1
+                                for issue in frame.quality_metrics.quality_issues:
+                                    issue_counts[issue] += 1
+                        finally:
+                            # Unload image from memory to conserve resources
+                            frame.unload_image()
+                            if callable(progress_updater):
+                                progress_updater(i + 1)
             else:
-                quality_stats, total_assessed = quality_assessor.process_frame_batch(
-                    frames_for_quality, progress_callback
-                )
+                for i, frame in enumerate(frames_for_quality):
+                    try:
+                        quality_assessor.assess_quality_in_frame(frame)
+                        
+                        # Update stats
+                        if frame.quality_metrics:
+                            if frame.quality_metrics.is_high_quality:
+                                high_quality_count += 1
+                            for issue in frame.quality_metrics.quality_issues:
+                                issue_counts[issue] += 1
+                    finally:
+                        # Unload image from memory to conserve resources
+                        frame.unload_image()
+                        progress_callback(i + 1)
             
+            total_assessed = len(frames_for_quality)
+            quality_stats = {
+                "high_quality": high_quality_count,
+                "usable": total_assessed - len(issue_counts),
+                "issues": dict(issue_counts)
+            }
+
             self.state.get_step_progress(self.step_name).set_data("total_assessed", total_assessed)
             self.state.get_step_progress(self.step_name).set_data("quality_stats", quality_stats)
 

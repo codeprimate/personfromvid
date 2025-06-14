@@ -4,15 +4,21 @@ AI-powered video frame extraction and pose categorization tool that analyzes vid
 
 ## Features
 
-- 🎥 **Video Analysis**: Supports multiple video formats (MP4, AVI, MOV, MKV, WebM, etc.)
-- 🤖 **AI-Powered Detection**: Uses state-of-the-art models for face detection, pose estimation, and head pose analysis
-- 📐 **Pose Classification**: Automatically categorizes poses into standing, sitting, and squatting
-- 👤 **Head Orientation**: Classifies head directions into 9 cardinal orientations
-- 🖼️ **Quality Assessment**: Advanced image quality metrics for selecting the best frames
-- ⚡ **GPU Acceleration**: Optional CUDA support for faster processing
-- 📊 **Progress Tracking**: Rich console interface with real-time progress displays
-- 🔄 **Resumable Processing**: Automatic state management with interruption recovery
-- ⚙️ **Configurable**: Extensive configuration options via CLI, files, or environment variables
+- 🎥 **Video Analysis**: Supports multiple video formats (MP4, AVI, MOV, MKV, WebM, etc.).
+- 🤖 **AI-Powered Detection**: Uses state-of-the-art models for face detection (`yolov8s-face`), pose estimation (`yolov8s-pose`), and head pose analysis (`sixdrepnet`).
+- 🧠 **Smart Frame Selection**:
+    - **Keyframe Detection**: Prioritizes information-rich I-frames.
+    - **Temporal Sampling**: Extracts frames at regular intervals to ensure coverage.
+    - **Deduplication**: Avoids saving visually similar frames.
+- 📐 **Pose & Shot Classification**:
+    - Automatically categorizes poses into **standing, sitting, and squatting**.
+    - Classifies shot types like **closeup, medium shot, and full body**.
+- 👤 **Head Orientation**: Classifies head directions into 9 cardinal orientations (front, profile, looking up/down, etc.).
+- 🖼️ **Advanced Quality Assessment**: Uses multiple metrics like blur, brightness, and contrast to select the sharpest, best-lit frames.
+- ⚡ **GPU Acceleration**: Optional CUDA/MPS support for significantly faster processing.
+- 📊 **Rich Progress Tracking**: Modern console interface with real-time progress displays and detailed status.
+- 🔄 **Resumable Processing**: Automatically saves progress and allows resuming interrupted sessions.
+- ⚙️ **Highly Configurable**: Extensive configuration options via CLI, YAML files, or environment variables.
 
 ## Installation
 
@@ -61,96 +67,144 @@ pip install -e .
 ### Basic Usage
 
 ```bash
-# Process a video file
+# Process a video file, saving results to the same directory
 personfromvid video.mp4
 
-# Specify output directory
+# Specify a different output directory
 personfromvid video.mp4 --output-dir ./extracted_frames
 
-# Enable verbose logging
+# Enable verbose logging for detailed information
 personfromvid video.mp4 --verbose
 
-# Use GPU acceleration
+# Use GPU for faster processing (if available)
 personfromvid video.mp4 --device gpu
 ```
 
-### Advanced Options
+### Advanced Usage
 
 ```bash
 # High-quality processing with custom settings
 personfromvid video.mp4 \
-    --jpeg-quality 98 \
-    --confidence-threshold 0.8 \
+    --output-dir ./custom_output \
+    --output-jpeg-quality 98 \
+    --confidence 0.5 \
     --batch-size 16 \
     --max-frames 1000
 
-# Resume interrupted processing
+# Resume an interrupted process
 personfromvid video.mp4 --resume
 
-# Dry run to validate inputs
+# Perform a dry run to validate configuration without processing
 personfromvid video.mp4 --dry-run
 ```
 
+## Command-line Options
+
+`personfromvid` offers many options to customize its behavior. Here are some of the most common ones:
+
+| Option | Alias | Description | Default |
+| --- | --- | --- | --- |
+| `--config` | `-c` | Path to a YAML configuration file. | `None` |
+| `--output-dir` | `-o` | Directory to save output files. | Video's directory |
+| `--device` | | Device to use for AI models (`auto`, `cpu`, `gpu`). | `auto` |
+| `--log-level` | `-l` | Set logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). | `INFO` |
+| `--verbose` | `-v` | Enable verbose output (sets log level to `DEBUG`). | `False` |
+| `--quiet` | `-q` | Suppress non-essential output. | `False` |
+| `--resume` | | Resume from the last saved state. | `True` |
+| `--batch-size`| | Batch size for AI model inference. | `8` |
+| `--confidence`| | Confidence threshold for detections. | `0.3` |
+| `--max-frames`| | Maximum frames to process from the video. | `None` |
+| `--output-format`| | Output image format (`jpeg` or `png`). | `jpeg` |
+| `--output-jpeg-quality`| | Quality for JPEG output (70-100). | `95` |
+| `--no-output-face-crop-enabled`| | Disable generation of cropped face images. | `False` |
+| `--no-output-full-frame-enabled`| | Disable saving of full-frame images. | `False` |
+| `--force` | | Force cleanup of existing temp directory before starting. | `False` |
+| `--keep-temp` | | Keep temporary files after processing for debugging. | `False` |
+| `--dry-run` | | Validate inputs and exit without processing. | `False` |
+| `--version` | | Show version information and exit. | `False` |
+
+For a full list of options, run `personfromvid --help`.
+
 ## Output Structure
 
-Person From Vid creates the following output structure:
+By default, Person From Vid saves all output files into the same directory as the input video. You can specify a different location with the `--output-dir` option. All files are prefixed with the base name of the video file.
+
+Here is an example of the output for a video named `interview.mp4`:
 
 ```
-video_name/
-├── video_name_info.json          # Processing metadata and results
-├── standing_front_001.jpg        # Standing pose, front view
-├── standing_front_002.jpg
-├── standing_profile_left_001.jpg # Standing pose, left profile
-├── sitting_front_001.jpg         # Sitting pose, front view
-├── squatting_front_001.jpg       # Squatting pose, front view
-└── faces/                        # Face crops for head angle analysis
-    ├── front_001.jpg
-    ├── profile_left_001.jpg
-    └── looking_up_001.jpg
+interview_info.json                     # Detailed processing metadata and results
+interview_standing_front_closeup_001.jpg  # Full frame: {video}_{pose}_{head}_{shot}_{rank}.jpg
+interview_sitting_profile-left_medium-shot_002.jpg
+interview_face_front_001.jpg              # Face crop: {video}_face_{head-angle}_{rank}.jpg
+interview_face_profile-right_002.jpg
 ```
+
+- **`{video_base_name}_info.json`**: A detailed JSON file containing the configuration used, video metadata, and data for every selected frame.
+- **Full Frame Images**: Saved if `output.image.full_frame_enabled` is `true` (default). The filename captures the detected pose, head orientation, and shot type.
+- **Face Crop Images**: Saved if `output.image.face_crop_enabled` is `true` (default). These files contain only the cropped face for easier analysis. All images are saved in a single flat directory.
 
 ## Configuration
 
+Person From Vid can be configured via a YAML file, environment variables, or command-line arguments.
+
 ### Configuration File
 
-Create a YAML configuration file:
+Create a YAML file (e.g., `config.yaml`) to manage settings. CLI arguments will override file settings.
 
 ```yaml
 # config.yaml
-models:
-  device: "auto"
-  batch_size: 8
-  confidence_threshold: 0.7
 
+# Models and device settings
+models:
+  device: "auto"  # "cpu", "gpu", or "auto"
+  batch_size: 8
+  confidence_threshold: 0.3
+  face_detection_model: "yolov8s-face"
+  pose_estimation_model: "yolov8s-pose"
+  head_pose_model: "sixdrepnet"
+
+# Frame extraction strategy
+frame_extraction:
+  temporal_sampling_interval: 0.25 # Seconds between samples
+  enable_keyframe_detection: true
+  max_frames_per_video: null # No limit
+
+# Quality assessment thresholds
 quality:
   blur_threshold: 100.0
   brightness_min: 30.0
   brightness_max: 225.0
+  contrast_min: 20.0
 
+# Output settings
 output:
-  jpeg_quality: 95
-  max_frames_per_category: 3
-  create_face_crops: true
+  min_frames_per_category: 3
+  image:
+    format: "jpeg" # 'jpeg' or 'png'
+    jpeg:
+      quality: 95
+    png:
+      optimize: true
+    face_crop_enabled: true
+    full_frame_enabled: true
+    face_crop_padding: 0.2 # 20% padding
 
+# Processing and storage behavior
 processing:
   enable_resume: true
-  parallel_workers: 1
+storage:
+  keep_temp: false
+  force_temp_cleanup: false
+
+# Logging configuration
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  enable_structured_output: true
 ```
 
 Use with:
 ```bash
 personfromvid video.mp4 --config config.yaml
-```
-
-### Environment Variables
-
-Set configuration via environment variables:
-
-```bash
-export PERSONFROMVID_MODELS__DEVICE="gpu"
-export PERSONFROMVID_MODELS__BATCH_SIZE=16
-export PERSONFROMVID_QUALITY__BLUR_THRESHOLD=150.0
-personfromvid video.mp4
 ```
 
 ## Development
@@ -216,20 +270,28 @@ flake8 personfromvid/
 mypy personfromvid/
 ```
 
+### Cleaning Up
+
+To remove temporary files, build artifacts, and caches, run the cleaning script:
+
+```bash
+./scripts/clean.sh
+```
+
 ## System Requirements
 
 ### Minimum Requirements
 - Python 3.8+
-- 2GB RAM
-- 500MB disk space
+- 4GB RAM
+- 1GB disk space for dependencies and cache
 - FFmpeg
 
 ### Recommended Requirements
 - Python 3.10+
-- 8GB RAM
-- 5GB disk space
-- NVIDIA GPU with CUDA support
-- FFmpeg with hardware acceleration
+- 8GB+ RAM
+- 5GB+ disk space for cache
+- NVIDIA GPU with CUDA support for acceleration
+- FFmpeg with hardware acceleration support
 
 ## Supported Formats
 
@@ -242,20 +304,19 @@ mypy personfromvid/
 
 ## AI Models
 
-Person From Vid uses the following AI models:
+Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use.
 
-- **Face Detection**: SCRFD or YOLO-based models
-- **Pose Estimation**: YOLOv8-Pose or ViTPose
-- **Head Pose**: HopeNet or similar models
+- **Face Detection**: `yolov8s-face` - A YOLOv8 model trained for face detection.
+- **Pose Estimation**: `yolov8s-pose` - A YOLOv8 model for human pose estimation.
+- **Head Pose**: `sixdrepnet` - A model for 6DoF head pose estimation.
 
-Models are automatically downloaded and cached on first use.
+Alternative models can be configured.
 
 ## Performance Tips
 
-1. **GPU Acceleration**: Use `--device gpu` for faster processing
-2. **Batch Size**: Increase `--batch-size` for better GPU utilization
-3. **Quality Threshold**: Adjust `--quality-threshold` to filter low-quality frames
-4. **Max Frames**: Limit processing with `--max-frames` for large videos
+1. **Use a GPU**: The single most effective way to speed up processing is to use an NVIDIA GPU with `--device gpu`.
+2. **Adjust Batch Size**: Increase `--batch-size` to improve GPU utilization. A size of 8 or 16 is a good starting point.
+3. **Limit Frame Extraction**: Use `--max-frames` on very long videos to get results faster.
 
 ## Troubleshooting
 

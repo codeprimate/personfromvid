@@ -49,6 +49,10 @@ from .pipeline_state import (
     PipelineStatus
 )
 
+from .context import (
+    ProcessingContext
+)
+
 __all__ = [
     # Configuration
     "Config",
@@ -89,5 +93,8 @@ __all__ = [
     "VideoMetadata",
     "StepProgress",
     "ProcessingResult",
-    "PipelineStatus"
+    "PipelineStatus",
+    
+    # Processing context
+    "ProcessingContext"
 ]

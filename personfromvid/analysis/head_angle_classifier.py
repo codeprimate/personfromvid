@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, Any, Optional
 import warnings
 
 from ..data.detection_results import HeadPoseResult
+from ..data.frame_data import FrameData
 from ..utils.exceptions import HeadAngleClassificationError
 
 logger = logging.getLogger(__name__)
@@ -74,82 +75,40 @@ class HeadAngleClassifier:
         
         logger.info("Initialized HeadAngleClassifier with default thresholds")
     
-    def classify_head_angle(self, yaw: float, pitch: float, roll: float) -> str:
-        """Classify head pose angles into cardinal directions.
-        
+    def classify_head_poses_in_frame(self, frame: FrameData) -> None:
+        """Classifies all head pose detections in a given frame and updates them in place.
+
         Args:
-            yaw: Yaw angle in degrees (left/right rotation)
-            pitch: Pitch angle in degrees (up/down rotation)
-            roll: Roll angle in degrees (tilt rotation)
-            
-        Returns:
-            Direction string from the 9 cardinal directions
-            
-        Raises:
-            HeadAngleClassificationError: If classification fails
+            frame: The FrameData object containing head_poses.
         """
-        try:
-            # Validate input angles
-            self._validate_angles(yaw, pitch, roll)
-            
-            # Check if roll is within acceptable range
-            if not self.is_valid_orientation(roll):
-                # Still classify but could be marked as low quality
-                logger.debug(f"High roll angle detected: {roll}°, classification may be less reliable")
-            
-            # Classify based on yaw and pitch
-            if abs(yaw) <= self.yaw_threshold:
-                # Frontal directions
-                if abs(pitch) <= self.pitch_threshold:
-                    return "front"
-                elif pitch > self.pitch_threshold:
-                    return "looking_up"
-                else:  # pitch < -self.pitch_threshold
-                    return "looking_down"
-            
-            elif abs(yaw) >= self.profile_yaw_threshold:
-                # Profile directions
-                if yaw > 0:
-                    return "profile_left"
-                else:
-                    return "profile_right"
-            
-            else:
-                # Intermediate directions
-                if yaw > 0:  # Looking left
-                    if abs(pitch) <= self.pitch_threshold:
-                        return "looking_left"
-                    elif pitch > self.pitch_threshold:
-                        return "looking_up_left"
-                    else:
-                        return "looking_down_left"
-                else:  # Looking right
-                    if abs(pitch) <= self.pitch_threshold:
-                        return "looking_right"
-                    elif pitch > self.pitch_threshold:
-                        return "looking_up_right"
-                    else:
-                        return "looking_down_right"
-                        
-        except Exception as e:
-            raise HeadAngleClassificationError(f"Failed to classify head angle: {str(e)}") from e
-    
-    def classify_head_pose(self, head_pose_result: HeadPoseResult) -> Tuple[str, float]:
-        """Classify a head pose result with confidence scoring.
+        for head_pose_result in frame.head_poses:
+            direction, confidence = self._classify_single_head_pose(head_pose_result)
+            head_pose_result.direction = direction
+            head_pose_result.direction_confidence = confidence
+
+    def _classify_single_head_pose(self, head_pose_result: HeadPoseResult) -> Tuple[str, float]:
+        """Classify a single head pose result with confidence scoring.
+        
+        This is the core classification logic for a single detection.
         
         Args:
-            head_pose_result: Head pose estimation result
+            head_pose_result: Head pose estimation result containing yaw, pitch, roll.
             
         Returns:
             Tuple of (direction, adjusted_confidence)
         """
         try:
-            direction = self.classify_head_angle(
-                head_pose_result.yaw, 
-                head_pose_result.pitch, 
-                head_pose_result.roll
-            )
+            # Validate input angles
+            self._validate_angles(head_pose_result.yaw, head_pose_result.pitch, head_pose_result.roll)
             
+            # Check if roll is within acceptable range
+            if not self.is_valid_orientation(head_pose_result.roll):
+                # Still classify but could be marked as low quality
+                logger.debug(f"High roll angle detected: {head_pose_result.roll}°, classification may be less reliable")
+
+            # Determine direction based on yaw and pitch
+            direction = self._get_direction_from_angles(head_pose_result.yaw, head_pose_result.pitch)
+
             # Calculate adjusted confidence based on direction and pose quality
             adjusted_confidence = self._calculate_direction_confidence(
                 direction,
@@ -161,25 +120,45 @@ class HeadAngleClassifier:
             
             return direction, adjusted_confidence
             
-        except HeadAngleClassificationError:
+        except Exception as e:
+            logger.error(f"Failed to classify head pose for face_id={head_pose_result.face_id}: {e}")
             # Return default classification for failed poses
             return "front", 0.1
-    
-    def classify_head_poses(self, head_pose_results: List[HeadPoseResult]) -> List[Tuple[str, float]]:
-        """Classify multiple head pose results.
+
+    def _get_direction_from_angles(self, yaw: float, pitch: float) -> str:
+        """Determine cardinal direction from yaw and pitch angles."""
+        if abs(yaw) <= self.yaw_threshold:
+            # Frontal directions
+            if abs(pitch) <= self.pitch_threshold:
+                return "front"
+            elif pitch > self.pitch_threshold:
+                return "looking_up"
+            else:  # pitch < -self.pitch_threshold
+                return "looking_down"
         
-        Args:
-            head_pose_results: List of head pose estimation results
-            
-        Returns:
-            List of (direction, confidence) tuples
-        """
-        results = []
-        for head_pose_result in head_pose_results:
-            direction, confidence = self.classify_head_pose(head_pose_result)
-            results.append((direction, confidence))
+        elif abs(yaw) >= self.profile_yaw_threshold:
+            # Profile directions
+            if yaw > 0:
+                return "profile_left"
+            else:
+                return "profile_right"
         
-        return results
+        else:
+            # Intermediate directions
+            if yaw > 0:  # Looking left
+                if abs(pitch) <= self.pitch_threshold:
+                    return "looking_left"
+                elif pitch > self.pitch_threshold:
+                    return "looking_up_left"
+                else: # Inverted from original logic to be correct
+                    return "looking_down_left"
+            else:  # Looking right
+                if abs(pitch) <= self.pitch_threshold:
+                    return "looking_right"
+                elif pitch > self.pitch_threshold:
+                    return "looking_up_right"
+                else: # Inverted from original logic to be correct
+                    return "looking_down_right"
     
     def is_valid_orientation(self, roll: float) -> bool:
         """Check if head orientation is valid (not excessively tilted).

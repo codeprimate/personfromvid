@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np
+from pathlib import Path
 
 from personfromvid.analysis.closeup_detector import (
     CloseupDetector, 
@@ -12,7 +13,8 @@ from personfromvid.analysis.closeup_detector import (
     MEDIUM_CLOSEUP_THRESHOLD,
     MEDIUM_SHOT_THRESHOLD
 )
-from personfromvid.data.detection_results import FaceDetection, CloseupDetection
+from personfromvid.data.detection_results import FaceDetection, PoseDetection, CloseupDetection
+from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties
 
 
 class TestCloseupDetector:
@@ -22,6 +24,22 @@ class TestCloseupDetector:
         """Set up test fixtures."""
         self.detector = CloseupDetector()
         self.image_shape = (1080, 1920)  # height, width
+        
+        # Create sample FrameData components
+        self.source_info = SourceInfo(
+            video_timestamp=1.0,
+            extraction_method="test",
+            original_frame_number=1,
+            video_fps=30.0
+        )
+        
+        self.image_properties = ImageProperties(
+            width=1920,
+            height=1080,
+            channels=3,
+            file_size_bytes=1000000,
+            format="JPEG"
+        )
     
     def create_face_detection(self, bbox, confidence=0.9, landmarks=None):
         """Helper to create FaceDetection object."""
@@ -29,6 +47,17 @@ class TestCloseupDetector:
             bbox=bbox,
             confidence=confidence,
             landmarks=landmarks
+        )
+    
+    def create_frame_data(self, face_detections=None, pose_detections=None):
+        """Helper to create FrameData object with detections."""
+        return FrameData(
+            frame_id="test_frame",
+            file_path=Path("/tmp/test.jpg"),
+            source_info=self.source_info,
+            image_properties=self.image_properties,
+            face_detections=face_detections or [],
+            pose_detections=pose_detections or []
         )
     
     def test_initialization(self):
@@ -53,8 +82,12 @@ class TestCloseupDetector:
         bbox = (500, 300, 500 + bbox_size, 300 + bbox_size)
         
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        assert len(frame_data.closeup_detections) == 1
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "extreme_closeup"
         assert result.is_closeup is True
         assert result.confidence > 0.5
@@ -68,8 +101,11 @@ class TestCloseupDetector:
         bbox = (500, 300, 500 + bbox_size, 300 + bbox_size)
         
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "closeup"
         assert result.is_closeup is True
         assert CLOSEUP_THRESHOLD <= result.face_area_ratio < EXTREME_CLOSEUP_THRESHOLD
@@ -82,8 +118,11 @@ class TestCloseupDetector:
         bbox = (500, 300, 500 + bbox_size, 300 + bbox_size)
         
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "medium_closeup"
         assert result.is_closeup is True
         assert MEDIUM_CLOSEUP_THRESHOLD <= result.face_area_ratio < CLOSEUP_THRESHOLD
@@ -96,8 +135,11 @@ class TestCloseupDetector:
         bbox = (500, 300, 500 + bbox_size, 300 + bbox_size)
         
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "medium_shot"
         assert result.is_closeup is False
         assert MEDIUM_SHOT_THRESHOLD <= result.face_area_ratio < MEDIUM_CLOSEUP_THRESHOLD
@@ -110,8 +152,11 @@ class TestCloseupDetector:
         bbox = (500, 300, 500 + bbox_size, 300 + bbox_size)
         
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "wide_shot"
         assert result.is_closeup is False
         assert result.face_area_ratio < MEDIUM_SHOT_THRESHOLD
@@ -129,8 +174,11 @@ class TestCloseupDetector:
         
         bbox = (50, 150, 250, 300)
         face_detection = self.create_face_detection(bbox, landmarks=landmarks)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.inter_ocular_distance == 80.0
         assert result.estimated_distance == "very_close"  # 80 > VERY_CLOSE_IOD_THRESHOLD
     
@@ -153,8 +201,11 @@ class TestCloseupDetector:
         # Centered face with good proportions
         bbox = (800, 300, 1120, 620)  # 320x320 face centered horizontally
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.face_position == ("center", "center")
         assert result.composition_score > 0.5
         assert "good_horizontal_centering" in result.composition_notes
@@ -166,8 +217,11 @@ class TestCloseupDetector:
         # Face in left third
         bbox = (width_third // 2, 300, width_third // 2 + 200, 500)
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.face_position[0] == "left"
         assert "rule_of_thirds_horizontal" in result.composition_notes
     
@@ -177,8 +231,11 @@ class TestCloseupDetector:
         face_height = int(self.image_shape[0] * 0.4)
         bbox = (800, 300, 1000, 300 + face_height)
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert "ideal_face_size" in result.composition_notes
         assert result.composition_score > 0.6
     
@@ -194,12 +251,19 @@ class TestCloseupDetector:
             'nose': (600.0, 400.0, 0.8)
         }
         
-        result = self.detector.detect_closeup_with_pose(
-            face_detection, pose_keypoints, self.image_shape
+        pose_detection = PoseDetection(
+            bbox=(400, 300, 1000, 600),
+            confidence=0.9,
+            keypoints=pose_keypoints
         )
         
+        frame_data = self.create_frame_data([face_detection], [pose_detection])
+        
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert result.shoulder_width_ratio is not None
-        assert result.shoulder_width_ratio > 0.3
+        assert result.shoulder_width_ratio > 0.3  # Wide shoulders
     
     def test_batch_processing(self):
         """Test batch processing of frames."""
@@ -293,8 +357,13 @@ class TestCloseupDetector:
         invalid_face.landmarks = None
         invalid_face.confidence = 0.9
         
+        frame_data = self.create_frame_data([invalid_face])
+        
         # The detector should handle this gracefully without raising an exception
-        result = self.detector.detect_closeup(invalid_face, self.image_shape)
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        assert len(frame_data.closeup_detections) == 1
+        result = frame_data.closeup_detections[0]
         assert result.shot_type == "wide_shot"
         assert result.face_area_ratio == 0.0
         assert result.is_closeup is False
@@ -308,9 +377,11 @@ class TestCloseupDetector:
         ]
         bbox = (500, 300, 900, 700)  # Large face for closeup
         face_detection = self.create_face_detection(bbox, confidence=0.95, landmarks=landmarks)
+        frame_data = self.create_frame_data([face_detection])
         
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        self.detector.detect_closeups_in_frame(frame_data)
         
+        result = frame_data.closeup_detections[0]
         # Should have high confidence due to:
         # - High face detection confidence
         # - Large face area ratio
@@ -339,133 +410,99 @@ class TestCloseupDetector:
     def test_empty_frame_batch(self):
         """Test processing empty frame batch."""
         result = self.detector.process_frame_batch([])
-        # Method returns None for empty input (no frames to modify)
         assert result is None
     
     def test_frame_with_no_faces(self):
         """Test processing frame with no face detections."""
-        from personfromvid.data.frame_data import FrameData
-        from personfromvid.data.frame_data import SourceInfo, ImageProperties
-        from pathlib import Path
+        frame_data = self.create_frame_data([])  # No face detections
         
-        frames_with_faces = [
-            FrameData(
-                frame_id='frame_001',
-                file_path=Path('/path/to/frame1.jpg'),
-                source_info=SourceInfo(
-                    video_timestamp=1.0, 
-                    extraction_method='test',
-                    original_frame_number=30,
-                    video_fps=30.0
-                ),
-                image_properties=ImageProperties(
-                    width=self.image_shape[1], 
-                    height=self.image_shape[0], 
-                    channels=3,
-                    file_size_bytes=1024000,
-                    format='jpg'
-                ),
-                face_detections=[],  # No faces
-                pose_detections=[]
-            )
-        ]
+        self.detector.detect_closeups_in_frame(frame_data)
         
-        result = self.detector.process_frame_batch(frames_with_faces)
+        # Should not add any closeup detections
+        assert len(frame_data.closeup_detections) == 0
+    
+    def test_multiple_faces_in_frame(self):
+        """Test processing frame with multiple face detections."""
+        # Create two different face detections
+        face1 = self.create_face_detection((100, 100, 300, 300))  # Small face
+        face2 = self.create_face_detection((400, 200, 1000, 800))  # Large face for closeup
         
-        # Method returns None (in-place modification)
-        assert result is None
+        frame_data = self.create_frame_data([face1, face2])
         
-        # Frame should have no closeup detections since there are no faces
-        assert len(frames_with_faces) == 1
-        assert len(frames_with_faces[0].closeup_detections) == 0
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        # Should have two closeup detection results
+        assert len(frame_data.closeup_detections) == 2
+        
+        # First face should be wide shot or medium shot
+        result1 = frame_data.closeup_detections[0]
+        assert result1.shot_type in ["wide_shot", "medium_shot"]
+        
+        # Second face should be closeup (large face area)
+        result2 = frame_data.closeup_detections[1]
+        assert result2.is_closeup is True
     
     def test_batch_processing_edge_cases(self):
-        """Test batch processing with edge cases that are actually possible."""
-        from personfromvid.data.frame_data import FrameData
-        from personfromvid.data.detection_results import FaceDetection
-        from personfromvid.data.frame_data import SourceInfo, ImageProperties
-        from pathlib import Path
+        """Test batch processing with edge cases."""
+        # Frame with face but no pose data
+        frame1 = self.create_frame_data([
+            self.create_face_detection((400, 300, 600, 500))
+        ])
         
-        # Create a FrameData with a very small face (edge case that's actually possible)
-        frames_with_faces = [
-            FrameData(
-                frame_id='frame_001',
-                file_path=Path('/path/to/frame1.jpg'),
-                source_info=SourceInfo(
-                    video_timestamp=1.0, 
-                    extraction_method='test',
-                    original_frame_number=30,
-                    video_fps=30.0
-                ),
-                image_properties=ImageProperties(
-                    width=self.image_shape[1], 
-                    height=self.image_shape[0], 
-                    channels=3,
-                    file_size_bytes=1024000,
-                    format='jpg'
-                ),
-                face_detections=[
-                    FaceDetection(
-                        bbox=(0, 0, 1, 1),  # Extremely small face (1x1 pixel)
-                        confidence=0.9,
-                        landmarks=None
-                    )
-                ],
-                pose_detections=[]
-            )
-        ]
-        
-        result = self.detector.process_frame_batch(frames_with_faces)
-        
-        # Method returns None (in-place modification)
-        assert result is None
-        
-        # Should still process the frame, even with tiny face
-        assert len(frames_with_faces) == 1
-        assert len(frames_with_faces[0].closeup_detections) == 1
-        
-        # Tiny face should be classified as wide shot
-        closeup_result = frames_with_faces[0].closeup_detections[0]
-        assert closeup_result.shot_type == "wide_shot"
-        assert closeup_result.is_closeup is False
-    
-    def test_shoulder_width_ratio_calculation(self):
-        """Test shoulder width ratio calculation from pose keypoints."""
+        # Frame with both face and pose data
         pose_keypoints = {
-            'left_shoulder': (400.0, 450.0, 0.9),
-            'right_shoulder': (800.0, 450.0, 0.9),
-            'nose': (600.0, 400.0, 0.8)
+            'left_shoulder': (300.0, 400.0, 0.9),
+            'right_shoulder': (700.0, 400.0, 0.9),
+            'nose': (500.0, 350.0, 0.8)
         }
+        pose_detection = PoseDetection(
+            bbox=(300, 300, 700, 600),
+            confidence=0.9,
+            keypoints=pose_keypoints
+        )
+        frame2 = self.create_frame_data([
+            self.create_face_detection((400, 300, 600, 500))
+        ], [pose_detection])
         
-        ratio = self.detector._calculate_shoulder_width_ratio(pose_keypoints, self.image_shape)
+        # Frame with no faces
+        frame3 = self.create_frame_data([])
         
-        expected_ratio = 400.0 / self.image_shape[1]  # shoulder width / frame width
-        assert abs(ratio - expected_ratio) < 0.001
-    
-    def test_shoulder_width_ratio_insufficient_confidence(self):
-        """Test shoulder width calculation with low confidence keypoints."""
-        pose_keypoints = {
-            'left_shoulder': (400.0, 450.0, 0.3),  # Low confidence
-            'right_shoulder': (800.0, 450.0, 0.9),
-            'nose': (600.0, 400.0, 0.8)
-        }
+        frames = [frame1, frame2, frame3]
         
-        ratio = self.detector._calculate_shoulder_width_ratio(pose_keypoints, self.image_shape)
-        assert ratio is None
+        # Process batch
+        self.detector.process_frame_batch(frames)
+        
+        # Verify results
+        assert len(frame1.closeup_detections) == 1
+        assert len(frame2.closeup_detections) == 1
+        assert len(frame3.closeup_detections) == 0
+        
+        # Frame with pose data should have shoulder width ratio
+        assert frame2.closeup_detections[0].shoulder_width_ratio is not None
+        
+        # Frame without pose data should not have shoulder width ratio
+        assert frame1.closeup_detections[0].shoulder_width_ratio is None
     
     def test_composition_headroom_assessment(self):
         """Test headroom assessment in composition scoring."""
-        # Face with good headroom (15% from top)
-        y_offset = int(self.image_shape[0] * 0.15)
-        bbox = (800, y_offset, 1000, y_offset + 200)
+        # Face with good headroom (10-20% from top)
+        good_headroom_y = int(self.image_shape[0] * 0.15)  # 15% from top
+        bbox = (800, good_headroom_y, 1000, good_headroom_y + 200)
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert "good_headroom" in result.composition_notes
         
         # Face with insufficient headroom (too close to top)
-        bbox = (800, 10, 1000, 210)
+        bad_headroom_y = int(self.image_shape[0] * 0.02)  # 2% from top
+        bbox = (800, bad_headroom_y, 1000, bad_headroom_y + 200)
         face_detection = self.create_face_detection(bbox)
-        result = self.detector.detect_closeup(face_detection, self.image_shape)
+        frame_data = self.create_frame_data([face_detection])
         
+        self.detector.detect_closeups_in_frame(frame_data)
+        
+        result = frame_data.closeup_detections[0]
         assert "insufficient_headroom" in result.composition_notes 

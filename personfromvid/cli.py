@@ -75,7 +75,7 @@ def signal_handler(signum: int, frame) -> None:
     help='Batch size for AI model inference'
 )
 @click.option(
-    '--confidence-threshold',
+    '--confidence',
     type=click.FloatRange(0.0, 1.0),
     help='Confidence threshold for detections'
 )
@@ -120,6 +120,16 @@ def signal_handler(signum: int, frame) -> None:
     help='Enable/disable PNG optimization'
 )
 @click.option(
+    '--keep-temp',
+    is_flag=True,
+    help='Keep temporary files after processing (overrides default cleanup)'
+)
+@click.option(
+    '--force',
+    is_flag=True,
+    help='Force cleanup of existing temp directory before processing'
+)
+@click.option(
     '--dry-run',
     is_flag=True,
     help='Validate inputs and show processing plan without executing'
@@ -144,7 +154,7 @@ def main(
     resume: bool,
     device: str,
     batch_size: Optional[int],
-    confidence_threshold: Optional[float],
+    confidence: Optional[float],
     max_frames: Optional[int],
     quality_threshold: Optional[float],
     output_format: Optional[str],
@@ -153,6 +163,8 @@ def main(
     output_full_frame_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
     output_png_optimize: Optional[bool],
+    keep_temp: bool,
+    force: bool,
     dry_run: bool,
     no_structured_output: bool,
     version: bool
@@ -292,6 +304,19 @@ def main(
         
         # Initialize and run pipeline
         from .core.pipeline import ProcessingPipeline
+        from .data.context import ProcessingContext
+        
+        # Create processing context with required components
+        if not will_use_consolidated_formatter:
+            logger.info("Initializing processing context...")
+        
+        # Create ProcessingContext
+        processing_context = ProcessingContext(
+            video_path=video_path,
+            video_base_name=video_path.stem,
+            config=app_config,
+            output_directory=output_dir
+        )
         
         # Create consolidated formatter if structured output is enabled
         consolidated_formatter = None
@@ -313,7 +338,7 @@ def main(
             logger.info("Initializing processing pipeline...")
         
         try:
-            pipeline = ProcessingPipeline(str(video_path), app_config, formatter=consolidated_formatter)
+            pipeline = ProcessingPipeline(context=processing_context, formatter=consolidated_formatter)
             
             # Process or resume
             if resume:
@@ -346,19 +371,51 @@ def main(
             logger.error(f"Pipeline processing failed: {e}")
             if verbose:
                 console.print_exception()
+                
+            # Cleanup temp files on failure if configured
+            if app_config.storage.cleanup_temp_on_failure:
+                logger.info("Cleaning up temporary files after failure...")
+                processing_context.temp_manager.cleanup_temp_files()
+            
             sys.exit(1)
         
     except PersonFromVidError as e:
         error_msg = format_exception_message(e)
         console.print(f"[red]Error:[/red] {error_msg}")
+        
+        # Cleanup temp files if they were created and cleanup on failure is enabled
+        try:
+            if ('processing_context' in locals() and 
+                app_config.storage.cleanup_temp_on_failure):
+                processing_context.temp_manager.cleanup_temp_files()
+        except:
+            pass  # Don't fail cleanup on error
+        
         sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n[yellow]Processing interrupted by user.[/yellow]")
+        
+        # Cleanup temp files if they were created
+        try:
+            if 'processing_context' in locals():
+                processing_context.temp_manager.cleanup_temp_files()
+        except:
+            pass  # Don't fail cleanup on error
+        
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {str(e)}")
         if verbose:
             console.print_exception()
+            
+        # Cleanup temp files if they were created and cleanup on failure is enabled
+        try:
+            if ('processing_context' in locals() and 
+                app_config.storage.cleanup_temp_on_failure):
+                processing_context.temp_manager.cleanup_temp_files()
+        except:
+            pass  # Don't fail cleanup on error
+        
         sys.exit(1)
 
 
@@ -415,8 +472,8 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args['batch_size']:
         config.models.batch_size = cli_args['batch_size']
     
-    if cli_args['confidence_threshold']:
-        config.models.confidence_threshold = cli_args['confidence_threshold']
+    if cli_args['confidence']:
+        config.models.confidence_threshold = cli_args['confidence']
     
     # Frame extraction overrides
     if cli_args['max_frames']:
@@ -447,6 +504,13 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     
     # Processing overrides
     config.processing.enable_resume = cli_args['resume']
+    
+    # Storage overrides
+    if cli_args['keep_temp']:
+        config.storage.keep_temp = True
+    
+    if cli_args['force']:
+        config.storage.force_temp_cleanup = True
 
 
 def show_processing_plan(video_path: Path, output_dir: Path, config: Config, dry_run: bool) -> None:
@@ -470,6 +534,15 @@ def show_processing_plan(video_path: Path, output_dir: Path, config: Config, dry
     
     if config.frame_extraction.max_frames_per_video:
         details.append(f"Max frames: {config.frame_extraction.max_frames_per_video}")
+    
+    # Temp directory handling
+    if config.storage.keep_temp:
+        details.append("Temp files: kept after processing")
+    else:
+        details.append("Temp files: cleaned up after processing")
+    
+    if config.storage.force_temp_cleanup:
+        details.append("Force cleanup: existing temp directory will be removed")
     
     plan_content = "\n".join(details)
     

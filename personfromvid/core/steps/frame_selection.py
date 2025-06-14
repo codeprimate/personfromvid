@@ -10,6 +10,21 @@ class FrameSelectionStep(PipelineStep):
     def step_name(self) -> str:
         return "frame_selection"
 
+    def _calculate_dynamic_max_frames(self, baseline_frames: int, video_duration: float) -> int:
+        """Calculate dynamic max frames per category based on video duration.
+        
+        Uses baseline minimum frames for 30s video, increments by 1 for every 10 additional seconds after 30s.
+        
+        Args:
+            baseline_frames: Base minimum number of frames for 30s video
+            video_duration: Video duration in seconds
+            
+        Returns:
+            Dynamic max frames per category (baseline + duration scaling)
+        """
+        additional_frames = max(0, int((video_duration - 30.0) // 10))
+        return baseline_frames + additional_frames
+
     def execute(self) -> None:
         """Select best frames based on quality and diversity."""
         self.state.start_step(self.step_name)
@@ -34,11 +49,17 @@ class FrameSelectionStep(PipelineStep):
             else:
                 self.logger.info(f"🎯 Selecting from {total_candidates} candidates...")
 
+            # Calculate dynamic frames per category based on video duration
+            baseline_frames = self.config.output.min_frames_per_category
+            video_duration = self.state.video_metadata.duration
+            dynamic_max_frames = self._calculate_dynamic_max_frames(baseline_frames, video_duration)
+
             criteria = SelectionCriteria(
-                max_frames_per_category=self.config.output.max_frames_per_category,
-                min_quality_threshold=0.3,
-                face_size_weight=0.3,
-                quality_weight=0.7
+                min_frames_per_category=dynamic_max_frames,
+                min_quality_threshold=self.config.frame_selection.min_quality_threshold,
+                face_size_weight=self.config.frame_selection.face_size_weight,
+                quality_weight=self.config.frame_selection.quality_weight,
+                diversity_threshold=self.config.frame_selection.diversity_threshold
             )
             frame_selector = create_frame_selector(criteria)
             self.state.get_step_progress(self.step_name).start(total_candidates)

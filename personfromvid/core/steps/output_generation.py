@@ -31,19 +31,13 @@ class OutputGenerationStep(PipelineStep):
                 self.state.get_step_progress(self.step_name).start(0)
                 return
 
-            output_dir = self.pipeline.video_path.parent
-            video_base_name = self.pipeline.video_path.stem
+            output_dir = self.pipeline.context.output_directory
+            image_writer = ImageWriter(context=self.pipeline.context)
             
             if self.formatter:
                 self.formatter.print_info("📁 Creating output files...", 'files')
             else:
                 self.logger.info(f"📁 Generating output in {output_dir}...")
-
-            image_writer = ImageWriter(
-                config=self.config.output.image,
-                output_directory=output_dir,
-                video_base_name=video_base_name
-            )
 
             total_frames = len(selected_frames)
             self.state.get_step_progress(self.step_name).start(total_frames)

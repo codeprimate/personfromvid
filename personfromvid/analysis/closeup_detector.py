@@ -12,7 +12,8 @@ import math
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
-from ..data.detection_results import FaceDetection, CloseupDetection
+from ..data.detection_results import FaceDetection, PoseDetection, CloseupDetection
+from ..data.frame_data import FrameData, ImageProperties
 from ..utils.exceptions import AnalysisError
 
 logger = logging.getLogger(__name__)
@@ -53,15 +54,12 @@ class CloseupDetector:
     - Portrait suitability scoring
     
     Examples:
-        Basic usage:
+        Basic usage with FrameData:
         >>> detector = CloseupDetector()
-        >>> result = detector.detect_closeup(face_detection, image_shape)
-        
-        With pose keypoints for enhanced analysis:
-        >>> result = detector.detect_closeup_with_pose(face_detection, pose_keypoints, image_shape)
+        >>> detector.detect_closeups_in_frame(frame_data)
         
         Batch processing:
-        >>> results = detector.process_frame_batch(frames_with_faces)
+        >>> detector.process_frame_batch(frames_with_faces)
     """
     
     def __init__(self, 
@@ -85,14 +83,53 @@ class CloseupDetector:
         logger.info(f"Initialized CloseupDetector with thresholds: "
                    f"extreme={extreme_closeup_threshold}, closeup={closeup_threshold}, "
                    f"medium_closeup={medium_closeup_threshold}, medium_shot={medium_shot_threshold}")
-    
-    def detect_closeup(self, face_detection: FaceDetection, 
-                      image_shape: Tuple[int, int]) -> CloseupDetection:
-        """Detect closeup shot characteristics from face detection.
+
+    def detect_closeups_in_frame(self, frame: FrameData) -> None:
+        """Detect closeup characteristics for all faces in a frame and update the frame in place.
+        
+        This is the primary method that operates on FrameData objects and follows the 
+        standardized pattern of using FrameData as the unit of work.
+        
+        Args:
+            frame: FrameData object containing face detections and image properties
+        """
+        if not frame.face_detections:
+            return
+        
+        image_properties = frame.image_properties
+        
+        # Process each face detection
+        for face_idx, face_detection in enumerate(frame.face_detections):
+            try:
+                # Check if we have corresponding pose data for enhanced detection
+                pose_detection = None
+                if (frame.pose_detections and 
+                    len(frame.pose_detections) > face_idx):
+                    pose_detection = frame.pose_detections[face_idx]
+                
+                # Perform closeup detection
+                if pose_detection:
+                    closeup_result = self._detect_closeup_with_pose_data(
+                        face_detection, pose_detection, image_properties
+                    )
+                else:
+                    closeup_result = self._detect_closeup_from_face(
+                        face_detection, image_properties
+                    )
+                
+                frame.closeup_detections.append(closeup_result)
+                
+            except Exception as e:
+                logger.error(f"Failed to detect closeup for face {face_idx} in frame {frame.frame_id}: {e}")
+                # Continue processing other faces
+
+    def _detect_closeup_from_face(self, face_detection: FaceDetection, 
+                                 image_properties: ImageProperties) -> CloseupDetection:
+        """Detect closeup shot characteristics from face detection using data models.
         
         Args:
             face_detection: Face detection result with bbox and landmarks
-            image_shape: Image dimensions (height, width)
+            image_properties: Image properties containing dimensions and metadata
             
         Returns:
             CloseupDetection with comprehensive analysis results
@@ -101,8 +138,7 @@ class CloseupDetector:
             CloseupDetectionError: If detection fails
         """
         try:
-            height, width = image_shape
-            frame_area = height * width
+            frame_area = image_properties.total_pixels
             
             # Calculate face area ratio
             face_area = face_detection.area
@@ -119,8 +155,8 @@ class CloseupDetector:
                 estimated_distance = self._estimate_distance(inter_ocular_distance)
             
             # Assess frame composition
-            composition_score, composition_notes, face_position = self._assess_composition(
-                face_detection, image_shape
+            composition_score, composition_notes, face_position = self._assess_composition_with_properties(
+                face_detection, image_properties
             )
             
             # Determine if this is a closeup
@@ -145,25 +181,27 @@ class CloseupDetector:
             
         except Exception as e:
             raise CloseupDetectionError(f"Failed to detect closeup: {str(e)}") from e
-    
-    def detect_closeup_with_pose(self, face_detection: FaceDetection,
-                                pose_keypoints: Dict[str, Tuple[float, float, float]],
-                                image_shape: Tuple[int, int]) -> CloseupDetection:
-        """Enhanced closeup detection using both face and pose information.
+
+    def _detect_closeup_with_pose_data(self, face_detection: FaceDetection,
+                                      pose_detection: PoseDetection,
+                                      image_properties: ImageProperties) -> CloseupDetection:
+        """Enhanced closeup detection using both face and pose data models.
         
         Args:
             face_detection: Face detection result
-            pose_keypoints: Pose keypoints for additional context
-            image_shape: Image dimensions (height, width)
+            pose_detection: Pose detection with keypoints
+            image_properties: Image properties containing dimensions
             
         Returns:
             CloseupDetection with enhanced analysis including shoulder width
         """
         # Start with basic face-based detection
-        result = self.detect_closeup(face_detection, image_shape)
+        result = self._detect_closeup_from_face(face_detection, image_properties)
         
-        # Add shoulder width analysis if available
-        shoulder_width_ratio = self._calculate_shoulder_width_ratio(pose_keypoints, image_shape)
+        # Add shoulder width analysis from pose data
+        shoulder_width_ratio = self._calculate_shoulder_width_ratio_from_pose(
+            pose_detection, image_properties
+        )
         if shoulder_width_ratio is not None:
             result.shoulder_width_ratio = shoulder_width_ratio
             
@@ -177,78 +215,20 @@ class CloseupDetector:
                     result.confidence = min(1.0, result.confidence + 0.1)
         
         return result
-    
-    def _classify_shot_type(self, face_area_ratio: float) -> str:
-        """Classify shot type based on face area ratio.
-        
-        Args:
-            face_area_ratio: Ratio of face area to total frame area
-            
-        Returns:
-            Shot type classification string
-        """
-        if face_area_ratio >= self.extreme_closeup_threshold:
-            return "extreme_closeup"
-        elif face_area_ratio >= self.closeup_threshold:
-            return "closeup"
-        elif face_area_ratio >= self.medium_closeup_threshold:
-            return "medium_closeup"
-        elif face_area_ratio >= self.medium_shot_threshold:
-            return "medium_shot"
-        else:
-            return "wide_shot"
-    
-    def _calculate_inter_ocular_distance(self, landmarks: List[Tuple[float, float]]) -> float:
-        """Calculate distance between eyes using facial landmarks.
-        
-        Args:
-            landmarks: List of facial landmark points (typically 5 points)
-                      Expected format: [left_eye, right_eye, nose, left_mouth, right_mouth]
-            
-        Returns:
-            Distance between eyes in pixels
-        """
-        if len(landmarks) < 2:
-            return 0.0
-        
-        # Assuming first two landmarks are left and right eyes
-        left_eye = landmarks[0]
-        right_eye = landmarks[1]
-        
-        # Calculate Euclidean distance
-        distance = math.sqrt((right_eye[0] - left_eye[0])**2 + (right_eye[1] - left_eye[1])**2)
-        return distance
-    
-    def _estimate_distance(self, inter_ocular_distance: float) -> str:
-        """Estimate relative distance based on inter-ocular distance.
-        
-        Args:
-            inter_ocular_distance: Distance between eyes in pixels
-            
-        Returns:
-            Distance category string
-        """
-        if inter_ocular_distance >= VERY_CLOSE_IOD_THRESHOLD:
-            return "very_close"
-        elif inter_ocular_distance >= CLOSE_IOD_THRESHOLD:
-            return "close"
-        elif inter_ocular_distance >= MEDIUM_IOD_THRESHOLD:
-            return "medium"
-        else:
-            return "far"
-    
-    def _assess_composition(self, face_detection: FaceDetection, 
-                          image_shape: Tuple[int, int]) -> Tuple[float, List[str], Tuple[str, str]]:
-        """Assess frame composition quality for portrait photography.
+
+    def _assess_composition_with_properties(self, face_detection: FaceDetection, 
+                                          image_properties: ImageProperties) -> Tuple[float, List[str], Tuple[str, str]]:
+        """Assess frame composition quality using ImageProperties data model.
         
         Args:
             face_detection: Face detection result
-            image_shape: Image dimensions (height, width)
+            image_properties: Image properties data model
             
         Returns:
             Tuple of (composition_score, notes, face_position)
         """
-        height, width = image_shape
+        height = image_properties.height
+        width = image_properties.width
         x1, y1, x2, y2 = face_detection.bbox
         face_center_x = (x1 + x2) / 2
         face_center_y = (y1 + y2) / 2
@@ -319,18 +299,19 @@ class CloseupDetector:
             notes.append("excessive_headroom")
         
         return min(1.0, composition_score), notes, face_position
-    
-    def _calculate_shoulder_width_ratio(self, pose_keypoints: Dict[str, Tuple[float, float, float]],
-                                      image_shape: Tuple[int, int]) -> Optional[float]:
-        """Calculate shoulder width ratio from pose keypoints.
+
+    def _calculate_shoulder_width_ratio_from_pose(self, pose_detection: PoseDetection,
+                                                 image_properties: ImageProperties) -> Optional[float]:
+        """Calculate shoulder width ratio from pose detection data model.
         
         Args:
-            pose_keypoints: Pose keypoints dictionary
-            image_shape: Image dimensions (height, width)
+            pose_detection: Pose detection with keypoints
+            image_properties: Image properties containing dimensions
             
         Returns:
             Shoulder width ratio or None if keypoints unavailable
         """
+        pose_keypoints = pose_detection.keypoints
         left_shoulder = pose_keypoints.get('left_shoulder')
         right_shoulder = pose_keypoints.get('right_shoulder')
         
@@ -339,9 +320,68 @@ class CloseupDetector:
             right_shoulder[2] >= MIN_LANDMARK_CONFIDENCE):
             
             shoulder_width = abs(right_shoulder[0] - left_shoulder[0])
-            return shoulder_width / image_shape[1]
+            return shoulder_width / image_properties.width
         
         return None
+
+    def _classify_shot_type(self, face_area_ratio: float) -> str:
+        """Classify shot type based on face area ratio.
+        
+        Args:
+            face_area_ratio: Ratio of face area to total frame area
+            
+        Returns:
+            Shot type classification string
+        """
+        if face_area_ratio >= self.extreme_closeup_threshold:
+            return "extreme_closeup"
+        elif face_area_ratio >= self.closeup_threshold:
+            return "closeup"
+        elif face_area_ratio >= self.medium_closeup_threshold:
+            return "medium_closeup"
+        elif face_area_ratio >= self.medium_shot_threshold:
+            return "medium_shot"
+        else:
+            return "wide_shot"
+    
+    def _calculate_inter_ocular_distance(self, landmarks: List[Tuple[float, float]]) -> float:
+        """Calculate distance between eyes using facial landmarks.
+        
+        Args:
+            landmarks: List of facial landmark points (typically 5 points)
+                      Expected format: [left_eye, right_eye, nose, left_mouth, right_mouth]
+            
+        Returns:
+            Distance between eyes in pixels
+        """
+        if len(landmarks) < 2:
+            return 0.0
+        
+        # Assuming first two landmarks are left and right eyes
+        left_eye = landmarks[0]
+        right_eye = landmarks[1]
+        
+        # Calculate Euclidean distance
+        distance = math.sqrt((right_eye[0] - left_eye[0])**2 + (right_eye[1] - left_eye[1])**2)
+        return distance
+    
+    def _estimate_distance(self, inter_ocular_distance: float) -> str:
+        """Estimate relative distance based on inter-ocular distance.
+        
+        Args:
+            inter_ocular_distance: Distance between eyes in pixels
+            
+        Returns:
+            Distance category string
+        """
+        if inter_ocular_distance >= VERY_CLOSE_IOD_THRESHOLD:
+            return "very_close"
+        elif inter_ocular_distance >= CLOSE_IOD_THRESHOLD:
+            return "close"
+        elif inter_ocular_distance >= MEDIUM_IOD_THRESHOLD:
+            return "medium"
+        else:
+            return "far"
     
     def _calculate_detection_confidence(self, face_detection: FaceDetection,
                                       face_area_ratio: float,
@@ -376,7 +416,7 @@ class CloseupDetector:
         confidence_factors.append(composition_score)
         
         return max(0.3, np.mean(confidence_factors))
-    
+
     def process_frame_batch(self, frames_with_faces: List['FrameData'], 
                            progress_callback: Optional[callable] = None) -> None:
         """Process a batch of frames with closeup detection.
@@ -394,31 +434,8 @@ class CloseupDetector:
         
         for i, frame_data in enumerate(frames_with_faces):
             try:
-                # Get image dimensions from FrameData object
-                image_shape = (frame_data.image_properties.height, 
-                             frame_data.image_properties.width)
-                
-                # Get face and pose detections from FrameData object
-                face_detections = frame_data.face_detections
-                pose_detections = frame_data.pose_detections
-                
-                closeup_results = []
-                
-                # Process each face detection
-                for face_idx, face_detection in enumerate(face_detections):
-                    # Check if we have pose data for enhanced detection
-                    if pose_detections and len(pose_detections) > face_idx:
-                        pose_keypoints = pose_detections[face_idx].keypoints
-                        closeup_result = self.detect_closeup_with_pose(
-                            face_detection, pose_keypoints, image_shape
-                        )
-                    else:
-                        closeup_result = self.detect_closeup(face_detection, image_shape)
-                    
-                    closeup_results.append(closeup_result)
-                
-                # Add closeup results to FrameData object
-                frame_data.closeup_detections.extend(closeup_results)
+                # Use the new standardized method
+                self.detect_closeups_in_frame(frame_data)
                 
             except Exception as e:
                 frame_id = getattr(frame_data, 'frame_id', f'frame_{i}')

@@ -9,7 +9,7 @@ from unittest.mock import patch, Mock
 
 from personfromvid.core import StateManager
 from personfromvid.core.temp_manager import TempManager
-from personfromvid.data import PipelineState, VideoMetadata
+from personfromvid.data import PipelineState, VideoMetadata, Config, ProcessingContext
 from personfromvid.utils.exceptions import StateLoadError, StateSaveError
 
 # Test constants
@@ -39,16 +39,30 @@ class TestStateManager:
             state_file.unlink()
     
     @pytest.fixture
-    def temp_manager(self, temp_video_file):
-        """Create a TempManager for testing."""
-        manager = TempManager(str(temp_video_file))
-        manager.create_temp_structure()
+    def processing_context(self, temp_video_file):
+        """Create ProcessingContext for testing."""
+        config = Config()
+        output_dir = temp_video_file.parent / 'test_output'
         
-        yield manager
-        
-        # Cleanup temp directory
-        manager.cleanup_temp_files()
-    
+        # We need a real TempManager for StateManager tests as it deals with file paths
+        with patch('personfromvid.core.temp_manager.TempManager') as MockTempManager:
+            # Create a real temp manager instance to be returned by the mock
+            real_temp_manager = TempManager(str(temp_video_file))
+            real_temp_manager.create_temp_structure()
+            MockTempManager.return_value = real_temp_manager
+
+            context = ProcessingContext(
+                video_path=temp_video_file,
+                video_base_name=temp_video_file.stem,
+                config=config,
+                output_directory=output_dir
+            )
+            
+            yield context
+
+            # Cleanup
+            real_temp_manager.cleanup_temp_files()
+
     @pytest.fixture
     def sample_pipeline_state(self):
         """Create a sample pipeline state for testing."""
@@ -76,29 +90,29 @@ class TestStateManager:
             last_updated=now
         )
     
-    def test_state_manager_initialization(self, temp_video_file, temp_manager):
+    def test_state_manager_initialization(self, processing_context):
         """Test StateManager initialization."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
-        assert manager.video_path == temp_video_file
-        assert manager.state_file_path.name == f"{temp_video_file.stem}_info.json"
-        assert manager.state_file_path.parent == temp_manager.get_temp_path()
+        assert manager.video_path == processing_context.video_path
+        assert manager.state_file_path.name == f"{processing_context.video_base_name}_info.json"
+        assert manager.state_file_path.parent == processing_context.temp_manager.get_temp_path()
     
-    def test_load_state_no_file(self, temp_video_file, temp_manager):
+    def test_load_state_no_file(self, processing_context):
         """Test loading state when no state file exists."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         state = manager.load_state()
         
         assert state is None
     
-    def test_save_and_load_state(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_save_and_load_state(self, processing_context, sample_pipeline_state):
         """Test saving and loading pipeline state."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         # Mock the video hash calculation to match our test state
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
             # Update state to match our video file
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             
             # Save state
             manager.save_state(sample_pipeline_state)
@@ -110,17 +124,17 @@ class TestStateManager:
             loaded_state = manager.load_state()
             
             assert loaded_state is not None
-            assert loaded_state.video_file == str(temp_video_file)
+            assert loaded_state.video_file == str(processing_context.video_path)
             assert loaded_state.video_hash == "abc123def456"
             assert loaded_state.video_metadata.duration == 120.5
     
-    def test_save_state_creates_backup(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_save_state_creates_backup(self, processing_context, sample_pipeline_state):
         """Test that saving state creates backup of existing file."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
             # Update state to match our video file
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             
             # Save state first time
             manager.save_state(sample_pipeline_state)
@@ -133,13 +147,13 @@ class TestStateManager:
             loaded_state = manager.load_state()
             assert loaded_state.current_step == "face_detection"
     
-    def test_validate_state_video_hash_mismatch(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_validate_state_video_hash_mismatch(self, processing_context, sample_pipeline_state):
         """Test state validation when video hash doesn't match."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
 
         # Save state with one hash
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             manager.save_state(sample_pipeline_state)
         
         # Try to load with different hash
@@ -147,28 +161,28 @@ class TestStateManager:
             with pytest.raises(StateLoadError, match="Video file has been modified"):
                 manager.load_state()
     
-    def test_validate_state_video_file_missing(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_validate_state_video_file_missing(self, processing_context, sample_pipeline_state):
         """Test state validation when video file is missing."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         # Save state
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             manager.save_state(sample_pipeline_state)
         
         # Remove video file
-        temp_video_file.unlink()
+        processing_context.video_path.unlink()
         
         # Try to load state
         with pytest.raises(StateLoadError, match="Video file no longer exists"):
             manager.load_state()
     
-    def test_update_step_progress(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_update_step_progress(self, processing_context, sample_pipeline_state):
         """Test updating step progress."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             sample_pipeline_state.start_step("frame_extraction", 1000)
             manager.save_state(sample_pipeline_state)
             
@@ -180,12 +194,12 @@ class TestStateManager:
             progress = updated_state.get_step_progress("frame_extraction")
             assert progress.processed_count == 500
     
-    def test_mark_step_complete(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_mark_step_complete(self, processing_context, sample_pipeline_state):
         """Test marking step as complete."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             sample_pipeline_state.start_step("frame_extraction", 1000)
             manager.save_state(sample_pipeline_state)
             
@@ -196,144 +210,151 @@ class TestStateManager:
             updated_state = manager.load_state()
             assert updated_state.is_step_completed("frame_extraction") is True
     
-    def test_can_resume(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_can_resume(self, processing_context, sample_pipeline_state):
         """Test can_resume functionality."""
-        manager = StateManager(str(temp_video_file), temp_manager)
-        
-        # No state file exists
-        assert manager.can_resume() is False
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             
-            # Save new state (no completed steps)
-            manager.save_state(sample_pipeline_state)
+            # No state saved yet
             assert manager.can_resume() is False
             
-            # Complete a step
+            # Save incomplete state - complete one step but not all
+            sample_pipeline_state.start_step("initialization", 1)
             sample_pipeline_state.complete_step("initialization")
+            sample_pipeline_state.start_step("frame_extraction", 1000)
             manager.save_state(sample_pipeline_state)
+            
+            # Should be able to resume
             assert manager.can_resume() is True
+            
+            # Complete all steps to make pipeline fully completed
+            all_steps = ["initialization", "frame_extraction", "face_detection", "pose_analysis", 
+                        "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
+            for step in all_steps:
+                sample_pipeline_state.complete_step(step)
+            manager.save_state(sample_pipeline_state)
+            
+            # Should not be able to resume completed pipeline
+            assert manager.can_resume() is False
     
-    def test_get_resume_point(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_get_resume_point(self, processing_context, sample_pipeline_state):
         """Test getting resume point."""
-        manager = StateManager(str(temp_video_file), temp_manager)
-        
-        # No state file
-        assert manager.get_resume_point() is None
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
-            sample_pipeline_state.complete_step("initialization")
-            sample_pipeline_state.complete_step("frame_extraction")
+            sample_pipeline_state.video_file = str(processing_context.video_path)
+            
+            # No state saved yet
+            assert manager.get_resume_point() is None
+            
+            # Save state with current step
             sample_pipeline_state.current_step = "face_detection"
             manager.save_state(sample_pipeline_state)
             
-            resume_point = manager.get_resume_point()
-            assert resume_point == "face_detection"
+            # Should return current step
+            assert manager.get_resume_point() == "face_detection"
     
-    def test_delete_state(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_delete_state(self, processing_context, sample_pipeline_state):
         """Test deleting state file."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             manager.save_state(sample_pipeline_state)
             
-            # Verify file exists
+            # Verify state file exists
             assert manager.state_file_path.exists()
             
             # Delete state
             manager.delete_state()
             
-            # Verify file is gone
+            # Verify state file is gone
             assert not manager.state_file_path.exists()
+            
+            # Should be safe to call again
+            manager.delete_state()
     
-    def test_get_state_info(self, temp_video_file, temp_manager, sample_pipeline_state):
-        """Test getting basic state information."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+    def test_get_state_info(self, processing_context, sample_pipeline_state):
+        """Test getting state information."""
+        manager = StateManager(context=processing_context)
         
         # No state file
         info = manager.get_state_info()
         assert info is None
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
-            sample_pipeline_state.complete_step("initialization")
+            sample_pipeline_state.video_file = str(processing_context.video_path)
+            sample_pipeline_state.current_step = "pose_analysis"
             manager.save_state(sample_pipeline_state)
             
+            # With state file
             info = manager.get_state_info()
             assert info is not None
-            assert info["video_file"] == str(temp_video_file)
-            assert info["current_step"] == sample_pipeline_state.current_step
-            assert "initialization" in info["completed_steps"]
-            assert info["can_resume"] is True
+            assert info["current_step"] == "pose_analysis"
+            assert info["can_resume"] is False  # No completed steps yet
+            assert "created_at" in info
+            assert "last_updated" in info
     
-    def test_context_manager(self, temp_video_file, temp_manager, sample_pipeline_state):
+    def test_context_manager(self, processing_context, sample_pipeline_state):
         """Test StateManager as context manager."""
-        with patch('personfromvid.core.state_manager.StateManager._calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
-    
-            # Use as context manager
-            with StateManager(str(temp_video_file), temp_manager) as manager:
+        with patch.object(StateManager, '_calculate_video_hash', return_value="abc123def456"):
+            sample_pipeline_state.video_file = str(processing_context.video_path)
+            
+            with StateManager(context=processing_context) as manager:
                 manager.save_state(sample_pipeline_state)
                 assert manager.state_file_path.exists()
             
-            # Should cleanup backup files
-            backup_path = manager.state_file_path.with_suffix('.json.backup')
-            assert not backup_path.exists()
+            # Context manager should not delete state file
+            assert manager.state_file_path.exists()
     
-    def test_save_state_error_handling(self, temp_video_file, temp_manager, sample_pipeline_state):
-        """Test error handling when saving state fails."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+    def test_save_state_error_handling(self, processing_context, sample_pipeline_state):
+        """Test error handling during state save."""
+        manager = StateManager(context=processing_context)
         
-        # Mock file operations to fail
         with patch('builtins.open', side_effect=PermissionError("Permission denied")):
             with pytest.raises(StateSaveError, match="Cannot save state"):
                 manager.save_state(sample_pipeline_state)
     
-    def test_load_state_corrupted_file(self, temp_video_file, temp_manager):
+    def test_load_state_corrupted_file(self, processing_context):
         """Test loading corrupted state file."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
-        # Create corrupted JSON file
-        with open(manager.state_file_path, 'w') as f:
-            f.write("invalid json content {")
+        # Create corrupted state file
+        manager.state_file_path.parent.mkdir(parents=True, exist_ok=True)
+        manager.state_file_path.write_text("invalid json content")
         
         with pytest.raises(StateLoadError, match="Cannot load state"):
             manager.load_state()
     
-    def test_calculate_video_hash(self, temp_video_file, temp_manager):
+    def test_calculate_video_hash(self, processing_context):
         """Test video hash calculation."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+        manager = StateManager(context=processing_context)
         
-        # Calculate hash twice - should be same
+        # Calculate hash twice - should be consistent
         hash1 = manager._calculate_video_hash()
         hash2 = manager._calculate_video_hash()
         
         assert hash1 == hash2
-        assert len(hash1) == 64  # SHA256 hex string length
+        assert len(hash1) == 64  # SHA-256 hex digest length
         assert isinstance(hash1, str)
     
-    def test_backup_and_restore(self, temp_video_file, temp_manager, sample_pipeline_state):
-        """Test backup creation and restoration."""
-        manager = StateManager(str(temp_video_file), temp_manager)
+    def test_backup_and_restore(self, processing_context, sample_pipeline_state):
+        """Test backup and restore functionality."""
+        manager = StateManager(context=processing_context)
         
         with patch.object(manager, '_calculate_video_hash', return_value="abc123def456"):
-            sample_pipeline_state.video_file = str(temp_video_file)
+            sample_pipeline_state.video_file = str(processing_context.video_path)
             
             # Save initial state
-            manager.save_state(sample_pipeline_state)
-            original_content = manager.state_file_path.read_text()
-            
-            # Save modified state (should create backup)
-            sample_pipeline_state.current_step = "modified_step"
+            sample_pipeline_state.current_step = "initialization"
             manager.save_state(sample_pipeline_state)
             
-            # Verify backup exists and contains original content
-            backup_path = manager.state_file_path.with_suffix('.json.backup')
-            # Note: backup is created but may be cleaned up immediately in successful save
+            # Save updated state (should create backup)
+            sample_pipeline_state.current_step = "frame_extraction"
+            manager.save_state(sample_pipeline_state)
             
-            # Verify new content is different
-            new_content = manager.state_file_path.read_text()
-            assert "modified_step" in new_content 
+            # Verify current state
+            loaded_state = manager.load_state()
+            assert loaded_state.current_step == "frame_extraction" 

@@ -241,6 +241,45 @@ class CloseupDetectionConfig(BaseModel):
     )
 
 
+class FrameSelectionConfig(BaseModel):
+    """Configuration for frame selection."""
+    min_quality_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum quality threshold for frame selection"
+    )
+    face_size_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Weight for face size in selection scoring (0-1)"
+    )
+    quality_weight: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Weight for quality metrics in selection scoring (0-1)"
+    )
+    diversity_threshold: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Minimum diversity score to avoid selecting similar frames"
+    )
+
+    @field_validator('face_size_weight', 'quality_weight')
+    @classmethod
+    def validate_weights_sum(cls, v, info):
+        """Ensure face_size_weight and quality_weight don't exceed 1.0 when combined."""
+        if info.field_name == 'quality_weight':
+            # Get face_size_weight from values if it exists
+            face_size_weight = info.data.get('face_size_weight', 0.3)
+            if v + face_size_weight > 1.0:
+                raise ValueError(f"face_size_weight ({face_size_weight}) + quality_weight ({v}) must not exceed 1.0")
+        return v
+
+
 class PngConfig(BaseModel):
     """Configuration for PNG output."""
     optimize: bool = Field(True, description="Enable PNG optimization for smaller file sizes.")
@@ -261,11 +300,11 @@ class OutputImageConfig(BaseModel):
 
 class OutputConfig(BaseModel):
     """Configuration for output generation."""
-    max_frames_per_category: int = Field(
+    min_frames_per_category: int = Field(
         default=3,
         ge=1,
         le=10,
-        description="Maximum frames to output per pose/angle category"
+        description="Minimum frames to output per pose/angle category"
     )
     preserve_metadata: bool = Field(
         default=True,
@@ -286,12 +325,20 @@ class StorageConfig(BaseModel):
         description="Temporary directory (None for auto-generated)"
     )
     cleanup_temp_on_success: bool = Field(
-        default=False,
+        default=True,
         description="Clean up temporary files on successful completion"
     )
     cleanup_temp_on_failure: bool = Field(
         default=False,
         description="Clean up temporary files on failure"
+    )
+    keep_temp: bool = Field(
+        default=False,
+        description="Keep temporary files after processing (overrides cleanup settings)"
+    )
+    force_temp_cleanup: bool = Field(
+        default=False,
+        description="Force cleanup of existing temp directory before processing"
     )
     max_cache_size_gb: float = Field(
         default=5.0,
@@ -395,6 +442,7 @@ class Config(BaseModel):
     pose_classification: PoseClassificationConfig = Field(default_factory=PoseClassificationConfig)
     head_angle: HeadAngleConfig = Field(default_factory=HeadAngleConfig)
     closeup_detection: CloseupDetectionConfig = Field(default_factory=CloseupDetectionConfig)
+    frame_selection: FrameSelectionConfig = Field(default_factory=FrameSelectionConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)

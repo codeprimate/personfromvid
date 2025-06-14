@@ -21,7 +21,8 @@ from ..data import (
     FrameData,
     SourceInfo,
     ImageProperties,
-    StepProgress
+    StepProgress,
+    ProcessingContext
 )
 from ..utils.logging import get_logger, get_formatter
 from ..utils.exceptions import (
@@ -92,21 +93,23 @@ class ProcessingPipeline:
     resumption, and interruption handling.
     """
     
-    def __init__(self, video_path: str, config: Config, formatter: Optional[Any] = None):
+    def __init__(self, context: ProcessingContext, formatter: Optional[Any] = None):
         """Initialize processing pipeline.
         
         Args:
-            video_path: Path to input video file
-            config: Configuration settings
+            context: ProcessingContext with unified pipeline data
             formatter: Optional consolidated formatter for output
         """
-        self.video_path = Path(video_path)
-        self.config = config
+        self.context = context
+        self.video_path = context.video_path
+        self.config = context.config
+        self.temp_manager = context.temp_manager
+        
         self.logger = get_logger("pipeline")
         
         # Use provided formatter or create default one
         self.formatter = formatter
-        if not self.formatter and config.logging.enable_structured_output:
+        if not self.formatter and self.config.logging.enable_structured_output:
             self.formatter = get_formatter()
         
         # State management
@@ -114,7 +117,6 @@ class ProcessingPipeline:
         self.state_manager = None  # Will be initialized in process()
         
         # Processing components (will be initialized as needed)
-        self.temp_manager = None
         self.video_processor = None
         
         # Interruption handling
@@ -170,18 +172,42 @@ class ProcessingPipeline:
         try:
             self._setup_interruption_handling()
             self._initialize_state_management()
+            
+            # Handle force cleanup if requested
+            if self.config.storage.force_temp_cleanup:
+                self.logger.info("Force cleanup requested - removing existing temp directory")
+                self.temp_manager.cleanup_temp_files()
+                # Recreate temp structure after cleanup
+                self.temp_manager.create_temp_structure()
+            
             self._initialize_steps()
             
             if self.state and self.state.can_resume():
                 self.logger.info("Resuming from previous processing state")
-                return self._resume_processing()
+                result = self._resume_processing()
             else:
                 self.logger.info("Starting new processing from beginning")
-                return self._start_new_processing()
+                result = self._start_new_processing()
+                
+            # Handle temp cleanup after successful processing
+            if result.success and not self.config.storage.keep_temp:
+                if self.config.storage.cleanup_temp_on_success:
+                    self.logger.info("Cleaning up temporary files after successful processing")
+                    self.temp_manager.cleanup_temp_files()
+                else:
+                    self.logger.info("Temporary files kept (cleanup disabled)")
+            
+            return result
                 
         except InterruptionError:
             self.logger.warning("Processing interrupted by user")
             self._save_current_state()
+            
+            # Handle temp cleanup after interruption
+            if not self.config.storage.keep_temp and self.config.storage.cleanup_temp_on_failure:
+                self.logger.info("Cleaning up temporary files after interruption")
+                self.temp_manager.cleanup_temp_files()
+            
             return ProcessingResult(
                 success=False,
                 error_message="Processing interrupted by user",
@@ -193,6 +219,12 @@ class ProcessingPipeline:
             if self.formatter:
                 self.formatter.print_error(str(e))
             self._save_current_state()
+            
+            # Handle temp cleanup after failure
+            if not self.config.storage.keep_temp and self.config.storage.cleanup_temp_on_failure:
+                self.logger.info("Cleaning up temporary files after failure")
+                self.temp_manager.cleanup_temp_files()
+            
             return ProcessingResult(
                 success=False,
                 error_message=str(e),
@@ -262,12 +294,10 @@ class ProcessingPipeline:
     def _initialize_state_management(self) -> None:
         """Initialize state management and load existing state if available."""
         from .state_manager import StateManager
-        from .temp_manager import TempManager
         from .video_processor import VideoProcessor
         
-        self.temp_manager = TempManager(self.video_path)
-        self.temp_manager.create_temp_structure()
-        self.state_manager = StateManager(str(self.video_path), self.temp_manager)
+        # Initialize components using ProcessingContext
+        self.state_manager = StateManager(context=self.context)
         self.video_processor = VideoProcessor(str(self.video_path))
         
         existing_state = self.state_manager.load_state()

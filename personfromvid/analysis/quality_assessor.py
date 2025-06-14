@@ -55,7 +55,20 @@ class QualityAssessor:
         """Initialize quality assessor."""
         self.logger = get_logger("quality_assessor")
         
-    def assess_quality(self, image: np.ndarray) -> QualityMetrics:
+    def assess_quality_in_frame(self, frame: 'FrameData'):
+        """Assess quality for a single frame and update it in place.
+
+        Args:
+            frame: The FrameData object to assess. The `image` attribute
+                   must be populated with the loaded image data.
+        """
+        if frame.image is None:
+            raise ValueError(f"Frame {frame.frame_id} has no image data loaded. Image must be loaded before quality assessment.")
+
+        quality_metrics = self._assess_quality(frame.image)
+        frame.quality_metrics = quality_metrics
+    
+    def _assess_quality(self, image: np.ndarray) -> QualityMetrics:
         """Assess overall image quality using multiple metrics.
         
         Args:
@@ -264,7 +277,7 @@ class QualityAssessor:
         brightness_score: float, 
         contrast_score: float
     ) -> List[str]:
-        """Identify specific quality issues with the image.
+        """Identify specific quality issues based on metrics.
         
         Args:
             laplacian_variance: Blur detection score
@@ -272,203 +285,27 @@ class QualityAssessor:
             contrast_score: Contrast assessment
             
         Returns:
-            List of quality issue descriptions
+            List of quality issue identifiers (e.g., "blurry", "dark")
         """
         issues = []
-        
-        # Check for blur
         if laplacian_variance < MIN_LAPLACIAN_VARIANCE:
             issues.append("blurry")
         
-        # Check brightness issues
         if brightness_score < MIN_BRIGHTNESS:
-            issues.append("too_dark")
+            issues.append("dark")
         elif brightness_score > MAX_BRIGHTNESS:
-            issues.append("too_bright")
-        elif brightness_score < OPTIMAL_BRIGHTNESS_MIN:
-            issues.append("slightly_dark")
-        elif brightness_score > OPTIMAL_BRIGHTNESS_MAX:
-            issues.append("slightly_bright")
-        
-        # Check contrast issues
+            issues.append("overexposed")
+            
         if contrast_score < MIN_CONTRAST_STD:
             issues.append("low_contrast")
-        
+            
         return issues
-    
-    def assess_frame_batch(self, frames: List[np.ndarray]) -> List[QualityMetrics]:
-        """Assess quality for a batch of frames.
-        
-        Args:
-            frames: List of image arrays
-            
-        Returns:
-            List of QualityMetrics for each frame
-        """
-        results = []
-        
-        self.logger.debug(f"Assessing quality for {len(frames)} frames")
-        
-        for i, frame in enumerate(frames):
-            try:
-                metrics = self.assess_quality(frame)
-                results.append(metrics)
-                
-                if i % 10 == 0:  # Log progress every 10 frames
-                    self.logger.debug(f"Processed {i+1}/{len(frames)} frames")
-                    
-            except Exception as e:
-                self.logger.error(f"Quality assessment failed for frame {i}: {e}")
-                # Add default poor quality metrics
-                results.append(QualityMetrics(
-                    laplacian_variance=0.0,
-                    sobel_variance=0.0,
-                    brightness_score=0.0,
-                    contrast_score=0.0,
-                    overall_quality=0.0,
-                    quality_issues=["assessment_failed"],
-                    usable=False
-                ))
-        
-        # Log summary
-        usable_count = sum(1 for m in results if m.usable)
-        high_quality_count = sum(1 for m in results if m.is_high_quality)
-        
-        self.logger.info(
-            f"Quality assessment complete: {usable_count}/{len(frames)} usable, "
-            f"{high_quality_count}/{len(frames)} high quality"
-        )
-        
-        return results
-
-
-    def process_frame_batch(self, frames_with_faces: List['FrameData'], 
-                           progress_callback: Optional[callable] = None) -> Tuple[Dict[str, int], int]:
-        """Process a batch of frames with quality assessment at a high level.
-        
-        This method handles:
-        - Loading images from frame data
-        - Running quality assessment in batches
-        - Updating frame data with quality metrics
-        - Error handling for individual frames
-        - Progress tracking
-        - Statistics collection
-        
-        Args:
-            frames_with_faces: List of FrameData objects containing face and pose detections
-            progress_callback: Optional callback for progress updates (called with processed_count)
-            
-        Returns:
-            Tuple of (quality_stats, total_assessed)
-        """
-        if not frames_with_faces:
-            return {}, 0
-        
-        import cv2
-        from pathlib import Path
-        
-        total_assessed = 0
-        quality_stats = {"usable": 0, "high_quality": 0, "total": 0}
-        processed_count = 0
-        
-        # Process frames in batches for memory efficiency
-        batch_size = 10
-        total_frames = len(frames_with_faces)
-        total_batches = (total_frames + batch_size - 1) // batch_size
-        
-        self.logger.info(f"Starting quality assessment on {total_frames} frames ({total_batches} batches)")
-        
-        for i in range(0, total_frames, batch_size):
-            batch_num = i // batch_size + 1
-            batch = frames_with_faces[i:i + batch_size]
-            
-            self.logger.debug(f"Processing quality assessment batch {batch_num}/{total_batches} ({len(batch)} frames)")
-            
-            # Load frame images for this batch
-            frame_images = []
-            for frame_data in batch:
-                try:
-                    frame_path = frame_data.file_path
-                    
-                    if frame_path.exists():
-                        image = cv2.imread(str(frame_path))
-                        if image is not None:
-                            frame_images.append(image)
-                        else:
-                            self.logger.warning(f"Could not load image: {frame_path}")
-                            frame_images.append(None)
-                    else:
-                        self.logger.warning(f"Frame file not found: {frame_path}")
-                        frame_images.append(None)
-                except Exception as e:
-                    self.logger.warning(f"Error loading frame {frame_data.frame_id}: {e}")
-                    frame_images.append(None)
-            
-            # Assess quality for loaded images
-            batch_assessed = 0
-            batch_usable = 0
-            batch_high_quality = 0
-            
-            for j, (frame_data, image) in enumerate(zip(batch, frame_images)):
-                if image is not None:
-                    try:
-                        # Assess quality
-                        quality_metrics = self.assess_quality(image)
-                        
-                        # Update FrameData object with quality metrics
-                        frame_data.quality_metrics = quality_metrics
-                        
-                        batch_assessed += 1
-                        total_assessed += 1
-                        
-                        # Track quality statistics
-                        if quality_metrics.usable:
-                            batch_usable += 1
-                            quality_stats["usable"] += 1
-                        
-                        if quality_metrics.is_high_quality:
-                            batch_high_quality += 1
-                            quality_stats["high_quality"] += 1
-                        
-                        quality_stats["total"] += 1
-                        
-                    except Exception as e:
-                        self.logger.error(f"Quality assessment failed for {frame_data.frame_id}: {e}")
-                        # Create default poor quality metrics
-                        from ..data.detection_results import QualityMetrics
-                        frame_data.quality_metrics = QualityMetrics(
-                            laplacian_variance=0.0,
-                            sobel_variance=0.0,
-                            brightness_score=0.0,
-                            contrast_score=0.0,
-                            overall_quality=0.0,
-                            quality_issues=["assessment_failed"],
-                            usable=False
-                        )
-                        quality_stats["total"] += 1
-                
-                processed_count += 1
-                if progress_callback:
-                    progress_callback(processed_count)
-            
-            # Log batch results
-            if batch_assessed > 0:
-                self.logger.debug(f"Batch {batch_num}/{total_batches}: {batch_assessed} assessed, "
-                               f"{batch_usable} usable, {batch_high_quality} high quality")
-            else:
-                self.logger.debug(f"Batch {batch_num}/{total_batches}: No frames assessed")
-        
-        self.logger.info(f"Quality assessment completed: {total_assessed} frames assessed")
-        self.logger.info(f"Quality statistics: {quality_stats['usable']}/{quality_stats['total']} usable, "
-                        f"{quality_stats['high_quality']}/{quality_stats['total']} high quality")
-        
-        return quality_stats, total_assessed
 
 
 def create_quality_assessor() -> QualityAssessor:
     """Factory function to create a QualityAssessor instance.
     
     Returns:
-        Configured QualityAssessor instance
+        A new instance of QualityAssessor.
     """
-    return QualityAssessor() 
+    return QualityAssessor()

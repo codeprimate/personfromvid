@@ -11,7 +11,8 @@ from unittest.mock import Mock, patch, MagicMock
 
 from personfromvid.core.pipeline import ProcessingPipeline, ProcessingResult, PipelineStatus
 from personfromvid.data.constants import get_total_pipeline_steps
-from personfromvid.data import Config, PipelineState, VideoMetadata
+from personfromvid.data import Config, PipelineState, VideoMetadata, ProcessingContext
+from personfromvid.core import TempManager
 from personfromvid.utils.exceptions import (
     VideoProcessingError, 
     VideoFileError, 
@@ -23,6 +24,29 @@ from personfromvid.utils.exceptions import (
 def sample_config():
     """Create sample configuration for testing."""
     return Config()
+
+@pytest.fixture
+def processing_context(temp_video_file, sample_config):
+    """Create ProcessingContext for testing."""
+    output_dir = Path(temp_video_file).parent / 'test_output'
+    
+    with patch('personfromvid.core.temp_manager.TempManager') as MockTempManager:
+        mock_temp_manager = MockTempManager.return_value
+        # Configure any necessary mock behavior on mock_temp_manager here
+        
+        context = ProcessingContext(
+            video_path=Path(temp_video_file),
+            video_base_name=Path(temp_video_file).stem,
+            config=sample_config,
+            output_directory=output_dir
+        )
+        
+        yield context
+        
+        # No cleanup needed for the mock, but if the context created dirs, clean them.
+        if output_dir.exists():
+            import shutil
+            shutil.rmtree(output_dir, ignore_errors=True)
 
 @pytest.fixture
 def temp_video_file():
@@ -55,21 +79,29 @@ def temp_video_file():
 class TestProcessingPipeline:
     """Test suite for ProcessingPipeline class."""
     
-    def test_pipeline_initialization(self, temp_video_file, sample_config):
+    def test_pipeline_initialization(self, processing_context):
         """Test pipeline initialization with valid inputs."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
-        assert pipeline.video_path == Path(temp_video_file)
-        assert pipeline.config == sample_config
+        assert pipeline.video_path == processing_context.video_path
+        assert pipeline.config == processing_context.config
+        assert pipeline.context == processing_context
+        assert pipeline.temp_manager == processing_context.temp_manager
         assert pipeline._interrupted is False
         assert pipeline.state is None
         assert pipeline.state_manager is None
-        assert pipeline.temp_manager is None
     
     def test_pipeline_initialization_invalid_video(self, sample_config):
         """Test pipeline initialization with invalid video file."""
-        with pytest.raises(VideoFileError, match="Video file not found"):
-            ProcessingPipeline("/nonexistent/video.mp4", sample_config)
+        # ProcessingContext now validates file existence, so we expect FileNotFoundError
+        with pytest.raises(FileNotFoundError, match="Video file does not exist"):
+            with patch('personfromvid.core.temp_manager.TempManager'):
+                ProcessingContext(
+                    video_path=Path("/nonexistent/video.mp4"),
+                    video_base_name="video",
+                    config=sample_config,
+                    output_directory=Path("/tmp/output")
+                )
     
     def test_validate_inputs_empty_file(self, sample_config):
         """Test validation of empty video file."""
@@ -77,22 +109,29 @@ class TestProcessingPipeline:
             empty_file = f.name
         
         try:
+            with patch('personfromvid.core.temp_manager.TempManager'):
+                context = ProcessingContext(
+                    video_path=Path(empty_file),
+                    video_base_name=Path(empty_file).stem,
+                    config=sample_config,
+                    output_directory=Path(empty_file).parent / 'output'
+                )
             with pytest.raises(VideoFileError, match="Video file is empty"):
-                ProcessingPipeline(empty_file, sample_config)
+                ProcessingPipeline(context=context)
         finally:
             Path(empty_file).unlink(missing_ok=True)
     
-    def test_interrupt_gracefully(self, temp_video_file, sample_config):
+    def test_interrupt_gracefully(self, processing_context):
         """Test graceful interruption."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         assert pipeline._interrupted is False
         pipeline.interrupt_gracefully()
         assert pipeline._interrupted is True
     
-    def test_get_status_no_state(self, temp_video_file, sample_config):
+    def test_get_status_no_state(self, processing_context):
         """Test getting status when no state exists."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         status = pipeline.get_status()
         
@@ -106,7 +145,7 @@ class TestProcessingPipeline:
         assert status.is_running is False
         assert status.can_resume is False
     
-    def test_get_status_with_state(self, temp_video_file, sample_config):
+    def test_get_status_with_state(self, processing_context):
         """Test getting status when state exists."""
         # Create mock state
         mock_state = Mock()
@@ -116,7 +155,7 @@ class TestProcessingPipeline:
         mock_state.is_fully_completed.return_value = False
         mock_state.can_resume.return_value = True
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = mock_state
         
         status = pipeline.get_status()
@@ -132,14 +171,14 @@ class TestProcessingPipeline:
     
     @patch('personfromvid.core.state_manager.StateManager')
     @patch('personfromvid.core.video_processor.VideoProcessor')
-    def test_initialize_state_management_existing_state(self, mock_video_processor_class, mock_state_manager_class, temp_video_file, sample_config):
+    def test_initialize_state_management_existing_state(self, mock_video_processor_class, mock_state_manager_class, processing_context):
         """Test state management initialization with existing state."""
         mock_state_manager = Mock()
         mock_existing_state = Mock()
         mock_state_manager.load_state.return_value = mock_existing_state
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline._initialize_state_management()
         
         assert pipeline.state_manager == mock_state_manager
@@ -148,7 +187,7 @@ class TestProcessingPipeline:
     
     @patch('personfromvid.core.state_manager.StateManager')
     @patch('personfromvid.core.video_processor.VideoProcessor')
-    def test_initialize_state_management_no_existing_state(self, mock_video_processor_class, mock_state_manager_class, temp_video_file, sample_config):
+    def test_initialize_state_management_no_existing_state(self, mock_video_processor_class, mock_state_manager_class, processing_context):
         """Test state management initialization without existing state."""
         # Mock video processor to avoid ffprobe issues
         mock_video_processor = Mock()
@@ -164,16 +203,16 @@ class TestProcessingPipeline:
         mock_state_manager.load_state.return_value = None
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline._initialize_state_management()
         
         assert pipeline.state_manager == mock_state_manager
         # State should be created when none exists
         mock_state_manager.load_state.assert_called_once()
     
-    def test_create_initial_state(self, temp_video_file, sample_config):
+    def test_create_initial_state(self, processing_context):
         """Test creation of initial pipeline state."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with patch.object(pipeline, '_extract_video_metadata') as mock_metadata, \
              patch.object(pipeline, '_calculate_video_hash') as mock_hash:
@@ -187,14 +226,14 @@ class TestProcessingPipeline:
             pipeline._create_initial_state()
             
             assert pipeline.state is not None
-            assert pipeline.state.video_file == str(temp_video_file)
+            assert pipeline.state.video_file == str(processing_context.video_path)
             assert pipeline.state.video_hash == "test_hash_123"
             assert pipeline.state.video_metadata.duration == 120.0
             mock_metadata.assert_called_once()
             mock_hash.assert_called_once()
     
     @patch('personfromvid.core.video_processor.VideoProcessor')
-    def test_extract_video_metadata(self, mock_video_processor_class, temp_video_file, sample_config):
+    def test_extract_video_metadata(self, mock_video_processor_class, processing_context):
         """Test video metadata extraction."""
         # Set up mock video processor
         mock_video_processor = Mock()
@@ -211,7 +250,7 @@ class TestProcessingPipeline:
         mock_video_processor.extract_metadata.return_value = mock_metadata
         mock_video_processor_class.return_value = mock_video_processor
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         # Initialize video processor manually for testing
         pipeline.video_processor = mock_video_processor
         
@@ -225,7 +264,7 @@ class TestProcessingPipeline:
         assert metadata.codec == "h264"
     
     @patch('personfromvid.core.video_processor.VideoProcessor')
-    def test_calculate_video_hash(self, mock_video_processor_class, temp_video_file, sample_config):
+    def test_calculate_video_hash(self, mock_video_processor_class, processing_context):
         """Test video hash calculation."""
         # Set up mock video processor
         mock_video_processor = Mock()
@@ -233,7 +272,7 @@ class TestProcessingPipeline:
         mock_video_processor.calculate_hash.return_value = mock_hash
         mock_video_processor_class.return_value = mock_video_processor
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         # Initialize video processor manually for testing
         pipeline.video_processor = mock_video_processor
         
@@ -248,12 +287,12 @@ class TestProcessingPipeline:
         assert hash_value == hash_value2
     
     @patch('personfromvid.core.state_manager.StateManager')
-    def test_save_current_state(self, mock_state_manager_class, temp_video_file, sample_config):
+    def test_save_current_state(self, mock_state_manager_class, processing_context):
         """Test saving current state."""
         mock_state_manager = Mock()
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state_manager = mock_state_manager
         pipeline.state = Mock()
         
@@ -261,9 +300,9 @@ class TestProcessingPipeline:
         
         mock_state_manager.save_state.assert_called_once_with(pipeline.state)
     
-    def test_save_current_state_no_state_manager(self, temp_video_file, sample_config):
+    def test_save_current_state_no_state_manager(self, processing_context):
         """Test saving state when no state manager exists."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         pipeline.state_manager = None
         
@@ -271,13 +310,13 @@ class TestProcessingPipeline:
         pipeline._save_current_state()
     
     @patch('personfromvid.core.state_manager.StateManager')
-    def test_process_new_video(self, mock_state_manager_class, temp_video_file, sample_config):
+    def test_process_new_video(self, mock_state_manager_class, processing_context):
         """Test processing new video from start."""
         mock_state_manager = Mock()
         mock_state_manager.load_state.return_value = None
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with patch.object(pipeline, '_setup_interruption_handling'), \
              patch.object(pipeline, '_create_initial_state') as mock_create_state, \
@@ -293,7 +332,7 @@ class TestProcessingPipeline:
             assert result == mock_result
     
     @patch('personfromvid.core.state_manager.StateManager')
-    def test_process_resume_existing(self, mock_state_manager_class, temp_video_file, sample_config):
+    def test_process_resume_existing(self, mock_state_manager_class, processing_context):
         """Test processing with resume from existing state."""
         mock_state = Mock()
         mock_state.can_resume.return_value = True
@@ -303,7 +342,7 @@ class TestProcessingPipeline:
         mock_state_manager.load_state.return_value = mock_state
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with patch.object(pipeline, '_setup_interruption_handling'), \
              patch.object(pipeline, '_execute_pipeline_steps') as mock_execute:
@@ -317,13 +356,13 @@ class TestProcessingPipeline:
             assert result == mock_result
     
     @patch('personfromvid.core.state_manager.StateManager')
-    def test_process_interruption(self, mock_state_manager_class, temp_video_file, sample_config):
+    def test_process_interruption(self, mock_state_manager_class, processing_context):
         """Test processing with interruption."""
         mock_state_manager = Mock()
         mock_state_manager.load_state.return_value = None
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with patch.object(pipeline, '_setup_interruption_handling'), \
              patch.object(pipeline, '_create_initial_state'), \
@@ -338,7 +377,7 @@ class TestProcessingPipeline:
             assert "interrupted" in result.error_message.lower()
     
     @patch('personfromvid.core.state_manager.StateManager')
-    def test_resume_method(self, mock_state_manager_class, temp_video_file, sample_config):
+    def test_resume_method(self, mock_state_manager_class, processing_context):
         """Test the resume method."""
         mock_state = Mock()
         mock_state.can_resume.return_value = True
@@ -348,7 +387,7 @@ class TestProcessingPipeline:
         mock_state_manager.load_state.return_value = mock_state
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with patch.object(pipeline, '_execute_pipeline_steps') as mock_execute:
             mock_result = ProcessingResult(success=True)
@@ -361,7 +400,7 @@ class TestProcessingPipeline:
     
     @patch('personfromvid.core.state_manager.StateManager')
     @patch('personfromvid.core.video_processor.VideoProcessor')
-    def test_resume_no_resumable_state(self, mock_video_processor_class, mock_state_manager_class, temp_video_file, sample_config):
+    def test_resume_no_resumable_state(self, mock_video_processor_class, mock_state_manager_class, processing_context):
         """Test resume when no resumable state exists."""
         # Mock video processor to avoid ffprobe issues
         mock_video_processor = Mock()
@@ -377,14 +416,14 @@ class TestProcessingPipeline:
         mock_state_manager.load_state.return_value = None
         mock_state_manager_class.return_value = mock_state_manager
         
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         with pytest.raises(StateManagementError, match="No resumable state found"):
             pipeline.resume()
     
-    def test_step_initialization(self, temp_video_file, sample_config):
+    def test_step_initialization(self, processing_context):
         """Test initialization step."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         
         # Mock the step initialization instead of calling pipeline methods directly
@@ -400,9 +439,9 @@ class TestProcessingPipeline:
             step_names = [step.step_name for step in pipeline._steps]
             assert "initialization" in step_names
     
-    def test_step_placeholders(self, temp_video_file, sample_config):
+    def test_step_placeholders(self, processing_context):
         """Test step class instantiation."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         
         # Test that steps can be initialized without errors
@@ -434,9 +473,9 @@ class TestProcessingPipeline:
             mock_selection.assert_called_once_with(pipeline)
             mock_output.assert_called_once_with(pipeline)
     
-    def test_execute_pipeline_steps_full_run(self, temp_video_file, sample_config):
+    def test_execute_pipeline_steps_full_run(self, processing_context):
         """Test executing all pipeline steps."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         pipeline.state.is_step_completed.return_value = False
         pipeline.state.complete_step = Mock()
@@ -494,9 +533,9 @@ class TestProcessingPipeline:
             
             assert result.success is True
     
-    def test_execute_pipeline_steps_with_resume_point(self, temp_video_file, sample_config):
+    def test_execute_pipeline_steps_with_resume_point(self, processing_context):
         """Test executing pipeline steps with resume point."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         pipeline.state.is_step_completed.return_value = False
         pipeline.state.complete_step = Mock()
@@ -557,9 +596,9 @@ class TestProcessingPipeline:
             
             assert result.success is True
     
-    def test_execute_pipeline_steps_skip_completed(self, temp_video_file, sample_config):
+    def test_execute_pipeline_steps_skip_completed(self, processing_context):
         """Test executing pipeline steps when some are already completed."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         pipeline.state.frames = []  # Mock frames list
         
@@ -622,9 +661,9 @@ class TestProcessingPipeline:
             
             assert result.success is True
     
-    def test_execute_pipeline_steps_with_interruption(self, temp_video_file, sample_config):
+    def test_execute_pipeline_steps_with_interruption(self, processing_context):
         """Test executing pipeline steps with interruption."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline.state = Mock()
         pipeline.state.is_step_completed.return_value = False
         pipeline._interrupted = True  # Simulate interruption
@@ -639,9 +678,9 @@ class TestProcessingPipeline:
             with pytest.raises(InterruptionError):
                 pipeline._execute_pipeline_steps()
     
-    def test_create_success_result(self, temp_video_file, sample_config):
+    def test_create_success_result(self, processing_context):
         """Test creating success result."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         pipeline._start_time = time.time() - 10.0  # 10 seconds ago
         
         mock_state = Mock()
@@ -660,9 +699,9 @@ class TestProcessingPipeline:
         assert result.head_angles_found == {"front": 15, "profile_left": 5}
         assert result.processing_time_seconds >= 9.0  # Should be close to 10 seconds
     
-    def test_signal_handlers(self, temp_video_file, sample_config):
+    def test_signal_handlers(self, processing_context):
         """Test signal handler setup and restoration."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         original_sigint = signal.signal(signal.SIGINT, signal.SIG_DFL)
         original_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
@@ -695,9 +734,9 @@ class TestProcessingPipeline:
             signal.signal(signal.SIGINT, original_sigint)
             signal.signal(signal.SIGTERM, original_sigterm)
     
-    def test_get_elapsed_time(self, temp_video_file, sample_config):
+    def test_get_elapsed_time(self, processing_context):
         """Test elapsed time calculation."""
-        pipeline = ProcessingPipeline(temp_video_file, sample_config)
+        pipeline = ProcessingPipeline(context=processing_context)
         
         # No start time
         assert pipeline._get_elapsed_time() == 0.0

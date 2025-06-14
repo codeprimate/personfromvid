@@ -543,15 +543,14 @@ class HeadPoseEstimator:
         pitch_degrees = self._normalize_angle(pitch_degrees)
         roll_degrees = self._normalize_angle(roll_degrees)
         
-        # Classify direction
-        direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
+        # Classify direction - This is now handled by HeadAngleClassifier
+        # direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
         
         return HeadPoseResult(
             yaw=yaw_degrees,
             pitch=pitch_degrees,
             roll=roll_degrees,
             confidence=float(confidence.cpu().numpy()),
-            direction=direction,
             face_id=0
         )
     
@@ -609,15 +608,14 @@ class HeadPoseEstimator:
                     pitch_degrees = self._normalize_angle(float(pitch_predicted.cpu().numpy()))
                     roll_degrees = self._normalize_angle(float(roll_predicted.cpu().numpy()))
                     
-                    # Classify direction
-                    direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
+                    # Classify direction - This is now handled by HeadAngleClassifier
+                    # direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
                     
                     result = HeadPoseResult(
                         yaw=yaw_degrees,
                         pitch=pitch_degrees,
                         roll=roll_degrees,
                         confidence=float(confidence.cpu().numpy()),
-                        direction=direction,
                         face_id=j
                     )
                     results.append(result)
@@ -664,15 +662,14 @@ class HeadPoseEstimator:
         pitch_degrees = self._normalize_angle(float(pitch.cpu().numpy()))
         roll_degrees = self._normalize_angle(float(roll.cpu().numpy()))
         
-        # Classify direction
-        direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
+        # Classify direction - This is now handled by HeadAngleClassifier
+        # direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
         
         return HeadPoseResult(
             yaw=yaw_degrees,
             pitch=pitch_degrees,
             roll=roll_degrees,
             confidence=confidence,
-            direction=direction,
             face_id=0
         )
     
@@ -712,15 +709,14 @@ class HeadPoseEstimator:
                     pitch_degrees = self._normalize_angle(float(pitch.cpu().numpy()))
                     roll_degrees = self._normalize_angle(float(roll.cpu().numpy()))
                     
-                    # Classify direction
-                    direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
+                    # Classify direction - This is now handled by HeadAngleClassifier
+                    # direction = self.angles_to_direction(yaw_degrees, pitch_degrees, roll_degrees)
                     
                     result = HeadPoseResult(
                         yaw=yaw_degrees,
                         pitch=pitch_degrees,
                         roll=roll_degrees,
                         confidence=0.85,
-                        direction=direction,
                         face_id=j
                     )
                     results.append(result)
@@ -823,15 +819,14 @@ class HeadPoseEstimator:
         # Calculate confidence (placeholder for ONNX models)
         confidence = 0.8  # Could be improved with model-specific confidence calculation
         
-        # Classify direction
-        direction = self.angles_to_direction(yaw, pitch, roll)
+        # Classify direction - This is now handled by HeadAngleClassifier
+        # direction = self.angles_to_direction(yaw, pitch, roll)
         
         return HeadPoseResult(
             yaw=yaw,
             pitch=pitch,
             roll=roll,
             confidence=confidence,
-            direction=direction,
             face_id=0
         )
     
@@ -853,37 +848,21 @@ class HeadPoseEstimator:
         return angle
     
     def _calculate_confidence(self, yaw, pitch, roll):
-        """Calculate confidence based on prediction entropy."""
-        import torch
-        import torch.nn.functional as F
+        """Calculate a combined confidence score for the head pose angles."""
+        # Simple confidence based on magnitude of angles (closer to zero is better)
+        yaw_conf = max(0, 1 - abs(yaw) / 90)
+        pitch_conf = max(0, 1 - abs(pitch) / 90)
+        roll_conf = max(0, 1 - abs(roll) / 45)
         
-        # Apply softmax to get probabilities
-        yaw_probs = F.softmax(yaw, dim=1)
-        pitch_probs = F.softmax(pitch, dim=1)
-        roll_probs = F.softmax(roll, dim=1)
-        
-        # Calculate entropy (lower entropy = higher confidence)
-        yaw_entropy = -torch.sum(yaw_probs * torch.log(yaw_probs + 1e-8), dim=1)
-        pitch_entropy = -torch.sum(pitch_probs * torch.log(pitch_probs + 1e-8), dim=1)
-        roll_entropy = -torch.sum(roll_probs * torch.log(roll_probs + 1e-8), dim=1)
-        
-        # Average entropy
-        avg_entropy = (yaw_entropy + pitch_entropy + roll_entropy) / 3
-        
-        # Convert to confidence (0 to 1)
-        max_entropy = math.log(yaw.size(1))  # Maximum possible entropy
-        confidence = 1.0 - (avg_entropy / max_entropy)
-        
-        return torch.clamp(confidence, 0.0, 1.0)
+        # Weighted average
+        return (yaw_conf * 0.4 + pitch_conf * 0.4 + roll_conf * 0.2)
     
     def _normalize_angle(self, angle: float) -> float:
-        """Normalize angle to (-180, 180] range."""
-        # Use modulo operation for more robust normalization
-        angle = angle % 360
-        if angle > 180:
+        """Normalize angle to be within [-180, 180]."""
+        while angle > 180:
             angle -= 360
-        elif angle == 180:
-            angle = -180  # Convention: map 180° to -180°
+        while angle < -180:
+            angle += 360
         return angle
     
     def angles_to_direction(self, yaw: float, pitch: float, roll: float) -> str:
@@ -1110,7 +1089,6 @@ class HeadPoseEstimator:
                             pitch=head_pose.pitch,
                             roll=head_pose.roll,
                             confidence=head_pose.confidence,
-                            direction=head_pose.direction,
                             face_id=face_idx
                         )
                         frame_data.head_poses.append(head_pose_result)
@@ -1120,8 +1098,7 @@ class HeadPoseEstimator:
                         
                         # Debug: Log actual angles for troubleshooting
                         logger.debug(f"Head pose detected - Yaw: {head_pose.yaw:.1f}°, Pitch: {head_pose.pitch:.1f}°, "
-                                   f"Roll: {head_pose.roll:.1f}°, Direction: {head_pose.direction}, "
-                                   f"Forward-facing: {self.is_facing_forward(head_pose.yaw, head_pose.pitch, head_pose.roll)}")
+                                   f"Roll: {head_pose.roll:.1f}°, Forward-facing: {self.is_facing_forward(head_pose.yaw, head_pose.pitch, head_pose.roll)}")
                         
                         # Track head angle categories
                         direction = head_pose.direction
@@ -1135,13 +1112,14 @@ class HeadPoseEstimator:
                     else:
                         logger.debug(f"Batch {batch_num}/{total_batches}: No head poses detected")
                 
+                    # Now, classify all the head poses for the frames in this batch
+                    for frame_data in batch_frames:
+                        if frame_data.head_poses:
+                            self._head_angle_classifier.classify_head_poses_in_frame(frame_data)
+                
                 except Exception as e:
-                    logger.error(f"Head pose estimation failed for batch {batch_num}/{total_batches}: {e}")
-                    # Continue with next batch rather than failing completely
-            else:
-                logger.debug(f"Batch {batch_num}/{total_batches}: No face crops to process")
+                    logger.error(f"Head pose estimation failed for batch {batch_num}: {e}")
             
-            # Update progress
             processed_count += len(batch_frames)
             if progress_callback:
                 progress_callback(processed_count)

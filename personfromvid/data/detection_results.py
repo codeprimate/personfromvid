@@ -87,13 +87,17 @@ class HeadPoseResult:
     pitch: float  # Rotation around horizontal axis (nodding)
     roll: float  # Rotation around depth axis (tilting)
     confidence: float
-    direction: str  # Classified cardinal direction
     face_id: int = 0  # Index of face in frame
+    direction: Optional[str] = None  # Classified cardinal direction
+    direction_confidence: Optional[float] = None  # Confidence of direction classification
     
     def __post_init__(self):
         """Validate angle ranges and confidence."""
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("confidence must be between 0.0 and 1.0")
+        if self.direction_confidence is not None and not (0.0 <= self.direction_confidence <= 1.0):
+            raise ValueError("direction_confidence must be between 0.0 and 1.0")
+            
         # Angles can be outside typical ranges, but warn about extreme values
         if abs(self.yaw) > 180 or abs(self.pitch) > 90 or abs(self.roll) > 180:
             import warnings

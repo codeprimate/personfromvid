@@ -6,7 +6,7 @@ processing and file I/O operations for generating the final output images.
 
 import logging
 from pathlib import Path
-from typing import Tuple, Optional, List
+from typing import Tuple, List
 import numpy as np
 from PIL import Image, ImageOps
 import cv2
@@ -14,6 +14,7 @@ import cv2
 from ..data.config import OutputImageConfig
 from ..data.frame_data import FrameData
 from ..data.detection_results import FaceDetection
+from ..data.context import ProcessingContext
 from ..utils.logging import get_logger
 from ..utils.exceptions import ImageWriteError
 from .naming_convention import NamingConvention
@@ -22,26 +23,18 @@ from .naming_convention import NamingConvention
 class ImageWriter:
     """Handles image processing and file writing for output generation."""
     
-    def __init__(self, config: OutputImageConfig, output_directory: Path, video_base_name: str):
+    def __init__(self, context: ProcessingContext):
         """Initialize image writer.
         
         Args:
-            config: Output image configuration
-            output_directory: Directory to save output images
-            video_base_name: Base name of the video file (for naming)
+            context: ProcessingContext with unified pipeline data
         """
-        self.config = config
-        self.output_directory = Path(output_directory)
-        self.video_base_name = video_base_name
+        self.config = context.config.output.image
+        self.output_directory = context.output_directory
+        self.video_base_name = context.video_base_name
         self.logger = get_logger(__name__)
-        
-        # Initialize naming convention
-        self.naming = NamingConvention(video_base_name, output_directory)
-        
-        # Ensure output directory exists
+        self.naming = NamingConvention(context=context)
         self.output_directory.mkdir(parents=True, exist_ok=True)
-        
-        # Validate configuration
         self._validate_config()
     
     def save_frame_outputs(self, frame: FrameData, pose_categories: List[str], head_angle_categories: List[str]) -> List[str]:
@@ -102,29 +95,24 @@ class ImageWriter:
             raise ImageWriteError(error_msg) from e
     
     def _load_frame_image(self, frame: FrameData) -> np.ndarray:
-        """Load frame image from file.
+        """Load frame image from cache or file.
         
         Args:
-            frame: Frame data containing file path
+            frame: Frame data containing the file path and cached image.
             
         Returns:
-            Image as numpy array in RGB format
+            Image as a numpy array in RGB format.
         """
-        if not frame.file_path.exists():
-            raise ImageWriteError(f"Frame file not found: {frame.file_path}")
+        if frame.image is None:
+            raise ImageWriteError(f"Frame file not found or failed to load: {frame.file_path}")
         
         try:
-            # Load with OpenCV (BGR format)
-            image = cv2.imread(str(frame.file_path))
-            if image is None:
-                raise ImageWriteError(f"Failed to load image: {frame.file_path}")
-            
-            # Convert BGR to RGB
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # The cached frame.image is in BGR format, convert to RGB for PIL
+            image_rgb = cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB)
             return image_rgb
             
         except Exception as e:
-            raise ImageWriteError(f"Error loading frame image {frame.file_path}: {e}") from e
+            raise ImageWriteError(f"Error converting frame image {frame.frame_id} to RGB: {e}") from e
     
     def _crop_face(self, image: np.ndarray, face_detection: FaceDetection) -> np.ndarray:
         """Crop face from image with padding.

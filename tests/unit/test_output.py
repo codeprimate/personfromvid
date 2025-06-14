@@ -8,9 +8,11 @@ import numpy as np
 
 from personfromvid.output.naming_convention import NamingConvention
 from personfromvid.output.image_writer import ImageWriter
+from personfromvid.data import Config, ProcessingContext
 from personfromvid.data.config import OutputImageConfig, PngConfig, JpegConfig
 from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties, SelectionInfo
 from personfromvid.data.detection_results import FaceDetection
+from personfromvid.core import TempManager
 
 
 @pytest.fixture
@@ -18,6 +20,34 @@ def temp_output_dir():
     """Create a temporary output directory for tests."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
+
+
+@pytest.fixture
+def processing_context(tmp_path):
+    """Create a ProcessingContext for testing."""
+    # Create a test video file
+    video_file = tmp_path / "test_video.mp4"
+    video_file.write_bytes(b'dummy video content')
+    
+    # Create components
+    config = Config()
+    output_dir = tmp_path / 'output'
+    
+    # Create ProcessingContext
+    with patch('personfromvid.core.temp_manager.TempManager') as MockTempManager:
+        # If tests need the temp_manager, you can configure the mock here
+        # For NamingConvention and ImageWriter, they might need paths from it
+        mock_temp_manager = MockTempManager.return_value
+        mock_temp_manager.get_temp_path.return_value = tmp_path / '.temp'
+        
+        context = ProcessingContext(
+            video_path=video_file,
+            video_base_name=video_file.stem,
+            config=config,
+            output_directory=output_dir
+        )
+        
+        yield context
 
 
 @pytest.fixture
@@ -61,15 +91,15 @@ def sample_frame_data(tmp_path):
 class TestNamingConvention:
     """Tests for NamingConvention class."""
 
-    def test_full_frame_filename(self, temp_output_dir, sample_frame_data):
+    def test_full_frame_filename(self, processing_context, sample_frame_data):
         """Test full frame filename generation."""
-        naming = NamingConvention("test_video", temp_output_dir)
+        naming = NamingConvention(context=processing_context)
         filename = naming.get_full_frame_filename(sample_frame_data, "standing", 1, "png")
         assert filename == "test_video_standing_001.png"
 
-    def test_face_crop_filename(self, temp_output_dir, sample_frame_data):
+    def test_face_crop_filename(self, processing_context, sample_frame_data):
         """Test face crop filename generation."""
-        naming = NamingConvention("test_video", temp_output_dir)
+        naming = NamingConvention(context=processing_context)
         filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "jpg")
         assert filename == "test_video_face_front_001.jpg"
 
@@ -80,7 +110,7 @@ class TestImageWriter:
     @patch('personfromvid.output.image_writer.cv2.imread')
     @patch('personfromvid.output.image_writer.cv2.cvtColor')
     @patch('personfromvid.output.image_writer.Image.fromarray')
-    def test_save_full_frame(self, mock_fromarray, mock_cvtcolor, mock_imread, temp_output_dir, sample_frame_data):
+    def test_save_full_frame(self, mock_fromarray, mock_cvtcolor, mock_imread, processing_context, sample_frame_data):
         """Test saving a full frame image."""
         mock_imread.return_value = np.zeros((1080, 1920, 3), dtype=np.uint8)
         mock_cvtcolor.return_value = np.zeros((1080, 1920, 3), dtype=np.uint8)
@@ -88,14 +118,12 @@ class TestImageWriter:
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
 
-        config = OutputImageConfig(
-            full_frame_enabled=True, 
-            face_crop_enabled=False, 
-            format='png',
-            png=PngConfig(),
-            jpeg=JpegConfig()
-        )
-        writer = ImageWriter(config, temp_output_dir, "test_video")
+        # Update config to enable full frame output
+        processing_context.config.output.image.full_frame_enabled = True
+        processing_context.config.output.image.face_crop_enabled = False
+        processing_context.config.output.image.format = 'png'
+        
+        writer = ImageWriter(context=processing_context)
 
         output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=["standing"], head_angle_categories=[])
         
@@ -107,7 +135,7 @@ class TestImageWriter:
     @patch('personfromvid.output.image_writer.cv2.imread')
     @patch('personfromvid.output.image_writer.cv2.cvtColor')
     @patch('personfromvid.output.image_writer.Image.fromarray')
-    def test_save_face_crop(self, mock_fromarray, mock_cvtcolor, mock_imread, temp_output_dir, sample_frame_data):
+    def test_save_face_crop(self, mock_fromarray, mock_cvtcolor, mock_imread, processing_context, sample_frame_data):
         """Test saving a cropped face image."""
         mock_imread.return_value = np.zeros((1080, 1920, 3), dtype=np.uint8)
         mock_cvtcolor.return_value = np.zeros((1080, 1920, 3), dtype=np.uint8)
@@ -115,14 +143,12 @@ class TestImageWriter:
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
 
-        config = OutputImageConfig(
-            full_frame_enabled=False, 
-            face_crop_enabled=True, 
-            format='jpeg',
-            png=PngConfig(),
-            jpeg=JpegConfig()
-        )
-        writer = ImageWriter(config, temp_output_dir, "test_video")
+        # Update config to enable face crop output
+        processing_context.config.output.image.full_frame_enabled = False
+        processing_context.config.output.image.face_crop_enabled = True
+        processing_context.config.output.image.format = 'jpeg'
+        
+        writer = ImageWriter(context=processing_context)
 
         output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=[], head_angle_categories=["front"])
         

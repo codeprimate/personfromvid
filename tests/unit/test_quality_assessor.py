@@ -5,9 +5,12 @@ import numpy as np
 import cv2
 from unittest.mock import Mock, patch
 from pathlib import Path
+import tempfile
+import os
 
 from personfromvid.analysis.quality_assessor import QualityAssessor, create_quality_assessor
 from personfromvid.data.detection_results import QualityMetrics
+from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties
 
 
 class TestQualityAssessor:
@@ -16,6 +19,47 @@ class TestQualityAssessor:
     def setup_method(self):
         """Set up test fixtures."""
         self.assessor = QualityAssessor()
+
+    def _create_test_frame_with_image(self, frame_id: str, image: np.ndarray) -> FrameData:
+        """Helper to create a test FrameData object with an actual image file."""
+        # Create a temporary file
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.jpg', prefix=f'{frame_id}_')
+        os.close(temp_fd)  # Close the file descriptor, we'll use cv2 to write
+        
+        # Save the image to the temporary file
+        cv2.imwrite(temp_path, image)
+        
+        # Store the temp path for cleanup
+        if not hasattr(self, '_temp_files'):
+            self._temp_files = []
+        self._temp_files.append(temp_path)
+        
+        return FrameData(
+            frame_id=frame_id,
+            file_path=Path(temp_path),
+            source_info=SourceInfo(
+                video_timestamp=1.0,
+                extraction_method='test',
+                original_frame_number=30,
+                video_fps=30.0
+            ),
+            image_properties=ImageProperties(
+                width=image.shape[1],
+                height=image.shape[0],
+                channels=image.shape[2] if len(image.shape) == 3 else 1,
+                file_size_bytes=os.path.getsize(temp_path),
+                format='JPEG'
+            )
+        )
+    
+    def teardown_method(self):
+        """Clean up temporary files."""
+        if hasattr(self, '_temp_files'):
+            for temp_file in self._temp_files:
+                try:
+                    os.unlink(temp_file)
+                except FileNotFoundError:
+                    pass
 
     def test_initialization(self):
         """Test quality assessor initialization."""
@@ -27,7 +71,7 @@ class TestQualityAssessor:
         assessor = create_quality_assessor()
         assert isinstance(assessor, QualityAssessor)
 
-    def test_assess_quality_sharp_image(self):
+    def test_assess_quality_in_frame_sharp_image(self):
         """Test quality assessment on a sharp synthetic image."""
         # Create a synthetic sharp image with clear edges
         image = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -35,7 +79,9 @@ class TestQualityAssessor:
         image[240:, 320:] = [128, 128, 128]  # Gray square
         image[120:360, 160:480] = [64, 64, 64]  # Dark rectangle
         
-        quality = self.assessor.assess_quality(image)
+        frame = self._create_test_frame_with_image('sharp_test', image)
+        self.assessor.assess_quality_in_frame(frame)
+        quality = frame.quality_metrics
         
         assert isinstance(quality, QualityMetrics)
         assert quality.laplacian_variance > 0
@@ -46,12 +92,14 @@ class TestQualityAssessor:
         assert isinstance(quality.quality_issues, list)
         assert isinstance(quality.usable, bool)
 
-    def test_assess_quality_blurry_image(self):
+    def test_assess_quality_in_frame_blurry_image(self):
         """Test quality assessment on a blurry image."""
         # Create a synthetic blurry image (uniform color)
         image = np.full((480, 640, 3), 128, dtype=np.uint8)
         
-        quality = self.assessor.assess_quality(image)
+        frame = self._create_test_frame_with_image('blurry_test', image)
+        self.assessor.assess_quality_in_frame(frame)
+        quality = frame.quality_metrics
         
         assert isinstance(quality, QualityMetrics)
         # Blurry image should have low variance
@@ -60,27 +108,31 @@ class TestQualityAssessor:
         assert "blurry" in quality.quality_issues
         assert not quality.usable  # Should not be usable due to blur
 
-    def test_assess_quality_dark_image(self):
+    def test_assess_quality_in_frame_dark_image(self):
         """Test quality assessment on a dark image."""
         # Create a very dark image
         image = np.full((480, 640, 3), 20, dtype=np.uint8)
         
-        quality = self.assessor.assess_quality(image)
+        frame = self._create_test_frame_with_image('dark_test', image)
+        self.assessor.assess_quality_in_frame(frame)
+        quality = frame.quality_metrics
         
         assert quality.brightness_score < 30  # Below MIN_BRIGHTNESS
-        assert "too_dark" in quality.quality_issues
+        assert "dark" in quality.quality_issues
 
-    def test_assess_quality_bright_image(self):
+    def test_assess_quality_in_frame_bright_image(self):
         """Test quality assessment on a bright image."""
         # Create a very bright image
         image = np.full((480, 640, 3), 240, dtype=np.uint8)
         
-        quality = self.assessor.assess_quality(image)
+        frame = self._create_test_frame_with_image('bright_test', image)
+        self.assessor.assess_quality_in_frame(frame)
+        quality = frame.quality_metrics
         
         assert quality.brightness_score > 225  # Above MAX_BRIGHTNESS
-        assert "too_bright" in quality.quality_issues
+        assert "overexposed" in quality.quality_issues
 
-    def test_assess_quality_optimal_image(self):
+    def test_assess_quality_in_frame_optimal_image(self):
         """Test quality assessment on an optimal image."""
         # Create an image with good sharpness, brightness, and contrast
         image = np.random.randint(80, 180, (480, 640, 3), dtype=np.uint8)
@@ -88,7 +140,9 @@ class TestQualityAssessor:
         cv2.rectangle(image, (100, 100), (300, 300), (255, 255, 255), 2)
         cv2.rectangle(image, (350, 150), (550, 350), (50, 50, 50), 2)
         
-        quality = self.assessor.assess_quality(image)
+        frame = self._create_test_frame_with_image('optimal_test', image)
+        self.assessor.assess_quality_in_frame(frame)
+        quality = frame.quality_metrics
         
         # Should have good metrics
         assert quality.laplacian_variance > 100  # Good sharpness
@@ -153,10 +207,10 @@ class TestQualityAssessor:
         assert "blurry" in issues_blur
         
         issues_dark = self.assessor.identify_quality_issues(150, 20, 30)  # Too dark
-        assert "too_dark" in issues_dark
+        assert "dark" in issues_dark
         
         issues_bright = self.assessor.identify_quality_issues(150, 240, 30)  # Too bright
-        assert "too_bright" in issues_bright
+        assert "overexposed" in issues_bright
         
         issues_low_contrast = self.assessor.identify_quality_issues(150, 128, 10)  # Low contrast
         assert "low_contrast" in issues_low_contrast
@@ -165,168 +219,42 @@ class TestQualityAssessor:
         issues_good = self.assessor.identify_quality_issues(200, 128, 50)
         assert len(issues_good) == 0
 
-    def test_error_handling(self):
-        """Test error handling for invalid inputs."""
-        # Test with invalid image
-        invalid_image = None
+    def test_error_handling_no_image(self):
+        """Test error handling for a frame with no image data."""
+        # Create a FrameData with a non-existent file path
+        frame = FrameData(
+            frame_id='no_image_test',
+            file_path=Path('/nonexistent/path.jpg'),
+            source_info=SourceInfo(
+                video_timestamp=1.0,
+                extraction_method='test',
+                original_frame_number=30,
+                video_fps=30.0
+            ),
+            image_properties=ImageProperties(
+                width=640,
+                height=480,
+                channels=3,
+                file_size_bytes=0,
+                format='JPEG'
+            )
+        )
         
-        with patch.object(self.assessor.logger, 'error') as mock_logger:
-            quality = self.assessor.assess_quality(invalid_image)
+        # The image property will return None due to file not found
+        with pytest.raises(ValueError, match="has no image data loaded"):
+            self.assessor.assess_quality_in_frame(frame)
+
+    def test_assess_quality_handles_exception(self):
+        """Test that _assess_quality returns default on exception."""
+        with patch.object(self.assessor, 'calculate_laplacian_variance', side_effect=Exception("Test Error")):
+            # Create a simple test image
+            image = np.zeros((10, 10, 3), dtype=np.uint8)
+            frame = self._create_test_frame_with_image('exception_test', image)
             
-            # Should return default poor quality metrics
+            self.assessor.assess_quality_in_frame(frame)
+            quality = frame.quality_metrics
+
+            assert quality is not None
             assert quality.overall_quality == 0.0
             assert not quality.usable
-            assert "assessment_failed" in quality.quality_issues
-            mock_logger.assert_called_once()
-
-    @patch('cv2.imread')
-    def test_process_frame_batch(self, mock_imread):
-        """Test batch processing of frames."""
-        from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties
-        from personfromvid.data.detection_results import FaceDetection, PoseDetection
-        from pathlib import Path
-        
-        # Mock successful image loading
-        mock_image = np.random.randint(80, 180, (480, 640, 3), dtype=np.uint8)
-        mock_imread.return_value = mock_image
-        
-        # Create FrameData objects
-        frames_data = [
-            FrameData(
-                frame_id='frame_001',
-                file_path=Path('/path/to/frame1.jpg'),
-                source_info=SourceInfo(
-                    video_timestamp=1.0,
-                    extraction_method='test',
-                    original_frame_number=30,
-                    video_fps=30.0
-                ),
-                image_properties=ImageProperties(
-                    width=640,
-                    height=480,
-                    channels=3,
-                    file_size_bytes=1024000,
-                    format='JPEG'
-                ),
-                face_detections=[
-                    FaceDetection(bbox=(100, 100, 200, 200), confidence=0.9)
-                ],
-                pose_detections=[
-                    PoseDetection(
-                        bbox=(50, 50, 300, 400),
-                        confidence=0.8,
-                        keypoints={}
-                    )
-                ]
-            ),
-            FrameData(
-                frame_id='frame_002',
-                file_path=Path('/path/to/frame2.jpg'),
-                source_info=SourceInfo(
-                    video_timestamp=2.0,
-                    extraction_method='test',
-                    original_frame_number=60,
-                    video_fps=30.0
-                ),
-                image_properties=ImageProperties(
-                    width=640,
-                    height=480,
-                    channels=3,
-                    file_size_bytes=1024000,
-                    format='JPEG'
-                ),
-                face_detections=[
-                    FaceDetection(bbox=(150, 150, 250, 250), confidence=0.85)
-                ],
-                pose_detections=[
-                    PoseDetection(
-                        bbox=(75, 75, 325, 425),
-                        confidence=0.75,
-                        keypoints={}
-                    )
-                ]
-            )
-        ]
-        
-        # Mock Path.exists to return True
-        with patch.object(Path, 'exists', return_value=True):
-            progress_calls = []
-            
-            def progress_callback(count):
-                progress_calls.append(count)
-            
-            quality_stats, total_assessed = self.assessor.process_frame_batch(
-                frames_data, progress_callback
-            )
-            
-            # Verify results
-            assert total_assessed == 2
-            assert isinstance(quality_stats, dict)
-            assert 'usable' in quality_stats
-            assert 'high_quality' in quality_stats
-            assert 'total' in quality_stats
-            
-            # Verify frame data was updated in-place
-            for frame in frames_data:
-                assert frame.quality_metrics is not None
-                metrics = frame.quality_metrics
-                assert hasattr(metrics, 'laplacian_variance')
-                assert hasattr(metrics, 'overall_quality')
-                assert hasattr(metrics, 'usable')
-            
-            # Verify progress was called
-            assert len(progress_calls) == 2
-            assert progress_calls == [1, 2]
-
-    def test_process_frame_batch_empty(self):
-        """Test batch processing with empty input."""
-        quality_stats, total_assessed = self.assessor.process_frame_batch([])
-        
-        assert quality_stats == {}
-        assert total_assessed == 0
-
-    @patch('cv2.imread')
-    def test_process_frame_batch_missing_files(self, mock_imread):
-        """Test batch processing with missing image files."""
-        from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties
-        from personfromvid.data.detection_results import FaceDetection, PoseDetection
-        from pathlib import Path
-        
-        mock_imread.return_value = None  # Simulate failed image loading
-        
-        frames_data = [
-            FrameData(
-                frame_id='frame_001',
-                file_path=Path('/nonexistent/frame1.jpg'),
-                source_info=SourceInfo(
-                    video_timestamp=1.0,
-                    extraction_method='test',
-                    original_frame_number=30,
-                    video_fps=30.0
-                ),
-                image_properties=ImageProperties(
-                    width=640,
-                    height=480,
-                    channels=3,
-                    file_size_bytes=1024000,
-                    format='JPEG'
-                ),
-                face_detections=[
-                    FaceDetection(bbox=(100, 100, 200, 200), confidence=0.9)
-                ],
-                pose_detections=[
-                    PoseDetection(
-                        bbox=(50, 50, 300, 400),
-                        confidence=0.8,
-                        keypoints={}
-                    )
-                ]
-            )
-        ]
-        
-        with patch.object(Path, 'exists', return_value=False):
-            quality_stats, total_assessed = self.assessor.process_frame_batch(frames_data)
-            
-            # Should handle missing files gracefully
-            assert total_assessed == 0
-            assert quality_stats['total'] == 0 
+            assert "assessment_failed" in quality.quality_issues 

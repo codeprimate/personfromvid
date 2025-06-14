@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
+import numpy as np
 from .detection_results import (
     FaceDetection, 
     PoseDetection, 
@@ -101,6 +102,9 @@ class FrameData:
     source_info: SourceInfo  # Frame extraction metadata
     image_properties: ImageProperties  # Image dimensions and properties
     
+    # Optional cached image data (loaded on demand)
+    _image: Optional[np.ndarray] = field(default=None, init=False, repr=False)  # BGR image array (OpenCV format)
+    
     # Processing results (populated during pipeline)
     face_detections: List[FaceDetection] = field(default_factory=list)
     pose_detections: List[PoseDetection] = field(default_factory=list)
@@ -124,6 +128,38 @@ class FrameData:
             raise ValueError("frame_id cannot be empty")
         if not self.file_path:
             raise ValueError("file_path cannot be empty")
+    
+    @property
+    def image(self) -> Optional[np.ndarray]:
+        """Get the image data, loading it from file if not already cached.
+        
+        Returns:
+            BGR image array (OpenCV format) or None if loading fails
+        """
+        if self._image is None:
+            self._load_image()
+        return self._image
+    
+    def _load_image(self) -> None:
+        """Load image from file path and cache it."""
+        try:
+            import cv2
+            if self.file_path.exists():
+                self._image = cv2.imread(str(self.file_path))
+                if self._image is None:
+                    raise ValueError(f"Failed to load image from {self.file_path}")
+            else:
+                raise FileNotFoundError(f"Image file not found: {self.file_path}")
+        except Exception as e:
+            # Log the error but don't raise to allow graceful handling
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to load image for frame {self.frame_id}: {e}")
+            self._image = None
+    
+    def unload_image(self) -> None:
+        """Unload cached image to free memory."""
+        self._image = None
     
     # Processing step tracking
     def start_processing_step(self, step_name: str, model_version: Optional[str] = None) -> None:

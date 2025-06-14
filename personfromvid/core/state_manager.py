@@ -7,10 +7,10 @@ resumption from interruptions.
 import json
 import hashlib
 from pathlib import Path
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime
 
-from ..data import PipelineState, VideoMetadata
+from ..data import PipelineState, VideoMetadata, ProcessingContext
 from ..utils.logging import get_logger
 from ..utils.exceptions import (
     StateManagementError,
@@ -31,21 +31,17 @@ class StateManager:
     and tracking step completion status for graceful resumption.
     """
     
-    def __init__(self, video_path: str, temp_manager: 'TempManager'):
+    def __init__(self, context: ProcessingContext):
         """Initialize state manager.
         
         Args:
-            video_path: Path to the video file being processed
-            temp_manager: Temp manager for state file location
+            context: ProcessingContext with unified pipeline data
         """
-        self.video_path = Path(video_path)
-        self.temp_manager = temp_manager
+        self.video_path = context.video_path
+        self.temp_manager = context.temp_manager
+        self.video_base_name = context.video_base_name
         self.logger = get_logger("state_manager")
-        
-        # Calculate state file path in temp directory
-        video_base_name = self.video_path.stem  # Filename without extension
-        self.state_file_path = self.temp_manager.get_temp_path() / f"{video_base_name}_info.json"
-        
+        self.state_file_path = self.temp_manager.get_temp_path() / f"{self.video_base_name}_info.json"
         self.logger.debug(f"State file path: {self.state_file_path}")
     
     def load_state(self) -> Optional[PipelineState]:

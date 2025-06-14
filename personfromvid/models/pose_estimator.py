@@ -644,7 +644,7 @@ class PoseEstimator:
         for detection in detections:
             try:
                 # Use the pose classifier to determine pose type
-                classifications = self._pose_classifier.classify_pose(detection, image_shape)
+                classifications = self._pose_classifier._classify_single_pose(detection, image_shape)
                 
                 # Create new detection with classification
                 classified_detection = PoseDetection(
@@ -661,6 +661,15 @@ class PoseEstimator:
                 classified_detections.append(detection)
         
         return classified_detections
+    
+    def classify_poses_in_frame_data(self, frame_data: 'FrameData') -> None:
+        """Classify all pose detections within a FrameData object.
+        
+        Args:
+            frame_data: FrameData object containing pose detections to classify
+        """
+        if frame_data.pose_detections:
+            self._pose_classifier.classify_poses_in_frame(frame_data)
     
     def __del__(self):
         """Cleanup resources when estimator is destroyed."""
