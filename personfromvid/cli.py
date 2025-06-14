@@ -30,7 +30,13 @@ def signal_handler(signum: int, frame) -> None:
     sys.exit(1)
 
 
+def get_version():
+    """Get the current version for CLI help."""
+    from . import __version__
+    return __version__
+
 @click.command()
+@click.version_option(version=get_version(), prog_name="Person From Vid")
 @click.argument(
     "video_path", type=click.Path(exists=True, path_type=Path), required=False
 )
@@ -138,7 +144,6 @@ def signal_handler(signum: int, frame) -> None:
     is_flag=True,
     help="Disable structured output format (use basic logging instead)",
 )
-@click.option("--version", is_flag=True, help="Show version information")
 def main(
     video_path: Optional[Path],
     config: Optional[Path],
@@ -163,7 +168,6 @@ def main(
     keep_temp: bool,
     force: bool,
     no_structured_output: bool,
-    version: bool,
 ) -> None:
     """Extract and categorize high-quality frames containing people from video files.
 
@@ -193,11 +197,6 @@ def main(
         personfromvid video.mp4 --resize 1024
 
     """
-    # Handle version request
-    if version:
-        show_version()
-        return
-
     # Check for required video path
     if not video_path:
         console.print(
@@ -435,24 +434,7 @@ def main(
         sys.exit(1)
 
 
-def show_version() -> None:
-    """Show version information."""
-    try:
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib
 
-        with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
-            pyproject = tomllib.load(f)
-        version = pyproject["project"]["version"]
-    except:
-        version = "1.0.0"
-
-    console.print(f"Person From Vid v{version}")
-    console.print(
-        "Extract and categorize high-quality frames containing people from videos"
-    )
 
 
 def show_banner() -> None:

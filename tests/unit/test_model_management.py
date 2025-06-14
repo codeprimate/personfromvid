@@ -119,10 +119,12 @@ class TestModelMetadata:
     
     def test_model_with_no_files_raises_error(self):
         """Test that models with no files raise appropriate errors."""
+        from personfromvid import __version__
+        
         # Create a model with no files
         empty_model = ModelMetadata(
             name="test_empty",
-            version="1.0.0",
+            version=__version__,
             provider=ModelProvider.DIRECT_URL,
             files=[],  # Empty files list
             supported_devices=[DeviceType.CPU],
