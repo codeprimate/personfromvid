@@ -1,0 +1,474 @@
+"""Image quality assessment for frame selection.
+
+This module provides image quality evaluation using essential metrics
+with configurable thresholds for easy adjustment.
+"""
+
+import cv2
+import numpy as np
+from typing import Dict, List, Optional, Tuple
+import time
+
+from ..data.detection_results import QualityMetrics
+from ..utils.logging import get_logger
+
+# =============================================================================
+# ADJUSTABLE QUALITY CONSTANTS
+# =============================================================================
+
+# Blur Detection (Laplacian Variance) - Primary metric
+MIN_LAPLACIAN_VARIANCE = 100.0      # Minimum sharpness threshold
+HIGH_QUALITY_LAPLACIAN = 200.0      # High quality sharpness threshold
+
+# Brightness Assessment
+MIN_BRIGHTNESS = 30.0               # Too dark threshold
+MAX_BRIGHTNESS = 225.0              # Too bright threshold
+OPTIMAL_BRIGHTNESS_MIN = 80.0       # Optimal range start
+OPTIMAL_BRIGHTNESS_MAX = 180.0      # Optimal range end
+
+# Contrast Assessment (Simple std deviation)
+MIN_CONTRAST_STD = 20.0             # Minimum contrast standard deviation
+
+# Overall Quality Scoring Weights
+LAPLACIAN_WEIGHT = 0.7              # Primary blur metric weight
+BRIGHTNESS_WEIGHT = 0.2             # Brightness score weight  
+CONTRAST_WEIGHT = 0.1               # Contrast score weight
+
+# Quality Classification Thresholds
+HIGH_QUALITY_THRESHOLD = 0.7        # Overall score for high quality
+USABLE_QUALITY_THRESHOLD = 0.3      # Minimum score for usable quality
+
+# Sobel Variance (Secondary sharpness metric)
+MIN_SOBEL_VARIANCE = 50.0           # Minimum edge sharpness
+HIGH_QUALITY_SOBEL = 100.0          # High quality edge sharpness
+
+# =============================================================================
+
+
+logger = get_logger("quality_assessor")
+
+
+class QualityAssessor:
+    """Evaluates image quality using essential metrics for frame selection."""
+    
+    def __init__(self):
+        """Initialize quality assessor."""
+        self.logger = get_logger("quality_assessor")
+        
+    def assess_quality(self, image: np.ndarray) -> QualityMetrics:
+        """Assess overall image quality using multiple metrics.
+        
+        Args:
+            image: Input image as numpy array (BGR or RGB)
+            
+        Returns:
+            QualityMetrics with comprehensive quality assessment
+        """
+        start_time = time.time()
+        
+        try:
+            # Convert to grayscale for analysis
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image.copy()
+            
+            # Primary metric: Laplacian variance (blur detection)
+            laplacian_variance = self.calculate_laplacian_variance(gray)
+            
+            # Secondary metric: Sobel variance (edge sharpness)
+            sobel_variance = self.calculate_sobel_variance(gray)
+            
+            # Brightness assessment
+            brightness_score = self.assess_brightness(gray)
+            
+            # Contrast assessment (simple std deviation)
+            contrast_score = self.assess_contrast(gray)
+            
+            # Calculate overall quality score
+            overall_quality = self.calculate_overall_score(
+                laplacian_variance, sobel_variance, brightness_score, contrast_score
+            )
+            
+            # Identify quality issues
+            quality_issues = self.identify_quality_issues(
+                laplacian_variance, brightness_score, contrast_score
+            )
+            
+            # Determine if image is usable
+            usable = overall_quality >= USABLE_QUALITY_THRESHOLD and len(quality_issues) == 0
+            
+            processing_time = (time.time() - start_time) * 1000  # Convert to ms
+            
+            self.logger.debug(
+                f"Quality assessment: laplacian={laplacian_variance:.1f}, "
+                f"brightness={brightness_score:.1f}, overall={overall_quality:.3f}, "
+                f"usable={usable}, time={processing_time:.1f}ms"
+            )
+            
+            return QualityMetrics(
+                laplacian_variance=laplacian_variance,
+                sobel_variance=sobel_variance,
+                brightness_score=brightness_score,
+                contrast_score=contrast_score,
+                overall_quality=overall_quality,
+                quality_issues=quality_issues,
+                usable=usable
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Quality assessment failed: {e}")
+            # Return default metrics indicating poor quality
+            return QualityMetrics(
+                laplacian_variance=0.0,
+                sobel_variance=0.0,
+                brightness_score=0.0,
+                contrast_score=0.0,
+                overall_quality=0.0,
+                quality_issues=["assessment_failed"],
+                usable=False
+            )
+    
+    def calculate_laplacian_variance(self, gray_image: np.ndarray) -> float:
+        """Calculate Laplacian variance for blur detection.
+        
+        This is the primary sharpness metric. Higher values indicate sharper images.
+        
+        Args:
+            gray_image: Grayscale image
+            
+        Returns:
+            Laplacian variance value
+        """
+        try:
+            laplacian = cv2.Laplacian(gray_image, cv2.CV_64F)
+            variance = laplacian.var()
+            return float(variance)
+        except Exception as e:
+            self.logger.warning(f"Laplacian calculation failed: {e}")
+            return 0.0
+    
+    def calculate_sobel_variance(self, gray_image: np.ndarray) -> float:
+        """Calculate Sobel variance for edge sharpness assessment.
+        
+        Secondary sharpness metric focusing on edge detection.
+        
+        Args:
+            gray_image: Grayscale image
+            
+        Returns:
+            Sobel variance value
+        """
+        try:
+            sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)
+            sobel_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)
+            sobel_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+            variance = sobel_magnitude.var()
+            return float(variance)
+        except Exception as e:
+            self.logger.warning(f"Sobel calculation failed: {e}")
+            return 0.0
+    
+    def assess_brightness(self, gray_image: np.ndarray) -> float:
+        """Assess image brightness and return normalized score.
+        
+        Returns a score from 0-255 representing average brightness.
+        
+        Args:
+            gray_image: Grayscale image
+            
+        Returns:
+            Average brightness value (0-255)
+        """
+        try:
+            mean_brightness = np.mean(gray_image)
+            return float(mean_brightness)
+        except Exception as e:
+            self.logger.warning(f"Brightness assessment failed: {e}")
+            return 0.0
+    
+    def assess_contrast(self, gray_image: np.ndarray) -> float:
+        """Assess image contrast using standard deviation.
+        
+        Higher standard deviation indicates better contrast.
+        
+        Args:
+            gray_image: Grayscale image
+            
+        Returns:
+            Standard deviation of pixel values
+        """
+        try:
+            contrast = np.std(gray_image)
+            return float(contrast)
+        except Exception as e:
+            self.logger.warning(f"Contrast assessment failed: {e}")
+            return 0.0
+    
+    def calculate_overall_score(
+        self, 
+        laplacian_variance: float, 
+        sobel_variance: float,
+        brightness_score: float, 
+        contrast_score: float
+    ) -> float:
+        """Calculate weighted overall quality score.
+        
+        Combines multiple metrics into a single quality score (0.0 to 1.0).
+        
+        Args:
+            laplacian_variance: Blur detection score
+            sobel_variance: Edge sharpness score
+            brightness_score: Brightness assessment (0-255)
+            contrast_score: Contrast assessment
+            
+        Returns:
+            Overall quality score (0.0 to 1.0)
+        """
+        try:
+            # Normalize laplacian score (primary metric)
+            laplacian_normalized = min(laplacian_variance / HIGH_QUALITY_LAPLACIAN, 1.0)
+            
+            # Normalize brightness score (optimal range gets score of 1.0)
+            if OPTIMAL_BRIGHTNESS_MIN <= brightness_score <= OPTIMAL_BRIGHTNESS_MAX:
+                brightness_normalized = 1.0
+            elif brightness_score < MIN_BRIGHTNESS or brightness_score > MAX_BRIGHTNESS:
+                brightness_normalized = 0.0
+            else:
+                # Partial score for suboptimal but acceptable brightness
+                if brightness_score < OPTIMAL_BRIGHTNESS_MIN:
+                    brightness_normalized = (brightness_score - MIN_BRIGHTNESS) / (OPTIMAL_BRIGHTNESS_MIN - MIN_BRIGHTNESS)
+                else:
+                    brightness_normalized = (MAX_BRIGHTNESS - brightness_score) / (MAX_BRIGHTNESS - OPTIMAL_BRIGHTNESS_MAX)
+                brightness_normalized = max(0.0, min(1.0, brightness_normalized))
+            
+            # Normalize contrast score
+            contrast_normalized = min(contrast_score / (MIN_CONTRAST_STD * 3), 1.0)
+            
+            # Calculate weighted overall score
+            overall_score = (
+                LAPLACIAN_WEIGHT * laplacian_normalized +
+                BRIGHTNESS_WEIGHT * brightness_normalized +
+                CONTRAST_WEIGHT * contrast_normalized
+            )
+            
+            return max(0.0, min(1.0, overall_score))
+            
+        except Exception as e:
+            self.logger.warning(f"Overall score calculation failed: {e}")
+            return 0.0
+    
+    def identify_quality_issues(
+        self, 
+        laplacian_variance: float, 
+        brightness_score: float, 
+        contrast_score: float
+    ) -> List[str]:
+        """Identify specific quality issues with the image.
+        
+        Args:
+            laplacian_variance: Blur detection score
+            brightness_score: Brightness assessment
+            contrast_score: Contrast assessment
+            
+        Returns:
+            List of quality issue descriptions
+        """
+        issues = []
+        
+        # Check for blur
+        if laplacian_variance < MIN_LAPLACIAN_VARIANCE:
+            issues.append("blurry")
+        
+        # Check brightness issues
+        if brightness_score < MIN_BRIGHTNESS:
+            issues.append("too_dark")
+        elif brightness_score > MAX_BRIGHTNESS:
+            issues.append("too_bright")
+        elif brightness_score < OPTIMAL_BRIGHTNESS_MIN:
+            issues.append("slightly_dark")
+        elif brightness_score > OPTIMAL_BRIGHTNESS_MAX:
+            issues.append("slightly_bright")
+        
+        # Check contrast issues
+        if contrast_score < MIN_CONTRAST_STD:
+            issues.append("low_contrast")
+        
+        return issues
+    
+    def assess_frame_batch(self, frames: List[np.ndarray]) -> List[QualityMetrics]:
+        """Assess quality for a batch of frames.
+        
+        Args:
+            frames: List of image arrays
+            
+        Returns:
+            List of QualityMetrics for each frame
+        """
+        results = []
+        
+        self.logger.debug(f"Assessing quality for {len(frames)} frames")
+        
+        for i, frame in enumerate(frames):
+            try:
+                metrics = self.assess_quality(frame)
+                results.append(metrics)
+                
+                if i % 10 == 0:  # Log progress every 10 frames
+                    self.logger.debug(f"Processed {i+1}/{len(frames)} frames")
+                    
+            except Exception as e:
+                self.logger.error(f"Quality assessment failed for frame {i}: {e}")
+                # Add default poor quality metrics
+                results.append(QualityMetrics(
+                    laplacian_variance=0.0,
+                    sobel_variance=0.0,
+                    brightness_score=0.0,
+                    contrast_score=0.0,
+                    overall_quality=0.0,
+                    quality_issues=["assessment_failed"],
+                    usable=False
+                ))
+        
+        # Log summary
+        usable_count = sum(1 for m in results if m.usable)
+        high_quality_count = sum(1 for m in results if m.is_high_quality)
+        
+        self.logger.info(
+            f"Quality assessment complete: {usable_count}/{len(frames)} usable, "
+            f"{high_quality_count}/{len(frames)} high quality"
+        )
+        
+        return results
+
+
+    def process_frame_batch(self, frames_with_faces: List['FrameData'], 
+                           progress_callback: Optional[callable] = None) -> Tuple[Dict[str, int], int]:
+        """Process a batch of frames with quality assessment at a high level.
+        
+        This method handles:
+        - Loading images from frame data
+        - Running quality assessment in batches
+        - Updating frame data with quality metrics
+        - Error handling for individual frames
+        - Progress tracking
+        - Statistics collection
+        
+        Args:
+            frames_with_faces: List of FrameData objects containing face and pose detections
+            progress_callback: Optional callback for progress updates (called with processed_count)
+            
+        Returns:
+            Tuple of (quality_stats, total_assessed)
+        """
+        if not frames_with_faces:
+            return {}, 0
+        
+        import cv2
+        from pathlib import Path
+        
+        total_assessed = 0
+        quality_stats = {"usable": 0, "high_quality": 0, "total": 0}
+        processed_count = 0
+        
+        # Process frames in batches for memory efficiency
+        batch_size = 10
+        total_frames = len(frames_with_faces)
+        total_batches = (total_frames + batch_size - 1) // batch_size
+        
+        self.logger.info(f"Starting quality assessment on {total_frames} frames ({total_batches} batches)")
+        
+        for i in range(0, total_frames, batch_size):
+            batch_num = i // batch_size + 1
+            batch = frames_with_faces[i:i + batch_size]
+            
+            self.logger.debug(f"Processing quality assessment batch {batch_num}/{total_batches} ({len(batch)} frames)")
+            
+            # Load frame images for this batch
+            frame_images = []
+            for frame_data in batch:
+                try:
+                    frame_path = frame_data.file_path
+                    
+                    if frame_path.exists():
+                        image = cv2.imread(str(frame_path))
+                        if image is not None:
+                            frame_images.append(image)
+                        else:
+                            self.logger.warning(f"Could not load image: {frame_path}")
+                            frame_images.append(None)
+                    else:
+                        self.logger.warning(f"Frame file not found: {frame_path}")
+                        frame_images.append(None)
+                except Exception as e:
+                    self.logger.warning(f"Error loading frame {frame_data.frame_id}: {e}")
+                    frame_images.append(None)
+            
+            # Assess quality for loaded images
+            batch_assessed = 0
+            batch_usable = 0
+            batch_high_quality = 0
+            
+            for j, (frame_data, image) in enumerate(zip(batch, frame_images)):
+                if image is not None:
+                    try:
+                        # Assess quality
+                        quality_metrics = self.assess_quality(image)
+                        
+                        # Update FrameData object with quality metrics
+                        frame_data.quality_metrics = quality_metrics
+                        
+                        batch_assessed += 1
+                        total_assessed += 1
+                        
+                        # Track quality statistics
+                        if quality_metrics.usable:
+                            batch_usable += 1
+                            quality_stats["usable"] += 1
+                        
+                        if quality_metrics.is_high_quality:
+                            batch_high_quality += 1
+                            quality_stats["high_quality"] += 1
+                        
+                        quality_stats["total"] += 1
+                        
+                    except Exception as e:
+                        self.logger.error(f"Quality assessment failed for {frame_data.frame_id}: {e}")
+                        # Create default poor quality metrics
+                        from ..data.detection_results import QualityMetrics
+                        frame_data.quality_metrics = QualityMetrics(
+                            laplacian_variance=0.0,
+                            sobel_variance=0.0,
+                            brightness_score=0.0,
+                            contrast_score=0.0,
+                            overall_quality=0.0,
+                            quality_issues=["assessment_failed"],
+                            usable=False
+                        )
+                        quality_stats["total"] += 1
+                
+                processed_count += 1
+                if progress_callback:
+                    progress_callback(processed_count)
+            
+            # Log batch results
+            if batch_assessed > 0:
+                self.logger.debug(f"Batch {batch_num}/{total_batches}: {batch_assessed} assessed, "
+                               f"{batch_usable} usable, {batch_high_quality} high quality")
+            else:
+                self.logger.debug(f"Batch {batch_num}/{total_batches}: No frames assessed")
+        
+        self.logger.info(f"Quality assessment completed: {total_assessed} frames assessed")
+        self.logger.info(f"Quality statistics: {quality_stats['usable']}/{quality_stats['total']} usable, "
+                        f"{quality_stats['high_quality']}/{quality_stats['total']} high quality")
+        
+        return quality_stats, total_assessed
+
+
+def create_quality_assessor() -> QualityAssessor:
+    """Factory function to create a QualityAssessor instance.
+    
+    Returns:
+        Configured QualityAssessor instance
+    """
+    return QualityAssessor() 

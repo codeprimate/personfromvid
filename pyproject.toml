@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personfromvid"
+version = "1.0.0"
+description = "Extract and categorize high-quality frames containing people in specific poses from video files"
+readme = "README.md"
+license = {text = "PRIVATE"}
+authors = [
+    {name = "Person From Vid Project"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+requires-python = ">=3.8"
+dependencies = [
+    # Core libraries
+    "opencv-python>=4.8.0",
+    "ffmpeg-python>=0.2.0",
+    "Pillow>=10.0.0",
+    "numpy>=1.24.0",
+    
+    # AI/ML libraries
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "onnxruntime>=1.15.0",
+    "ultralytics>=8.0.0",
+    "huggingface-hub>=0.16.0",
+    
+    # CLI and progress
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    
+    # Data handling
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0.0",
+    
+    # Utilities
+    "requests>=2.31.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+]
+gpu = [
+    "onnxruntime-gpu>=1.15.0",
+]
+
+[project.scripts]
+personfromvid = "personfromvid.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/personfromvid/personfromvid"
+Documentation = "https://github.com/personfromvid/personfromvid/docs"
+Repository = "https://github.com/personfromvid/personfromvid"
+Issues = "https://github.com/personfromvid/personfromvid/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["personfromvid*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py311"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=personfromvid --cov-report=term-missing --cov-report=html"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+] 

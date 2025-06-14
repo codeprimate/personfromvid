@@ -1,0 +1,489 @@
+"""Command-line interface for Person From Vid.
+
+This module provides the main CLI entry point with argument parsing,
+configuration management, and progress display setup.
+"""
+
+import sys
+import signal
+from pathlib import Path
+from typing import Optional
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
+from .data.config import Config, load_config, LogLevel
+from .utils.logging import setup_logging, get_logger
+from .utils.exceptions import PersonFromVidError, format_exception_message
+from .utils.validation import validate_video_file, validate_system_requirements
+
+
+# Global console for rich output
+console = Console()
+
+
+def signal_handler(signum: int, frame) -> None:
+    """Handle interrupt signals gracefully."""
+    console.print("\n[yellow]Processing interrupted by user. Saving state...[/yellow]")
+    # This will be handled by the pipeline when implemented
+    sys.exit(1)
+
+
+@click.command()
+@click.argument('video_path', type=click.Path(exists=True, path_type=Path), required=False)
+@click.option(
+    '--config', '-c',
+    type=click.Path(exists=True, path_type=Path),
+    help='Path to configuration file (YAML or JSON)'
+)
+@click.option(
+    '--output-dir', '-o',
+    type=click.Path(path_type=Path),
+    help='Output directory (default: same as video file)'
+)
+@click.option(
+    '--log-level', '-l',
+    type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
+    default='INFO',
+    help='Logging level'
+)
+@click.option(
+    '--verbose', '-v',
+    is_flag=True,
+    help='Enable verbose output'
+)
+@click.option(
+    '--quiet', '-q',
+    is_flag=True,
+    help='Suppress non-essential output'
+)
+@click.option(
+    '--resume/--no-resume',
+    default=True,
+    help='Resume from previous processing state if available'
+)
+@click.option(
+    '--device',
+    type=click.Choice(['cpu', 'gpu', 'auto'], case_sensitive=False),
+    default='auto',
+    help='Computation device preference'
+)
+@click.option(
+    '--batch-size',
+    type=click.IntRange(1, 64),
+    help='Batch size for AI model inference'
+)
+@click.option(
+    '--confidence-threshold',
+    type=click.FloatRange(0.0, 1.0),
+    help='Confidence threshold for detections'
+)
+@click.option(
+    '--max-frames',
+    type=click.IntRange(1),
+    help='Maximum frames to extract per video'
+)
+@click.option(
+    '--quality-threshold',
+    type=click.FloatRange(0.0),
+    help='Quality threshold for frame selection'
+)
+@click.option(
+    '--output-format',
+    type=click.Choice(['png', 'jpeg'], case_sensitive=False),
+    help='Output image format'
+)
+@click.option(
+    '--output-jpeg-quality',
+    type=click.IntRange(70, 100),
+    help='JPEG quality for output images'
+)
+@click.option(
+    '--output-face-crop-enabled/--no-output-face-crop-enabled',
+    default=None,
+    help='Enable/disable generation of cropped face images'
+)
+@click.option(
+    '--output-full-frame-enabled/--no-output-full-frame-enabled',
+    default=None,
+    help='Enable/disable saving of full-frame images'
+)
+@click.option(
+    '--output-face-crop-padding',
+    type=click.FloatRange(0.0, 1.0),
+    help='Padding around face bounding box for crops'
+)
+@click.option(
+    '--output-png-optimize/--no-output-png-optimize',
+    default=None,
+    help='Enable/disable PNG optimization'
+)
+@click.option(
+    '--dry-run',
+    is_flag=True,
+    help='Validate inputs and show processing plan without executing'
+)
+@click.option(
+    '--no-structured-output',
+    is_flag=True,
+    help='Disable structured output format (use basic logging instead)'
+)
+@click.option(
+    '--version',
+    is_flag=True,
+    help='Show version information'
+)
+def main(
+    video_path: Optional[Path],
+    config: Optional[Path],
+    output_dir: Optional[Path],
+    log_level: str,
+    verbose: bool,
+    quiet: bool,
+    resume: bool,
+    device: str,
+    batch_size: Optional[int],
+    confidence_threshold: Optional[float],
+    max_frames: Optional[int],
+    quality_threshold: Optional[float],
+    output_format: Optional[str],
+    output_jpeg_quality: Optional[int],
+    output_face_crop_enabled: Optional[bool],
+    output_full_frame_enabled: Optional[bool],
+    output_face_crop_padding: Optional[float],
+    output_png_optimize: Optional[bool],
+    dry_run: bool,
+    no_structured_output: bool,
+    version: bool
+) -> None:
+    """Extract and categorize high-quality frames containing people from video files.
+    
+    Person From Vid analyzes video files to identify and extract frames showing people
+    in specific poses (standing, sitting, squatting) and head orientations (front,
+    profile, looking directions). The tool uses AI models for face detection, pose
+    estimation, and head pose analysis to automatically categorize and select the
+    best quality frames.
+    
+    VIDEO_PATH: Path to the input video file to process.
+    
+    Examples:
+    
+        # Basic usage
+        personfromvid video.mp4
+        
+        # With custom output directory
+        personfromvid video.mp4 --output-dir ./extracted_frames
+        
+        # High quality with verbose output
+        personfromvid video.mp4 --jpeg-quality 98 --verbose
+        
+        # Use GPU acceleration with custom batch size
+        personfromvid video.mp4 --device gpu --batch-size 16
+        
+        # Dry run to validate inputs
+        personfromvid video.mp4 --dry-run
+    """
+    # Handle version request
+    if version:
+        show_version()
+        return
+    
+    # Check for required video path
+    if not video_path:
+        console.print("[red]Error:[/red] VIDEO_PATH is required when not using --version")
+        console.print("Try 'personfromvid --help' for help.")
+        sys.exit(1)
+    
+    # Set up signal handling
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    try:
+        # Load configuration
+        app_config = load_config(config)
+        
+        # Apply CLI overrides
+        apply_cli_overrides(app_config, locals())
+        
+        # Determine if we'll use consolidated formatter
+        will_use_consolidated_formatter = (
+            app_config.logging.enable_structured_output and 
+            not no_structured_output
+        )
+        
+        # Completely disable structured logging if using consolidated formatter
+        if will_use_consolidated_formatter:
+            app_config.logging.enable_rich_console = False
+            app_config.logging.enable_structured_output = False
+            # Set logging to ERROR level to suppress all INFO/DEBUG messages
+            app_config.logging.level = LogLevel.ERROR
+        
+        # Set up logging
+        setup_logging(app_config.logging)
+        logger = get_logger("cli")
+        
+        # Show banner unless quiet or using consolidated formatter
+        if not quiet and not will_use_consolidated_formatter:
+            show_banner()
+        
+        # Validate system requirements (suppress detailed output if using consolidated formatter)
+        if not will_use_consolidated_formatter:
+            logger.info("Validating system requirements...")
+        
+        system_issues = validate_system_requirements()
+        
+        if system_issues:
+            if will_use_consolidated_formatter:
+                # Just check for fatal issues, don't log details
+                fatal_issues = [issue for issue in system_issues if "Missing required dependency" in issue]
+                if fatal_issues:
+                    console.print("[red]Error:[/red] Missing required dependencies")
+                    for issue in fatal_issues:
+                        console.print(f"  • {issue}")
+                    sys.exit(1)
+            else:
+                # Original detailed logging
+                logger.warning("System validation issues found:")
+                for issue in system_issues:
+                    logger.warning(f"  • {issue}")
+                
+                # Fatal issues (missing dependencies)
+                fatal_issues = [issue for issue in system_issues if "Missing required dependency" in issue]
+                if fatal_issues:
+                    logger.error("Cannot proceed due to missing dependencies.")
+                    sys.exit(1)
+        
+        # Validate video file
+        if not will_use_consolidated_formatter:
+            logger.info(f"Validating video file: {video_path}")
+        
+        video_validation = validate_video_file(video_path)
+        
+        if 'error' not in video_validation['metadata']:
+            metadata = video_validation['metadata']
+            if not will_use_consolidated_formatter:
+                duration_str = f"{metadata['duration']:.1f}s"
+                resolution_str = f"{metadata['width']}x{metadata['height']}"
+                fps_str = f"{metadata['fps']:.1f} FPS"
+                logger.info(f"Video: {duration_str}, {resolution_str}, {fps_str}, {metadata['codec']}")
+        else:
+            error_msg = f"Video validation failed: {video_validation['metadata']['error']}"
+            if will_use_consolidated_formatter:
+                console.print(f"[red]Error:[/red] {error_msg}")
+            else:
+                logger.error(error_msg)
+            sys.exit(1)
+        
+        # Set up output directory
+        if output_dir is None:
+            output_dir = video_path.parent
+        
+        # Create necessary directories
+        app_config.create_directories()
+        
+        # Show processing plan (unless using consolidated formatter)
+        if not will_use_consolidated_formatter:
+            show_processing_plan(video_path, output_dir, app_config, dry_run)
+        
+        if dry_run:
+            logger.info("Dry run completed. No processing performed.")
+            return
+        
+        # Initialize and run pipeline
+        from .core.pipeline import ProcessingPipeline
+        
+        # Create consolidated formatter if structured output is enabled
+        consolidated_formatter = None
+        if will_use_consolidated_formatter:
+            from .utils.output_formatter import create_consolidated_formatter
+            consolidated_formatter = create_consolidated_formatter(
+                console=console, 
+                enable_debug=verbose or app_config.logging.verbose
+            )
+            
+            # Start processing with consolidated output
+            config_info = {
+                'gpu_available': app_config.models.device == 'gpu',
+                'video_metadata': video_validation['metadata'] if 'error' not in video_validation['metadata'] else None,
+                'file_size_mb': video_path.stat().st_size / (1024 * 1024)
+            }
+            consolidated_formatter.start_processing(str(video_path), config_info)
+        else:
+            logger.info("Initializing processing pipeline...")
+        
+        try:
+            pipeline = ProcessingPipeline(str(video_path), app_config, formatter=consolidated_formatter)
+            
+            # Process or resume
+            if resume:
+                # Check if resumable state exists
+                status = pipeline.get_status()
+                if status.can_resume:
+                    logger.info("Resuming from previous processing state...")
+                    result = pipeline.resume()
+                else:
+                    logger.info("No resumable state found, starting new processing...")
+                    result = pipeline.process()
+            else:
+                logger.info("Starting new processing...")
+                result = pipeline.process()
+            
+            # Show results
+            if result.success:
+                # Pipeline's consolidated formatter already handled success output
+                if not consolidated_formatter:
+                    logger.info("Processing completed successfully")
+            else:
+                error_msg = f"Processing failed: {result.error_message}"
+                if consolidated_formatter:
+                    consolidated_formatter.print_error(error_msg)
+                else:
+                    logger.error(f"❌ {error_msg}")
+                sys.exit(1)
+                
+        except Exception as e:
+            logger.error(f"Pipeline processing failed: {e}")
+            if verbose:
+                console.print_exception()
+            sys.exit(1)
+        
+    except PersonFromVidError as e:
+        error_msg = format_exception_message(e)
+        console.print(f"[red]Error:[/red] {error_msg}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Processing interrupted by user.[/yellow]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Unexpected error:[/red] {str(e)}")
+        if verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+def show_version() -> None:
+    """Show version information."""
+    try:
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+        
+        with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
+            pyproject = tomllib.load(f)
+        version = pyproject["project"]["version"]
+    except:
+        version = "1.0.0"
+    
+    console.print(f"Person From Vid v{version}")
+    console.print("Extract and categorize high-quality frames containing people from videos")
+
+
+def show_banner() -> None:
+    """Show application banner."""
+    banner_text = Text("Person From Vid", style="bold blue")
+    subtitle_text = Text("AI-powered video frame extraction and pose categorization", style="dim")
+    
+    panel = Panel(
+        f"{banner_text}\n{subtitle_text}",
+        border_style="blue",
+        padding=(1, 2)
+    )
+    console.print(panel)
+
+
+def apply_cli_overrides(config: Config, cli_args: dict) -> None:
+    """Apply CLI argument overrides to configuration."""
+    # Logging overrides
+    if cli_args['verbose']:
+        config.logging.verbose = True
+        config.logging.level = LogLevel.DEBUG
+    elif cli_args['quiet']:
+        config.logging.level = LogLevel.WARNING
+    else:
+        config.logging.level = LogLevel(cli_args['log_level'])
+    
+    # Structured output override
+    if cli_args['no_structured_output']:
+        config.logging.enable_structured_output = False
+    
+    # Model overrides
+    if cli_args['device']:
+        config.models.device = cli_args['device']
+    
+    if cli_args['batch_size']:
+        config.models.batch_size = cli_args['batch_size']
+    
+    if cli_args['confidence_threshold']:
+        config.models.confidence_threshold = cli_args['confidence_threshold']
+    
+    # Frame extraction overrides
+    if cli_args['max_frames']:
+        config.frame_extraction.max_frames_per_video = cli_args['max_frames']
+    
+    # Quality overrides
+    if cli_args['quality_threshold']:
+        config.quality.blur_threshold = cli_args['quality_threshold']
+    
+    # Output overrides
+    if cli_args['output_format']:
+        config.output.image.format = cli_args['output_format']
+    
+    if cli_args['output_jpeg_quality']:
+        config.output.image.jpeg.quality = cli_args['output_jpeg_quality']
+    
+    if cli_args['output_face_crop_enabled'] is not None:
+        config.output.image.face_crop_enabled = cli_args['output_face_crop_enabled']
+    
+    if cli_args['output_full_frame_enabled'] is not None:
+        config.output.image.full_frame_enabled = cli_args['output_full_frame_enabled']
+    
+    if cli_args['output_face_crop_padding']:
+        config.output.image.face_crop_padding = cli_args['output_face_crop_padding']
+    
+    if cli_args['output_png_optimize'] is not None:
+        config.output.image.png.optimize = cli_args['output_png_optimize']
+    
+    # Processing overrides
+    config.processing.enable_resume = cli_args['resume']
+
+
+def show_processing_plan(video_path: Path, output_dir: Path, config: Config, dry_run: bool) -> None:
+    """Show the processing plan to the user."""
+    logger = get_logger("cli")
+    
+    plan_text = Text("Processing Plan", style="bold green")
+    
+    details = [
+        f"Input video: {video_path}",
+        f"Output directory: {output_dir}",
+        f"Device: {config.models.device}",
+        f"Batch size: {config.models.batch_size}",
+        f"Confidence threshold: {config.models.confidence_threshold}",
+        f"Resume enabled: {config.processing.enable_resume}",
+        f"Output format: {config.output.image.format.upper()}",
+        f"Output quality: {config.output.image.jpeg.quality if config.output.image.format.lower() in ['jpg', 'jpeg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
+        f"Face crops: {'enabled' if config.output.image.face_crop_enabled else 'disabled'}",
+        f"Full frames: {'enabled' if config.output.image.full_frame_enabled else 'disabled'}"
+    ]
+    
+    if config.frame_extraction.max_frames_per_video:
+        details.append(f"Max frames: {config.frame_extraction.max_frames_per_video}")
+    
+    plan_content = "\n".join(details)
+    
+    if dry_run:
+        plan_content += "\n\n[yellow]DRY RUN MODE - No processing will be performed[/yellow]"
+    
+    panel = Panel(
+        plan_content,
+        title=plan_text,
+        border_style="green",
+        padding=(1, 2)
+    )
+    console.print(panel)
+
+
+if __name__ == "__main__":
+    main() 
