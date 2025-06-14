@@ -122,11 +122,7 @@ def signal_handler(signum: int, frame) -> None:
     is_flag=True,
     help="Force cleanup of existing temp directory before processing",
 )
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Validate inputs and show processing plan without executing",
-)
+
 @click.option(
     "--no-structured-output",
     is_flag=True,
@@ -154,7 +150,6 @@ def main(
     output_png_optimize: Optional[bool],
     keep_temp: bool,
     force: bool,
-    dry_run: bool,
     no_structured_output: bool,
     version: bool,
 ) -> None:
@@ -182,8 +177,7 @@ def main(
         # Use GPU acceleration with custom batch size
         personfromvid video.mp4 --device gpu --batch-size 16
 
-        # Dry run to validate inputs
-        personfromvid video.mp4 --dry-run
+
     """
     # Handle version request
     if version:
@@ -298,11 +292,7 @@ def main(
 
         # Show processing plan (unless using consolidated formatter)
         if not will_use_consolidated_formatter:
-            show_processing_plan(video_path, output_dir, app_config, dry_run)
-
-        if dry_run:
-            logger.info("Dry run completed. No processing performed.")
-            return
+            show_processing_plan(video_path, output_dir, app_config)
 
         # Initialize and run pipeline
         from .core.pipeline import ProcessingPipeline
@@ -528,7 +518,7 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
 
 
 def show_processing_plan(
-    video_path: Path, output_dir: Path, config: Config, dry_run: bool
+    video_path: Path, output_dir: Path, config: Config
 ) -> None:
     """Show the processing plan to the user."""
     logger = get_logger("cli")
@@ -561,11 +551,6 @@ def show_processing_plan(
         details.append("Force cleanup: existing temp directory will be removed")
 
     plan_content = "\n".join(details)
-
-    if dry_run:
-        plan_content += (
-            "\n\n[yellow]DRY RUN MODE - No processing will be performed[/yellow]"
-        )
 
     panel = Panel(plan_content, title=plan_text, border_style="green", padding=(1, 2))
     console.print(panel)

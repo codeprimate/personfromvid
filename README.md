@@ -97,9 +97,6 @@ personfromvid video.mp4 \
 
 # Resume an interrupted process
 personfromvid video.mp4 --resume
-
-# Perform a dry run to validate configuration without processing
-personfromvid video.mp4 --dry-run
 ```
 
 ## Command-line Options
@@ -124,7 +121,6 @@ personfromvid video.mp4 --dry-run
 | `--no-output-full-frame-enabled`| | Disable saving of full-frame images. | `False` |
 | `--force` | | Force cleanup of existing temp directory before starting. | `False` |
 | `--keep-temp` | | Keep temporary files after processing for debugging. | `False` |
-| `--dry-run` | | Validate inputs and exit without processing. | `False` |
 | `--version` | | Show version information and exit. | `False` |
 
 For a full list of options, run `personfromvid --help`.
