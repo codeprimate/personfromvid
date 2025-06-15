@@ -99,13 +99,15 @@ class FrameExtractor:
             self._original_sigint_handler = None
 
     def extract_frames(
-        self, output_dir: Path, progress_callback: Optional[callable] = None
+        self, output_dir: Path, progress_callback: Optional[callable] = None,
+        pre_calculated_candidates: Optional[List[FrameCandidate]] = None
     ) -> List[FrameData]:
         """Extract keyframes using hybrid approach.
 
         Args:
             output_dir: Directory to save extracted frames
             progress_callback: Optional callback for progress updates
+            pre_calculated_candidates: Optional pre-calculated and filtered candidates to skip candidate generation
 
         Returns:
             List of FrameData objects for extracted frames
@@ -123,27 +125,32 @@ class FrameExtractor:
             # Create output directory
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Step 1: Extract I-frames using FFmpeg metadata
-            i_frame_candidates = self._extract_i_frames()
-            self.logger.info(f"Found {len(i_frame_candidates)} I-frame candidates")
+            if pre_calculated_candidates:
+                # Use pre-calculated candidates - skip candidate generation
+                self.logger.info(f"Using {len(pre_calculated_candidates)} pre-calculated candidates")
+                all_candidates = pre_calculated_candidates
+            else:
+                # Step 1: Extract I-frames using FFmpeg metadata
+                i_frame_candidates = self._extract_i_frames()
+                self.logger.info(f"Found {len(i_frame_candidates)} I-frame candidates")
 
-            # Step 2: Generate temporal sampling candidates
-            temporal_candidates = self._generate_temporal_samples()
-            self.logger.info(
-                f"Generated {len(temporal_candidates)} temporal sampling candidates"
-            )
+                # Step 2: Generate temporal sampling candidates
+                temporal_candidates = self._generate_temporal_samples()
+                self.logger.info(
+                    f"Generated {len(temporal_candidates)} temporal sampling candidates"
+                )
 
-            # Step 3: Combine and deduplicate candidates
-            all_candidates = self._combine_and_deduplicate_candidates(
-                i_frame_candidates, temporal_candidates
-            )
-            self.logger.info(
-                f"Combined to {len(all_candidates)} unique frame candidates"
-            )
+                # Step 3: Combine and deduplicate candidates
+                all_candidates = self._combine_and_deduplicate_candidates(
+                    i_frame_candidates, temporal_candidates
+                )
+                self.logger.info(
+                    f"Combined to {len(all_candidates)} unique frame candidates"
+                )
 
-            # Step 3.1 Filter out frames where the frame is already in the output directory
-            all_candidates = self._filter_out_existing_frames(all_candidates, output_dir)
-
+                # Step 3.1 Filter out frames where the frame is already in the output directory
+                all_candidates = self._filter_out_existing_frames(all_candidates, output_dir)
+                self.logger.info(f"After filtering existing frames: {len(all_candidates)} candidates to process")
 
             # Step 4: Extract actual frame images
             extracted_frames = self._extract_frame_images(
@@ -185,7 +192,31 @@ class FrameExtractor:
 
     def _filter_out_existing_frames(self, candidates: List[FrameCandidate], output_dir: Path) -> List[FrameCandidate]:
         """Filter out frames where the frame is already in the output directory."""
-        return [candidate for candidate in candidates if not (output_dir / f"{candidate.frame_number:06d}.png").exists()]
+        if not candidates:
+            return []
+        
+        # Log progress for large candidate sets
+        if len(candidates) > 100:
+            self.logger.info(f"Checking for {len(candidates)} existing frames...")
+        
+        filtered = []
+        existing_count = 0
+        
+        for i, candidate in enumerate(candidates):
+            frame_path = output_dir / f"frame_{candidate.frame_number:06d}.png"
+            if not frame_path.exists():
+                filtered.append(candidate)
+            else:
+                existing_count += 1
+            
+            # Progress logging for large sets
+            if len(candidates) > 500 and (i + 1) % 100 == 0:
+                self.logger.debug(f"Checked {i + 1}/{len(candidates)} candidates...")
+        
+        if existing_count > 0:
+            self.logger.info(f"Found {existing_count} existing frames, {len(filtered)} candidates remain")
+        
+        return filtered
 
     def _extract_i_frames(self) -> List[FrameCandidate]:
         """Extract I-frame timestamps using FFmpeg.
@@ -193,7 +224,7 @@ class FrameExtractor:
         Returns:
             List of FrameCandidate objects for I-frames
         """
-        self.logger.debug("Extracting I-frame positions using FFmpeg")
+        self.logger.info("Analyzing video structure for keyframes (this may take a moment for large videos)...")
 
         try:
             # Use ffprobe to get frame information
@@ -214,6 +245,7 @@ class FrameExtractor:
 
             import subprocess
 
+            self.logger.debug(f"Running ffprobe analysis on {self.video_path.name}...")
             result = subprocess.run(probe_cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
@@ -221,6 +253,7 @@ class FrameExtractor:
                 return []
 
             # Parse JSON output
+            self.logger.debug("Processing video analysis results...")
             probe_data = json.loads(result.stdout)
             frames_data = probe_data.get("frames", [])
 
@@ -385,11 +418,6 @@ class FrameExtractor:
                     # Seek to specific timestamp
                     cap.set(cv2.CAP_PROP_POS_MSEC, candidate.timestamp * 1000)
 
-                    # Check for interruption after seek operation
-                    if self._interrupted:
-                        self.logger.info("Interruption detected, terminating application")
-                        raise KeyboardInterrupt("Frame extraction interrupted by user")
-
                     # Read frame
                     ret, frame = cap.read()
                     if not ret:
@@ -397,11 +425,6 @@ class FrameExtractor:
                             f"Could not read frame at {candidate.timestamp}s"
                         )
                         continue
-
-                    # Check for interruption after read operation
-                    if self._interrupted:
-                        self.logger.info("Interruption detected, terminating application")
-                        raise KeyboardInterrupt("Frame extraction interrupted by user")
 
                     # Generate frame ID and filename
                     frame_id = f"frame_{candidate.frame_number:06d}"
@@ -417,11 +440,6 @@ class FrameExtractor:
 
                     self.frame_hashes.add(frame_hash)
 
-                    # Check for interruption before saving to disk
-                    if self._interrupted:
-                        self.logger.info("Interruption detected, terminating application")
-                        raise KeyboardInterrupt("Frame extraction interrupted by user")
-
                     # Check if frame already exists
                     if not frame_path.exists():
                         # Save frame as PNG with maximum compression
@@ -433,11 +451,6 @@ class FrameExtractor:
                             self.logger.warning(f"Failed to save frame: {frame_path}")
                             continue
 
-                    # Check for interruption after saving
-                    if self._interrupted:
-                        self.logger.info("Interruption detected, terminating application")
-                        raise KeyboardInterrupt("Frame extraction interrupted by user")
-
                     # Create frame metadata
                     frame_data = self._create_frame_data(
                         candidate, frame, frame_path, frame_id
@@ -445,15 +458,15 @@ class FrameExtractor:
 
                     extracted_frames.append(frame_data)
 
-                    # Progress callback
-                    if progress_callback:
-                        progress_callback(i + 1, total_candidates)
-
                 except Exception as e:
                     self.logger.warning(
                         f"Failed to extract frame at {candidate.timestamp}s: {e}"
                     )
                     continue
+                finally:
+                    # Progress callback - always called regardless of success/failure/skipping
+                    if progress_callback:
+                        progress_callback(i + 1, total_candidates)
 
         finally:
             cap.release()

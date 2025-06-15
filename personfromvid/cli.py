@@ -408,10 +408,12 @@ def main(
     except KeyboardInterrupt:
         console.print("\n[yellow]Processing interrupted by user.[/yellow]")
 
-        # Cleanup temp files if they were created
+        # Cleanup temp files if they were created and keep_temp is not enabled
         try:
-            if "processing_context" in locals():
+            if "processing_context" in locals() and not app_config.storage.keep_temp:
                 processing_context.temp_manager.cleanup_temp_files()
+            elif "processing_context" in locals() and app_config.storage.keep_temp:
+                console.print("[green]Temporary files preserved due to --keep-temp flag.[/green]")
         except:
             pass  # Don't fail cleanup on error
 

@@ -26,14 +26,50 @@ class FrameExtractionStep(PipelineStep):
             # Get frames output directory
             frames_dir = self.pipeline.temp_manager.get_frames_dir()
 
-            # Calculate realistic estimate for progress tracking
-            temporal_samples = int(video_metadata.duration / 0.25)
-            estimated_i_frames = max(1, int(video_metadata.duration / 1.5))
-            estimated_before_dedup = temporal_samples + estimated_i_frames
-            max_allowed = int(video_metadata.duration * 8)
-            estimated_total_frames = min(estimated_before_dedup, max_allowed)
+            # Pre-calculate actual candidates to get accurate progress total
+            # This is better than using estimates since it accounts for existing frames
+            if self.formatter and hasattr(self.formatter, "create_progress_bar"):
+                with self.formatter.create_progress_bar("Analyzing video structure (may take time for large files)...") as spinner:
+                    # Step 1: Get I-frame and temporal candidates (FFprobe can be slow)
+                    i_frame_candidates = frame_extractor._extract_i_frames()
+                    self.logger.info(f"Found {len(i_frame_candidates)} I-frame candidates")
+                    
+                    temporal_candidates = frame_extractor._generate_temporal_samples()
+                    self.logger.info(f"Generated {len(temporal_candidates)} temporal sampling candidates")
+                    
+                    # Step 2: Combine and deduplicate candidates
+                    all_candidates = frame_extractor._combine_and_deduplicate_candidates(
+                        i_frame_candidates, temporal_candidates
+                    )
+                    self.logger.info(f"Combined to {len(all_candidates)} unique frame candidates")
+                    
+                    # Step 3: Filter out existing frames
+                    filtered_candidates = frame_extractor._filter_out_existing_frames(all_candidates, frames_dir)
+                    actual_total_frames = len(filtered_candidates)
+                    self.logger.info(f"After filtering existing frames: {actual_total_frames} candidates to process")
+            else:
+                # Fallback for non-formatter mode
+                self.logger.info("🎬 Analyzing frame candidates...")
+                
+                # Step 1: Get I-frame and temporal candidates (fast operations)
+                i_frame_candidates = frame_extractor._extract_i_frames()
+                self.logger.info(f"Found {len(i_frame_candidates)} I-frame candidates")
+                
+                temporal_candidates = frame_extractor._generate_temporal_samples()
+                self.logger.info(f"Generated {len(temporal_candidates)} temporal sampling candidates")
+                
+                # Step 2: Combine and deduplicate candidates
+                all_candidates = frame_extractor._combine_and_deduplicate_candidates(
+                    i_frame_candidates, temporal_candidates
+                )
+                self.logger.info(f"Combined to {len(all_candidates)} unique frame candidates")
+                
+                # Step 3: Filter out existing frames
+                filtered_candidates = frame_extractor._filter_out_existing_frames(all_candidates, frames_dir)
+                actual_total_frames = len(filtered_candidates)
+                self.logger.info(f"After filtering existing frames: {actual_total_frames} candidates to process")
 
-            self.state.get_step_progress(self.step_name).start(estimated_total_frames)
+            self.state.get_step_progress(self.step_name).start(actual_total_frames)
 
             last_processed_count = 0
             step_start_time = self._get_step_start_time()
@@ -52,18 +88,18 @@ class FrameExtractionStep(PipelineStep):
                     )
                     self.formatter.update_step_progress(advance_amount, rate=rate)
 
-            # Extract frames
+            # Extract frames using pre-calculated candidates
             if self.formatter and hasattr(self.formatter, "step_progress_context"):
                 with self.formatter.step_progress_context(
-                    "Extracting frames", estimated_total_frames
+                    "Extracting frames", actual_total_frames
                 ):
                     extracted_frames = frame_extractor.extract_frames(
-                        frames_dir, progress_callback
+                        frames_dir, progress_callback, pre_calculated_candidates=filtered_candidates
                     )
             else:
                 self.logger.info("🎬 Starting frame extraction...")
                 extracted_frames = frame_extractor.extract_frames(
-                    frames_dir, progress_callback
+                    frames_dir, progress_callback, pre_calculated_candidates=filtered_candidates
                 )
 
             # Update state with final results
@@ -71,6 +107,11 @@ class FrameExtractionStep(PipelineStep):
                 extracted_frames
             )
             self.state.update_step_progress(self.step_name, len(extracted_frames))
+
+            # Manually update statistics since we bypassed extract_frames()
+            frame_extractor.stats["i_frames_found"] = len(i_frame_candidates)
+            frame_extractor.stats["temporal_samples"] = len(temporal_candidates)
+            frame_extractor.stats["total_extracted"] = len(extracted_frames)
 
             extraction_stats = frame_extractor.get_extraction_statistics()
             self.state.get_step_progress(self.step_name).set_data(
