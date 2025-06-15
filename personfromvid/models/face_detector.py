@@ -643,6 +643,7 @@ class FaceDetector:
         frames: List["FrameData"],
         video_metadata: "VideoMetadata",
         progress_callback: Optional[callable] = None,
+        interruption_check: Optional[callable] = None,
     ) -> None:
         """Process a batch of frames with face detection at a high level.
 
@@ -652,11 +653,13 @@ class FaceDetector:
         - Adding face detections to FrameData objects in-place
         - Error handling for individual frames
         - Progress tracking
+        - Interruption checking
 
         Args:
             frames: List of FrameData objects to process
             video_metadata: Video metadata for processing context
             progress_callback: Optional callback for progress updates (called with processed_count)
+            interruption_check: Optional callback to check for interruption
 
         Raises:
             FaceDetectionError: If processing fails completely
@@ -674,12 +677,20 @@ class FaceDetector:
         batch_size = self.config.models.batch_size
 
         for i in range(0, len(frames), batch_size):
+            # Check for interruption at the start of each batch
+            if interruption_check:
+                interruption_check()
+                
             batch_frames = frames[i : i + batch_size]
             batch_images = []
             valid_frames = []
 
             # Load images for this batch
             for frame in batch_frames:
+                # Check for interruption periodically during frame loading
+                if interruption_check and len(batch_images) % 10 == 0:
+                    interruption_check()
+                    
                 if frame.file_path.exists():
                     try:
                         image = cv2.imread(str(frame.file_path))
@@ -700,6 +711,10 @@ class FaceDetector:
                     progress_callback(processed_count)
                 continue
 
+            # Check for interruption before running detection
+            if interruption_check:
+                interruption_check()
+
             # Run face detection on batch
             try:
                 batch_face_results = self.detect_batch(batch_images)
@@ -708,6 +723,10 @@ class FaceDetector:
                 for j, (faces, frame) in enumerate(
                     zip(batch_face_results, valid_frames)
                 ):
+                    # Check for interruption during result processing
+                    if interruption_check and j % 5 == 0:
+                        interruption_check()
+                        
                     if faces:  # Add face detections to the frame
                         # Convert faces to FaceDetection objects if needed
                         face_detections = []

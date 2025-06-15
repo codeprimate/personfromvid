@@ -68,9 +68,8 @@ class FrameExtractor:
         self.extracted_frames: List[FrameData] = []
         self.frame_hashes: Set[str] = set()  # For deduplication
         
-        # Interrupt handling
+        # Interrupt handling - will be provided by caller
         self._interrupted = False
-        self._original_sigint_handler = None
 
         # Statistics
         self.stats = {
@@ -82,25 +81,10 @@ class FrameExtractor:
             "interrupted": False,
         }
 
-    def _setup_interrupt_handler(self):
-        """Setup CTRL-C interrupt handler."""
-        def signal_handler(signum, frame):
-            self.logger.info("Received CTRL-C (SIGINT), interrupting frame extraction...")
-            self._interrupted = True
-            # Don't raise KeyboardInterrupt here, just set the flag
-
-        self._original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
-        self.logger.debug("Interrupt handler set up, press CTRL-C to stop extraction")
-
-    def _restore_interrupt_handler(self):
-        """Restore original CTRL-C interrupt handler."""
-        if self._original_sigint_handler is not None:
-            signal.signal(signal.SIGINT, self._original_sigint_handler)
-            self._original_sigint_handler = None
-
     def extract_frames(
         self, output_dir: Path, progress_callback: Optional[callable] = None,
-        pre_calculated_candidates: Optional[List[FrameCandidate]] = None
+        pre_calculated_candidates: Optional[List[FrameCandidate]] = None,
+        interruption_check: Optional[callable] = None
     ) -> List[FrameData]:
         """Extract keyframes using hybrid approach.
 
@@ -108,6 +92,7 @@ class FrameExtractor:
             output_dir: Directory to save extracted frames
             progress_callback: Optional callback for progress updates
             pre_calculated_candidates: Optional pre-calculated and filtered candidates to skip candidate generation
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             List of FrameData objects for extracted frames
@@ -118,10 +103,11 @@ class FrameExtractor:
         start_time = time.time()
         self.logger.info(f"Starting frame extraction from: {self.video_path}")
 
-        # Setup interrupt handler
-        self._setup_interrupt_handler()
-
         try:
+            # Check for interruption at start
+            if interruption_check:
+                interruption_check()
+
             # Create output directory
             output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -130,31 +116,51 @@ class FrameExtractor:
                 self.logger.info(f"Using {len(pre_calculated_candidates)} pre-calculated candidates")
                 all_candidates = pre_calculated_candidates
             else:
+                # Check for interruption before analysis
+                if interruption_check:
+                    interruption_check()
+
                 # Step 1: Extract I-frames using FFmpeg metadata
-                i_frame_candidates = self._extract_i_frames()
+                i_frame_candidates = self._extract_i_frames(interruption_check)
                 self.logger.info(f"Found {len(i_frame_candidates)} I-frame candidates")
 
+                # Check for interruption after I-frame extraction
+                if interruption_check:
+                    interruption_check()
+
                 # Step 2: Generate temporal sampling candidates
-                temporal_candidates = self._generate_temporal_samples()
+                temporal_candidates = self._generate_temporal_samples(interruption_check)
                 self.logger.info(
                     f"Generated {len(temporal_candidates)} temporal sampling candidates"
                 )
 
+                # Check for interruption after temporal sampling
+                if interruption_check:
+                    interruption_check()
+
                 # Step 3: Combine and deduplicate candidates
                 all_candidates = self._combine_and_deduplicate_candidates(
-                    i_frame_candidates, temporal_candidates
+                    i_frame_candidates, temporal_candidates, interruption_check
                 )
                 self.logger.info(
                     f"Combined to {len(all_candidates)} unique frame candidates"
                 )
 
+                # Check for interruption after combination
+                if interruption_check:
+                    interruption_check()
+
                 # Step 3.1 Filter out frames where the frame is already in the output directory
-                all_candidates = self._filter_out_existing_frames(all_candidates, output_dir)
+                all_candidates = self._filter_out_existing_frames(all_candidates, output_dir, interruption_check)
                 self.logger.info(f"After filtering existing frames: {len(all_candidates)} candidates to process")
+
+            # Check for interruption before frame extraction
+            if interruption_check:
+                interruption_check()
 
             # Step 4: Extract actual frame images
             extracted_frames = self._extract_frame_images(
-                all_candidates, output_dir, progress_callback
+                all_candidates, output_dir, progress_callback, interruption_check
             )
 
             # Update statistics
@@ -176,21 +182,20 @@ class FrameExtractor:
             self.extracted_frames = extracted_frames
             return extracted_frames
 
-        except KeyboardInterrupt:
-            self.logger.info("Received KeyboardInterrupt, terminating application")
-            self._interrupted = True
-            self.stats["interrupted"] = True
-            self.stats["processing_time"] = time.time() - start_time
-            # Re-raise to terminate the application
-            raise
         except Exception as e:
-            self.logger.error(f"Frame extraction failed: {e}")
-            raise VideoProcessingError(f"Frame extraction failed: {e}")
-        finally:
-            # Always restore the original interrupt handler
-            self._restore_interrupt_handler()
+            # Check if it's an interruption-related exception
+            if "interrupt" in str(e).lower():
+                self.logger.info("Frame extraction interrupted by user")
+                self._interrupted = True
+                self.stats["interrupted"] = True
+                self.stats["processing_time"] = time.time() - start_time
+                # Let the interruption propagate to the pipeline
+                raise
+            else:
+                self.logger.error(f"Frame extraction failed: {e}")
+                raise VideoProcessingError(f"Frame extraction failed: {e}")
 
-    def _filter_out_existing_frames(self, candidates: List[FrameCandidate], output_dir: Path) -> List[FrameCandidate]:
+    def _filter_out_existing_frames(self, candidates: List[FrameCandidate], output_dir: Path, interruption_check: Optional[callable] = None) -> List[FrameCandidate]:
         """Filter out frames where the frame is already in the output directory."""
         if not candidates:
             return []
@@ -203,6 +208,10 @@ class FrameExtractor:
         existing_count = 0
         
         for i, candidate in enumerate(candidates):
+            # Check for interruption during processing
+            if interruption_check and i % 50 == 0:
+                interruption_check()
+                
             frame_path = output_dir / f"frame_{candidate.frame_number:06d}.png"
             if not frame_path.exists():
                 filtered.append(candidate)
@@ -218,13 +227,17 @@ class FrameExtractor:
         
         return filtered
 
-    def _extract_i_frames(self) -> List[FrameCandidate]:
+    def _extract_i_frames(self, interruption_check: Optional[callable] = None) -> List[FrameCandidate]:
         """Extract I-frame timestamps using FFmpeg.
 
         Returns:
             List of FrameCandidate objects for I-frames
         """
         self.logger.info("Analyzing video structure for keyframes (this may take a moment for large videos)...")
+
+        # Check for interruption before starting FFprobe
+        if interruption_check:
+            interruption_check()
 
         try:
             # Use ffprobe to get frame information
@@ -246,11 +259,20 @@ class FrameExtractor:
             import subprocess
 
             self.logger.debug(f"Running ffprobe analysis on {self.video_path.name}...")
+            
+            # Check for interruption before running subprocess
+            if interruption_check:
+                interruption_check()
+                
             result = subprocess.run(probe_cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
                 self.logger.warning(f"FFprobe failed: {result.stderr}")
                 return []
+
+            # Check for interruption after subprocess
+            if interruption_check:
+                interruption_check()
 
             # Parse JSON output
             self.logger.debug("Processing video analysis results...")
@@ -259,7 +281,11 @@ class FrameExtractor:
 
             i_frame_candidates = []
 
-            for frame_data in frames_data:
+            for i, frame_data in enumerate(frames_data):
+                # Check for interruption during frame processing
+                if interruption_check and i % 100 == 0:
+                    interruption_check()
+                    
                 # Look for I-frames (keyframes)
                 if frame_data.get("pict_type") == "I":
                     timestamp = float(frame_data.get("pkt_pts_time", 0))
@@ -282,108 +308,108 @@ class FrameExtractor:
             self.stats["i_frames_found"] = len(i_frame_candidates)
             return i_frame_candidates
 
+        except subprocess.CalledProcessError as e:
+            self.logger.warning(f"FFprobe analysis failed: {e}")
+            return []
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Failed to parse FFprobe output: {e}")
+            return []
         except Exception as e:
-            self.logger.warning(
-                f"I-frame extraction failed: {e}, falling back to temporal sampling only"
-            )
+            self.logger.warning(f"I-frame extraction failed: {e}")
             return []
 
-    def _generate_temporal_samples(self) -> List[FrameCandidate]:
+    def _generate_temporal_samples(self, interruption_check: Optional[callable] = None) -> List[FrameCandidate]:
         """Generate temporal sampling candidates at fixed intervals.
 
         Returns:
             List of FrameCandidate objects for temporal samples
         """
-        self.logger.debug(
-            f"Generating temporal samples every {self.temporal_interval}s"
-        )
-
         temporal_candidates = []
         current_time = 0.0
+        frame_count = 0
+
+        self.logger.debug(f"Generating temporal samples every {self.temporal_interval}s")
 
         while current_time < self.video_metadata.duration:
+            # Check for interruption during generation
+            if interruption_check and frame_count % 50 == 0:
+                interruption_check()
+                
+            # Calculate frame number
             frame_number = int(current_time * self.video_metadata.fps)
 
-            # Skip if frame number exceeds total frames
-            if frame_number >= self.video_metadata.total_frames:
-                break
+            # Check rate limiting - avoid too many frames per second
+            frames_in_current_second = int(current_time) * self.max_frames_per_second
+            if frame_count > frames_in_current_second:
+                current_time += self.temporal_interval
+                continue
 
             candidate = FrameCandidate(
                 timestamp=current_time,
                 frame_number=frame_number,
                 method=ExtractionMethod.TEMPORAL_SAMPLING,
-                confidence=0.8,  # Lower confidence than I-frames
+                confidence=0.8,  # Temporal samples are lower confidence than I-frames
             )
 
             temporal_candidates.append(candidate)
             current_time += self.temporal_interval
+            frame_count += 1
 
         self.stats["temporal_samples"] = len(temporal_candidates)
         return temporal_candidates
 
     def _combine_and_deduplicate_candidates(
-        self, i_frames: List[FrameCandidate], temporal: List[FrameCandidate]
+        self, i_frames: List[FrameCandidate], temporal: List[FrameCandidate], interruption_check: Optional[callable] = None
     ) -> List[FrameCandidate]:
         """Combine I-frame and temporal candidates, removing duplicates.
 
         Args:
             i_frames: I-frame candidates
             temporal: Temporal sampling candidates
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             Deduplicated list of frame candidates
         """
-        self.logger.debug("Combining and deduplicating frame candidates")
+        # Check for interruption at start
+        if interruption_check:
+            interruption_check()
 
-        # Combine all candidates
-        all_candidates = i_frames + temporal
+        # Start with I-frames (higher priority)
+        all_candidates = i_frames.copy()
+        duplicate_threshold = 0.5  # seconds
 
-        # Sort by timestamp
+        self.logger.debug(f"Deduplicating {len(temporal)} temporal candidates against {len(i_frames)} I-frames")
+
+        for i, temporal_candidate in enumerate(temporal):
+            # Check for interruption during deduplication
+            if interruption_check and i % 50 == 0:
+                interruption_check()
+                
+            # Check if this temporal candidate is too close to any I-frame
+            is_duplicate = False
+            for i_frame_candidate in i_frames:
+                time_diff = abs(temporal_candidate.timestamp - i_frame_candidate.timestamp)
+                if time_diff < duplicate_threshold:
+                    is_duplicate = True
+                    break
+
+            if not is_duplicate:
+                all_candidates.append(temporal_candidate)
+
+        # Sort by timestamp for consistent ordering
         all_candidates.sort(key=lambda x: x.timestamp)
 
-        # Remove near-duplicates (within 0.1 seconds)
-        deduplicated = []
-        last_timestamp = -1.0
-        duplicate_threshold = 0.1  # 100ms threshold
+        self.logger.debug(f"Combined candidates: {len(all_candidates)} total ({len(i_frames)} I-frames + {len(all_candidates) - len(i_frames)} temporal)")
 
-        for candidate in all_candidates:
-            if candidate.timestamp - last_timestamp >= duplicate_threshold:
-                deduplicated.append(candidate)
-                last_timestamp = candidate.timestamp
-            else:
-                # Keep the candidate with higher confidence
-                if deduplicated and candidate.confidence > deduplicated[-1].confidence:
-                    deduplicated[-1] = candidate
-                self.stats["duplicates_removed"] += 1
-
-        # Apply max frames per second limit
-        if (
-            len(deduplicated)
-            > self.video_metadata.duration * self.max_frames_per_second
-        ):
-            # Keep frames with highest confidence, spread across time
-            target_count = int(
-                self.video_metadata.duration * self.max_frames_per_second
-            )
-
-            # Sort by confidence (descending) then by timestamp
-            deduplicated.sort(key=lambda x: (-x.confidence, x.timestamp))
-            deduplicated = deduplicated[:target_count]
-
-            # Re-sort by timestamp
-            deduplicated.sort(key=lambda x: x.timestamp)
-
-            self.logger.info(
-                f"Limited to {target_count} frames (max {self.max_frames_per_second}/sec)"
-            )
-
-        return deduplicated
+        return all_candidates
 
     def _extract_frame_images(
         self,
         candidates: List[FrameCandidate],
         output_dir: Path,
         progress_callback: Optional[callable] = None,
+        interruption_check: Optional[callable] = None
     ) -> List[FrameData]:
         """Extract actual frame images from video.
 
@@ -447,9 +473,8 @@ class FrameExtractor:
             try:
                 for i, candidate in enumerate(new_candidates):
                     # Check for interruption at the start of each iteration
-                    if self._interrupted:
-                        self.logger.info("Interruption detected, terminating application")
-                        raise KeyboardInterrupt("Frame extraction interrupted by user")
+                    if interruption_check:
+                        interruption_check()
 
                     try:
                         # Seek to specific timestamp
@@ -628,25 +653,3 @@ class FrameExtractor:
                 self.logger.warning(f"Failed to delete temp frame {frame_path}: {e}")
 
         self.logger.info(f"Cleaned up {deleted_count} temporary frame files")
-
-    def test_interrupt_handler(self):
-        """Test method to verify interrupt handling works.
-        
-        This method sets up the interrupt handler and waits for a signal.
-        Press CTRL-C to test if the interrupt is detected.
-        """
-        import time
-        
-        self.logger.info("Testing interrupt handler - press CTRL-C to test...")
-        self._setup_interrupt_handler()
-        
-        try:
-            for i in range(100):  # Wait up to 10 seconds
-                if self._interrupted:
-                    self.logger.info("SUCCESS: Interrupt detected!")
-                    break
-                time.sleep(0.1)
-            else:
-                self.logger.info("No interrupt received within 10 seconds")
-        finally:
-            self._restore_interrupt_handler()

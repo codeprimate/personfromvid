@@ -56,16 +56,19 @@ class CloseupDetectionStep(PipelineStep):
                 if self.formatter:
                     self.formatter.update_progress(advance)
 
+            # Process closeups
             if self.formatter:
                 with self.formatter.create_progress_bar(
-                    "Analyzing composition", total_frames
+                    "Detecting closeups", total_frames
                 ):
                     closeup_detector.process_frame_batch(
-                        frames_with_faces, progress_callback
+                        frames_with_faces, progress_callback,
+                        interruption_check=self._check_interrupted
                     )
             else:
                 closeup_detector.process_frame_batch(
-                    frames_with_faces, progress_callback
+                    frames_with_faces, progress_callback,
+                    interruption_check=self._check_interrupted
                 )
 
             # Collect and store stats

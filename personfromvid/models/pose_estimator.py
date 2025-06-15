@@ -746,6 +746,7 @@ class PoseEstimator:
         self,
         frames_with_faces: List["FrameData"],
         progress_callback: Optional[callable] = None,
+        interruption_check: Optional[callable] = None,
     ) -> Tuple[Dict[str, int], int]:
         """Process a batch of frames with pose estimation at a high level.
 
@@ -756,10 +757,12 @@ class PoseEstimator:
         - Error handling for individual frames
         - Progress tracking
         - Statistics collection
+        - Interruption checking
 
         Args:
             frames_with_faces: List of FrameData objects (typically from face detection step)
             progress_callback: Optional callback for progress updates (called with processed_count)
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             Tuple of (poses_by_category, total_poses_found)
@@ -786,6 +789,10 @@ class PoseEstimator:
         )
 
         for i in range(0, total_frames, batch_size):
+            # Check for interruption at the start of each batch
+            if interruption_check:
+                interruption_check()
+                
             batch_num = i // batch_size + 1
             batch_frames = frames_with_faces[i : i + batch_size]
             batch_images = []
@@ -799,6 +806,10 @@ class PoseEstimator:
             import cv2
 
             for frame_data in batch_frames:
+                # Check for interruption periodically during frame loading
+                if interruption_check and len(batch_images) % 10 == 0:
+                    interruption_check()
+                    
                 # Handle FrameData object
                 image = cv2.imread(str(frame_data.file_path))
                 if image is not None:
@@ -814,6 +825,10 @@ class PoseEstimator:
                     progress_callback(processed_count)
                 continue
 
+            # Check for interruption before running pose estimation
+            if interruption_check:
+                interruption_check()
+
             # Run pose estimation on batch
             try:
                 logger.debug(f"Running pose inference on {len(batch_images)} images...")
@@ -826,6 +841,10 @@ class PoseEstimator:
                 for j, (frame_data, poses) in enumerate(
                     zip(batch_frame_data, batch_pose_results)
                 ):
+                    # Check for interruption during result processing
+                    if interruption_check and j % 5 == 0:
+                        interruption_check()
+                        
                     if poses:
                         batch_poses_found += len(poses)
 

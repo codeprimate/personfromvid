@@ -55,11 +55,13 @@ class FaceDetectionStep(PipelineStep):
                 )
                 with progress_bar:
                     face_detector.process_frame_batch(
-                        self.state.frames, self.state.video_metadata, progress_callback
+                        self.state.frames, self.state.video_metadata, progress_callback,
+                        interruption_check=self._check_interrupted
                     )
             else:
                 face_detector.process_frame_batch(
-                    self.state.frames, self.state.video_metadata, progress_callback
+                    self.state.frames, self.state.video_metadata, progress_callback,
+                    interruption_check=self._check_interrupted
                 )
 
             total_faces_found = sum(len(f.face_detections) for f in self.state.frames)

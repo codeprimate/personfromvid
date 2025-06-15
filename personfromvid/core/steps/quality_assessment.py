@@ -58,6 +58,10 @@ class QualityAssessmentStep(PipelineStep):
                     "Evaluating quality", total_frames
                 ) as progress_updater:
                     for i, frame in enumerate(frames_for_quality):
+                        # Check for interruption at regular intervals
+                        if i % 10 == 0:
+                            self._check_interrupted()
+                            
                         try:
                             quality_assessor.assess_quality_in_frame(frame)
 
@@ -74,6 +78,10 @@ class QualityAssessmentStep(PipelineStep):
                                 progress_updater(i + 1)
             else:
                 for i, frame in enumerate(frames_for_quality):
+                    # Check for interruption at regular intervals
+                    if i % 10 == 0:
+                        self._check_interrupted()
+                        
                     try:
                         quality_assessor.assess_quality_in_frame(frame)
 

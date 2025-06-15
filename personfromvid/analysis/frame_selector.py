@@ -91,12 +91,14 @@ class FrameSelector:
         self,
         candidate_frames: List[FrameData],
         progress_callback: Optional[Callable[[str], None]] = None,
+        interruption_check: Optional[Callable[[], None]] = None,
     ) -> SelectionSummary:
         """Select best frames from candidates based on quality and diversity.
 
         Args:
             candidate_frames: List of candidate frames to select from
             progress_callback: Optional callback for progress updates
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             SelectionSummary with complete selection results
@@ -105,22 +107,34 @@ class FrameSelector:
             f"Starting frame selection from {len(candidate_frames)} candidates"
         )
 
+        # Check for interruption at the start
+        if interruption_check:
+            interruption_check()
+
         if progress_callback:
             progress_callback("Filtering candidate frames...")
 
         # Filter to usable frames only
-        usable_frames = self._filter_usable_frames(candidate_frames)
+        usable_frames = self._filter_usable_frames(candidate_frames, interruption_check)
         self.logger.info(f"Found {len(usable_frames)} usable frames after filtering")
 
         if not usable_frames:
             return self._create_empty_summary(len(candidate_frames))
 
+        # Check for interruption after filtering
+        if interruption_check:
+            interruption_check()
+
         if progress_callback:
             progress_callback("Grouping frames by categories...")
 
         # Group frames by categories
-        pose_groups = self.group_by_pose(usable_frames)
-        head_angle_groups = self.group_by_head_angle(usable_frames)
+        pose_groups = self.group_by_pose(usable_frames, interruption_check)
+        head_angle_groups = self.group_by_head_angle(usable_frames, interruption_check)
+
+        # Check for interruption after grouping
+        if interruption_check:
+            interruption_check()
 
         if progress_callback:
             progress_callback("Selecting best frames for pose categories...")
@@ -130,7 +144,11 @@ class FrameSelector:
         claimed_frame_ids = set()
 
         # Iterate through pose categories in their defined order of priority
-        for category in self.pose_categories:
+        for i, category in enumerate(self.pose_categories):
+            # Check for interruption during pose category processing
+            if interruption_check and i % 3 == 0:
+                interruption_check()
+                
             candidate_frames = pose_groups.get(category, [])
 
             # Filter out frames already claimed by a higher-priority category
@@ -146,6 +164,7 @@ class FrameSelector:
                     category,
                     "pose",
                     self._calculate_pose_frame_score,
+                    interruption_check,
                 )
 
                 if selection.selected_frames:
@@ -157,20 +176,33 @@ class FrameSelector:
                         f"Selected and claimed {len(selection.selected_frames)} frames for pose '{category}'"
                     )
 
+        # Check for interruption before head angle processing
+        if interruption_check:
+            interruption_check()
+
         if progress_callback:
             progress_callback("Selecting best frames for head angle categories...")
 
         # Select best frames for head angle categories (no de-duplication)
         head_angle_selections = {}
-        for angle, frames in head_angle_groups.items():
+        for j, (angle, frames) in enumerate(head_angle_groups.items()):
+            # Check for interruption during head angle processing
+            if interruption_check and j % 3 == 0:
+                interruption_check()
+                
             if frames:
                 selection = self._select_for_category(
-                    frames, angle, "head_angle", self._calculate_head_angle_frame_score
+                    frames, angle, "head_angle", self._calculate_head_angle_frame_score,
+                    interruption_check
                 )
                 head_angle_selections[angle] = selection
                 self.logger.debug(
                     f"Selected {len(selection.selected_frames)} frames for head angle '{angle}'"
                 )
+
+        # Check for interruption before final processing
+        if interruption_check:
+            interruption_check()
 
         if progress_callback:
             progress_callback("Updating frame selection metadata...")
@@ -203,11 +235,12 @@ class FrameSelector:
         )
         return summary
 
-    def group_by_pose(self, frames: List[FrameData]) -> Dict[str, List[FrameData]]:
+    def group_by_pose(self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None) -> Dict[str, List[FrameData]]:
         """Group frames by pose classification.
 
         Args:
             frames: List of frames to group
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             Dictionary mapping pose categories to frame lists
@@ -227,16 +260,21 @@ class FrameSelector:
                 if pose in self.pose_categories:
                     pose_groups[pose].append(frame)
 
+            # Check for interruption during pose processing
+            if interruption_check and frames.index(frame) % 3 == 0:
+                interruption_check()
+
         # Convert defaultdict to regular dict for cleaner output
         return dict(pose_groups)
 
     def group_by_head_angle(
-        self, frames: List[FrameData]
+        self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None
     ) -> Dict[str, List[FrameData]]:
         """Group frames by head angle direction.
 
         Args:
             frames: List of frames to group
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             Dictionary mapping head angle categories to frame lists
@@ -251,6 +289,10 @@ class FrameSelector:
             for direction in head_directions:
                 if direction in self.head_angle_categories:
                     head_angle_groups[direction].append(frame)
+
+            # Check for interruption during head angle processing
+            if interruption_check and frames.index(frame) % 3 == 0:
+                interruption_check()
 
         # Convert defaultdict to regular dict for cleaner output
         return dict(head_angle_groups)
@@ -272,11 +314,12 @@ class FrameSelector:
 
         return sorted(frames, key=get_quality_score, reverse=True)
 
-    def _filter_usable_frames(self, frames: List[FrameData]) -> List[FrameData]:
+    def _filter_usable_frames(self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None) -> List[FrameData]:
         """Filter frames to only include usable ones.
 
         Args:
             frames: Input frames to filter
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             List of frames that meet usability criteria
@@ -305,6 +348,10 @@ class FrameSelector:
 
             usable.append(frame)
 
+            # Check for interruption during frame processing
+            if interruption_check and frames.index(frame) % 3 == 0:
+                interruption_check()
+
         return usable
 
     def _select_for_category(
@@ -313,6 +360,7 @@ class FrameSelector:
         category_name: str,
         category_type: str,
         score_function: Callable[[FrameData], float],
+        interruption_check: Optional[Callable[[], None]] = None,
     ) -> CategorySelection:
         """Select best frames for a specific category.
 
@@ -321,6 +369,7 @@ class FrameSelector:
             category_name: Name of the category
             category_type: Type of category ("pose" or "head_angle")
             score_function: Function to calculate frame score
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             CategorySelection with results
@@ -338,7 +387,11 @@ class FrameSelector:
 
         # Calculate scores for all frames
         scored_frames = []
-        for frame in frames:
+        for i, frame in enumerate(frames):
+            # Check for interruption during scoring
+            if interruption_check and i % 5 == 0:
+                interruption_check()
+                
             score = score_function(frame)
             scored_frames.append((frame, score))
 
@@ -347,7 +400,7 @@ class FrameSelector:
 
         # Select top frames with diversity consideration
         selected_frames = self._select_diverse_frames(
-            scored_frames, self.criteria.min_frames_per_category
+            scored_frames, self.criteria.min_frames_per_category, interruption_check
         )
 
         # Calculate statistics
@@ -382,13 +435,14 @@ class FrameSelector:
         )
 
     def _select_diverse_frames(
-        self, scored_frames: List[Tuple[FrameData, float]], max_count: int
+        self, scored_frames: List[Tuple[FrameData, float]], max_count: int, interruption_check: Optional[Callable[[], None]] = None
     ) -> List[FrameData]:
         """Select diverse frames to avoid similar selections.
 
         Args:
             scored_frames: List of (frame, score) tuples sorted by score
             max_count: Maximum number of frames to select
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             List of selected frames
@@ -398,10 +452,14 @@ class FrameSelector:
 
         selected = []
 
-        for frame, score in scored_frames:
+        for i, (frame, score) in enumerate(scored_frames):
             if len(selected) >= max_count:
                 break
 
+            # Check for interruption during selection
+            if interruption_check and i % 5 == 0:
+                interruption_check()
+                
             # Check diversity against already selected frames
             if self._is_diverse_enough(frame, selected):
                 selected.append(frame)

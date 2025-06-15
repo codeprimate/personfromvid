@@ -1098,6 +1098,7 @@ class HeadPoseEstimator:
         self,
         frames_with_faces: List["FrameData"],
         progress_callback: Optional[callable] = None,
+        interruption_check: Optional[callable] = None,
     ) -> Tuple[Dict[str, int], int]:
         """Process a batch of frames with head pose estimation at a high level.
 
@@ -1109,10 +1110,12 @@ class HeadPoseEstimator:
         - Error handling for individual frames
         - Progress tracking
         - Statistics collection
+        - Interruption checking
 
         Args:
             frames_with_faces: List of FrameData objects containing face detections
             progress_callback: Optional callback for progress updates (called with processed_count)
+            interruption_check: Optional callback to check for interruption
 
         Returns:
             Tuple of (head_angles_by_category, total_head_poses_found)
@@ -1140,6 +1143,10 @@ class HeadPoseEstimator:
         )
 
         for i in range(0, total_frames, batch_size):
+            # Check for interruption at the start of each batch
+            if interruption_check:
+                interruption_check()
+                
             batch_num = i // batch_size + 1
             batch_frames = frames_with_faces[i : i + batch_size]
 
@@ -1153,6 +1160,10 @@ class HeadPoseEstimator:
             batch_face_indices = []
 
             for frame_data in batch_frames:
+                # Check for interruption periodically during frame processing
+                if interruption_check and len(batch_face_images) % 10 == 0:
+                    interruption_check()
+                    
                 try:
                     # Load frame image
                     frame_path = frame_data.file_path
@@ -1196,74 +1207,79 @@ class HeadPoseEstimator:
                     )
                     continue
 
-            # Run head pose estimation on face crops
-            if batch_face_images:
-                try:
-                    logger.debug(
-                        f"Running head pose inference on {len(batch_face_images)} face crops..."
-                    )
-                    batch_head_poses = self.estimate_batch(batch_face_images)
+            # Skip batch if no valid face images
+            if not batch_face_images:
+                processed_count += len(batch_frames)
+                if progress_callback:
+                    progress_callback(processed_count)
+                continue
 
-                    batch_head_poses_found = 0
-                    batch_directions = {}
+            # Check for interruption before running head pose estimation
+            if interruption_check:
+                interruption_check()
 
-                    # Process results and add to frame data
-                    for j, (head_pose, frame_data, face_idx) in enumerate(
-                        zip(batch_head_poses, batch_frame_data, batch_face_indices)
-                    ):
-                        # Add head pose result to frame data
-                        from ..data.detection_results import HeadPoseResult
+            # Run head pose estimation on batch of face crops
+            try:
+                logger.debug(
+                    f"Running head pose inference on {len(batch_face_images)} face crops..."
+                )
+                batch_head_pose_results = self.estimate_batch(batch_face_images)
 
-                        head_pose_result = HeadPoseResult(
-                            yaw=head_pose.yaw,
-                            pitch=head_pose.pitch,
-                            roll=head_pose.roll,
-                            confidence=head_pose.confidence,
-                            face_id=face_idx,
-                        )
+                batch_head_poses_found = 0
+                batch_classifications = {}
+
+                # Process results for each face crop in batch
+                for j, (frame_data, face_idx, head_pose_result) in enumerate(
+                    zip(batch_frame_data, batch_face_indices, batch_head_pose_results)
+                ):
+                    # Check for interruption during result processing
+                    if interruption_check and j % 5 == 0:
+                        interruption_check()
+                        
+                    if head_pose_result:
+                        batch_head_poses_found += 1
+
+                        # Update the face detection with head pose information
+                        if (
+                            face_idx < len(frame_data.face_detections)
+                            and hasattr(frame_data.face_detections[face_idx], "head_pose")
+                        ):
+                            frame_data.face_detections[face_idx].head_pose = (
+                                head_pose_result
+                            )
+
+                        # Add to frame's head_poses list
                         frame_data.head_poses.append(head_pose_result)
 
                         total_head_poses_found += 1
-                        batch_head_poses_found += 1
 
-                        # Debug: Log actual angles for troubleshooting
-                        logger.debug(
-                            f"Head pose detected - Yaw: {head_pose.yaw:.1f}°, Pitch: {head_pose.pitch:.1f}°, "
-                            f"Roll: {head_pose.roll:.1f}°, Forward-facing: {self.is_facing_forward(head_pose.yaw, head_pose.pitch, head_pose.roll)}"
-                        )
+                        # Update statistics
+                        if head_pose_result.head_pose_classifications:
+                            for classification, _ in head_pose_result.head_pose_classifications:
+                                head_angles_by_category[classification] = (
+                                    head_angles_by_category.get(classification, 0) + 1
+                                )
+                                batch_classifications[classification] = (
+                                    batch_classifications.get(classification, 0) + 1
+                                )
 
-                        # Track head angle categories
-                        direction = head_pose.direction
-                        head_angles_by_category[direction] = (
-                            head_angles_by_category.get(direction, 0) + 1
-                        )
-                        batch_directions[direction] = (
-                            batch_directions.get(direction, 0) + 1
-                        )
-
-                    # Log batch results
-                    if batch_head_poses_found > 0:
-                        logger.debug(
-                            f"Batch {batch_num}/{total_batches}: {batch_head_poses_found} head poses found, "
-                            f"directions: {batch_directions}"
-                        )
-                    else:
-                        logger.debug(
-                            f"Batch {batch_num}/{total_batches}: No head poses detected"
-                        )
-
-                    # Now, classify all the head poses for the frames in this batch
-                    for frame_data in batch_frames:
-                        if frame_data.head_poses:
-                            self._head_angle_classifier.classify_head_poses_in_frame(
-                                frame_data
-                            )
-
-                except Exception as e:
-                    logger.error(
-                        f"Head pose estimation failed for batch {batch_num}: {e}"
+                # Log batch results
+                if batch_head_poses_found > 0:
+                    logger.debug(
+                        f"Batch {batch_num}/{total_batches}: {batch_head_poses_found} head poses found, classifications: {batch_classifications}"
+                    )
+                else:
+                    logger.debug(
+                        f"Batch {batch_num}/{total_batches}: No head poses detected"
                     )
 
+            except Exception as e:
+                logger.error(
+                    f"Head pose estimation failed for batch {batch_num}/{total_batches}: {e}"
+                )
+                # Continue with next batch rather than failing completely
+
+            # Update progress
             processed_count += len(batch_frames)
             if progress_callback:
                 progress_callback(processed_count)

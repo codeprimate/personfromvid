@@ -91,11 +91,13 @@ class FrameSelectionStep(PipelineStep):
                     "Selecting frames", total_candidates
                 ):
                     selection_summary = frame_selector.select_best_frames(
-                        candidate_frames, progress_callback
+                        candidate_frames, progress_callback,
+                        interruption_check=self._check_interrupted
                     )
             else:
                 selection_summary = frame_selector.select_best_frames(
-                    candidate_frames, lambda m: self.logger.debug(f"   {m}")
+                    candidate_frames, lambda m: self.logger.debug(f"   {m}"),
+                    interruption_check=self._check_interrupted
                 )
 
             self.state.update_step_progress(

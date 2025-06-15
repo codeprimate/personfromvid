@@ -63,6 +63,10 @@ class OutputGenerationStep(PipelineStep):
                     "Generating files", total_frames
                 ):
                     for i, frame in enumerate(selected_frames):
+                        # Check for interruption at regular intervals
+                        if i % 5 == 0:
+                            self._check_interrupted()
+                            
                         output_files = image_writer.save_frame_outputs(
                             frame,
                             frame.selections.selected_for_poses,
@@ -72,6 +76,10 @@ class OutputGenerationStep(PipelineStep):
                         progress_callback(i + 1)
             else:
                 for i, frame in enumerate(selected_frames):
+                    # Check for interruption at regular intervals
+                    if i % 5 == 0:
+                        self._check_interrupted()
+                        
                     output_files = image_writer.save_frame_outputs(
                         frame,
                         frame.selections.selected_for_poses,

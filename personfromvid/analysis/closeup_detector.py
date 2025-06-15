@@ -452,12 +452,14 @@ class CloseupDetector:
         self,
         frames_with_faces: List["FrameData"],
         progress_callback: Optional[callable] = None,
+        interruption_check: Optional[callable] = None,
     ) -> None:
         """Process a batch of frames with closeup detection.
 
         Args:
             frames_with_faces: List of FrameData objects with face detections
             progress_callback: Optional callback for progress updates
+            interruption_check: Optional callback to check for interruption
         """
         if not frames_with_faces:
             return
@@ -467,6 +469,10 @@ class CloseupDetector:
         logger.info(f"Starting closeup detection on {total_frames} frames")
 
         for i, frame_data in enumerate(frames_with_faces):
+            # Check for interruption at regular intervals
+            if interruption_check and i % 10 == 0:
+                interruption_check()
+                
             try:
                 # Use the new standardized method
                 self.detect_closeups_in_frame(frame_data)
