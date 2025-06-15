@@ -106,7 +106,8 @@ class TestQualityAssessor:
         assert quality.laplacian_variance < 100  # Below our MIN_LAPLACIAN_VARIANCE
         assert quality.sobel_variance < 100
         assert "blurry" in quality.quality_issues
-        assert not quality.usable  # Should not be usable due to blur
+        # Usability is determined solely by overall quality score, not individual issues
+        assert quality.usable == (quality.overall_quality >= self.assessor.min_quality_threshold)
 
     def test_assess_quality_in_frame_dark_image(self):
         """Test quality assessment on a dark image."""

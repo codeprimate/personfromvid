@@ -124,6 +124,11 @@ def get_version():
     help="Minimum frames to output per pose/angle category",
 )
 @click.option(
+    "--max-frames-per-category",
+    type=click.IntRange(1, 100),
+    help="Maximum frames to output per pose/angle category",
+)
+@click.option(
     "--keep-temp",
     is_flag=True,
     help="Keep temporary files after processing (overrides default cleanup)",
@@ -159,6 +164,7 @@ def main(
     output_png_optimize: Optional[bool],
     resize: Optional[int],
     min_frames_per_category: Optional[int],
+    max_frames_per_category: Optional[int],
     keep_temp: bool,
     force: bool,
     no_structured_output: bool,
@@ -473,7 +479,7 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
 
     # Quality overrides
     if cli_args["quality_threshold"]:
-        config.quality.blur_threshold = cli_args["quality_threshold"]
+        config.frame_selection.min_quality_threshold = cli_args["quality_threshold"]
 
     # Output overrides
     if cli_args["output_format"]:
@@ -499,6 +505,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
 
     if cli_args["min_frames_per_category"]:
         config.output.min_frames_per_category = cli_args["min_frames_per_category"]
+
+    if cli_args["max_frames_per_category"]:
+        config.output.max_frames_per_category = cli_args["max_frames_per_category"]
 
     # Processing overrides
     if cli_args["force"]:

@@ -183,61 +183,18 @@ class TestCloseupDetector:
         assert result.estimated_distance == "very_close"  # 80 > VERY_CLOSE_IOD_THRESHOLD
     
     def test_distance_estimation_categories(self):
-        """Test distance estimation categories."""
-        # Test different inter-ocular distances
+        """Test distance estimation based on inter-ocular distance."""
+        # Test various inter-ocular distances
         test_cases = [
-            (90.0, "very_close"),
-            (60.0, "close"),
-            (35.0, "medium"),
-            (15.0, "far")
+            (100, "very_close"),
+            (60, "close"), 
+            (30, "medium"),
+            (10, "far")
         ]
         
         for iod, expected_distance in test_cases:
             distance = self.detector._estimate_distance(iod)
-            assert distance == expected_distance, f"IOD {iod} should be {expected_distance}"
-    
-    def test_composition_assessment_centered_face(self):
-        """Test composition assessment for centered face."""
-        # Centered face with good proportions
-        bbox = (800, 300, 1120, 620)  # 320x320 face centered horizontally
-        face_detection = self.create_face_detection(bbox)
-        frame_data = self.create_frame_data([face_detection])
-        
-        self.detector.detect_closeups_in_frame(frame_data)
-        
-        result = frame_data.closeup_detections[0]
-        assert result.face_position == ("center", "center")
-        assert result.composition_score > 0.5
-        assert "good_horizontal_centering" in result.composition_notes
-    
-    def test_composition_assessment_rule_of_thirds(self):
-        """Test composition assessment for rule of thirds positioning."""
-        width_third = self.image_shape[1] // 3
-        
-        # Face in left third
-        bbox = (width_third // 2, 300, width_third // 2 + 200, 500)
-        face_detection = self.create_face_detection(bbox)
-        frame_data = self.create_frame_data([face_detection])
-        
-        self.detector.detect_closeups_in_frame(frame_data)
-        
-        result = frame_data.closeup_detections[0]
-        assert result.face_position[0] == "left"
-        assert "rule_of_thirds_horizontal" in result.composition_notes
-    
-    def test_composition_assessment_face_size(self):
-        """Test composition assessment for different face sizes."""
-        # Ideal face size (40% of frame height)
-        face_height = int(self.image_shape[0] * 0.4)
-        bbox = (800, 300, 1000, 300 + face_height)
-        face_detection = self.create_face_detection(bbox)
-        frame_data = self.create_frame_data([face_detection])
-        
-        self.detector.detect_closeups_in_frame(frame_data)
-        
-        result = frame_data.closeup_detections[0]
-        assert "ideal_face_size" in result.composition_notes
-        assert result.composition_score > 0.6
+            assert distance == expected_distance
     
     def test_detect_closeup_with_pose_keypoints(self):
         """Test enhanced closeup detection with pose keypoints."""
@@ -386,7 +343,6 @@ class TestCloseupDetector:
         # - High face detection confidence
         # - Large face area ratio
         # - Available landmarks
-        # - Good composition
         assert result.confidence > 0.7
     
     def test_get_detection_info(self):
@@ -395,7 +351,7 @@ class TestCloseupDetector:
         
         assert 'shot_thresholds' in info
         assert 'distance_thresholds' in info
-        assert 'composition_constants' in info
+        assert 'detection_constants' in info
         
         # Check shot thresholds
         shot_thresholds = info['shot_thresholds']
@@ -483,26 +439,4 @@ class TestCloseupDetector:
         # Frame without pose data should not have shoulder width ratio
         assert frame1.closeup_detections[0].shoulder_width_ratio is None
     
-    def test_composition_headroom_assessment(self):
-        """Test headroom assessment in composition scoring."""
-        # Face with good headroom (10-20% from top)
-        good_headroom_y = int(self.image_shape[0] * 0.15)  # 15% from top
-        bbox = (800, good_headroom_y, 1000, good_headroom_y + 200)
-        face_detection = self.create_face_detection(bbox)
-        frame_data = self.create_frame_data([face_detection])
-        
-        self.detector.detect_closeups_in_frame(frame_data)
-        
-        result = frame_data.closeup_detections[0]
-        assert "good_headroom" in result.composition_notes
-        
-        # Face with insufficient headroom (too close to top)
-        bad_headroom_y = int(self.image_shape[0] * 0.02)  # 2% from top
-        bbox = (800, bad_headroom_y, 1000, bad_headroom_y + 200)
-        face_detection = self.create_face_detection(bbox)
-        frame_data = self.create_frame_data([face_detection])
-        
-        self.detector.detect_closeups_in_frame(frame_data)
-        
-        result = frame_data.closeup_detections[0]
-        assert "insufficient_headroom" in result.composition_notes 
+ 

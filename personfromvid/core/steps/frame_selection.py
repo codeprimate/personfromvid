@@ -16,16 +16,21 @@ class FrameSelectionStep(PipelineStep):
         """Calculate dynamic max frames per category based on video duration.
 
         Uses baseline minimum frames for 30s video, increments by 1 for every 10 additional seconds after 30s.
+        Result is capped by max_frames_per_category configuration.
 
         Args:
             baseline_frames: Base minimum number of frames for 30s video
             video_duration: Video duration in seconds
 
         Returns:
-            Dynamic max frames per category (baseline + duration scaling)
+            Dynamic max frames per category (baseline + duration scaling, capped by config)
         """
         additional_frames = max(0, int((video_duration - 30.0) // 10))
-        return baseline_frames + additional_frames
+        calculated_frames = baseline_frames + additional_frames
+        
+        # Respect the max_frames_per_category configuration limit
+        max_allowed = self.config.output.max_frames_per_category
+        return min(calculated_frames, max_allowed)
 
     def execute(self) -> None:
         """Select best frames based on quality and diversity."""

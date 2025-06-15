@@ -1,9 +1,8 @@
-"""Close-up shot detection and frame composition analysis.
+"""Close-up shot detection and distance estimation.
 
 This module provides comprehensive closeup detection capabilities including:
 - Shot type classification (extreme closeup, closeup, medium closeup, etc.)
 - Distance estimation using facial landmarks and geometry
-- Frame composition assessment using rule of thirds and positioning
 - Face size ratio analysis for shot classification
 """
 
@@ -30,11 +29,6 @@ VERY_CLOSE_IOD_THRESHOLD = 80  # >80 pixels between eyes
 CLOSE_IOD_THRESHOLD = 50  # >50 pixels between eyes
 MEDIUM_IOD_THRESHOLD = 25  # >25 pixels between eyes
 
-# Composition assessment constants
-RULE_OF_THIRDS_TOLERANCE = 0.1  # ±10% tolerance for rule of thirds
-IDEAL_FACE_HEIGHT_RATIO = (
-    0.4  # Face should be ~40% of frame height for good composition
-)
 SHOULDER_WIDTH_CLOSEUP_THRESHOLD = 0.35  # Shoulder width ratio for closeup detection
 
 # Confidence thresholds
@@ -49,13 +43,12 @@ class CloseupDetectionError(AnalysisError):
 
 
 class CloseupDetector:
-    """Comprehensive closeup detection and frame composition analysis.
+    """Comprehensive closeup detection and distance estimation.
 
     This class provides advanced closeup detection capabilities including:
     - Multi-criteria shot classification
     - Distance estimation using facial geometry
-    - Frame composition assessment
-    - Portrait suitability scoring
+    - Portrait suitability analysis
 
     Examples:
         Basic usage with FrameData:
@@ -166,13 +159,6 @@ class CloseupDetector:
                 )
                 estimated_distance = self._estimate_distance(inter_ocular_distance)
 
-            # Assess frame composition
-            composition_score, composition_notes, face_position = (
-                self._assess_composition_with_properties(
-                    face_detection, image_properties
-                )
-            )
-
             # Determine if this is a closeup
             is_closeup = shot_type in ["extreme_closeup", "closeup", "medium_closeup"]
 
@@ -181,7 +167,6 @@ class CloseupDetector:
                 face_detection,
                 face_area_ratio,
                 inter_ocular_distance,
-                composition_score,
             )
 
             return CloseupDetection(
@@ -191,9 +176,6 @@ class CloseupDetector:
                 face_area_ratio=face_area_ratio,
                 inter_ocular_distance=inter_ocular_distance,
                 estimated_distance=estimated_distance,
-                composition_score=composition_score,
-                composition_notes=composition_notes,
-                face_position=face_position,
             )
 
         except Exception as e:
@@ -236,90 +218,7 @@ class CloseupDetector:
 
         return result
 
-    def _assess_composition_with_properties(
-        self, face_detection: FaceDetection, image_properties: ImageProperties
-    ) -> Tuple[float, List[str], Tuple[str, str]]:
-        """Assess frame composition quality using ImageProperties data model.
 
-        Args:
-            face_detection: Face detection result
-            image_properties: Image properties data model
-
-        Returns:
-            Tuple of (composition_score, notes, face_position)
-        """
-        height = image_properties.height
-        width = image_properties.width
-        x1, y1, x2, y2 = face_detection.bbox
-        face_center_x = (x1 + x2) / 2
-        face_center_y = (y1 + y2) / 2
-        face_height = y2 - y1
-
-        composition_score = 0.0
-        notes = []
-
-        # Rule of thirds assessment
-        third_width = width / 3
-        third_height = height / 3
-
-        # Check horizontal positioning
-        horizontal_pos = "center"
-        if face_center_x < third_width:
-            horizontal_pos = "left"
-        elif face_center_x > 2 * third_width:
-            horizontal_pos = "right"
-
-        # Check vertical positioning
-        vertical_pos = "center"
-        if face_center_y < third_height:
-            vertical_pos = "upper"
-        elif face_center_y > 2 * third_height:
-            vertical_pos = "lower"
-
-        face_position = (horizontal_pos, vertical_pos)
-
-        # Score rule of thirds positioning
-        # Prefer center or slightly off-center for portraits
-        if horizontal_pos == "center":
-            composition_score += 0.3
-            notes.append("good_horizontal_centering")
-        else:
-            composition_score += 0.2
-            notes.append("rule_of_thirds_horizontal")
-
-        if vertical_pos in ["center", "upper"]:
-            composition_score += 0.3
-            notes.append("good_vertical_positioning")
-        else:
-            composition_score += 0.1
-            notes.append("face_too_low")
-
-        # Face size relative to frame assessment
-        face_height_ratio = face_height / height
-        if 0.3 <= face_height_ratio <= 0.5:
-            composition_score += 0.3
-            notes.append("ideal_face_size")
-        elif 0.2 <= face_height_ratio <= 0.6:
-            composition_score += 0.2
-            notes.append("acceptable_face_size")
-        else:
-            composition_score += 0.1
-            if face_height_ratio < 0.2:
-                notes.append("face_too_small")
-            else:
-                notes.append("face_too_large")
-
-        # Headroom assessment (space above face)
-        headroom_ratio = y1 / height
-        if 0.1 <= headroom_ratio <= 0.2:
-            composition_score += 0.1
-            notes.append("good_headroom")
-        elif headroom_ratio < 0.05:
-            notes.append("insufficient_headroom")
-        else:
-            notes.append("excessive_headroom")
-
-        return min(1.0, composition_score), notes, face_position
 
     def _calculate_shoulder_width_ratio_from_pose(
         self, pose_detection: PoseDetection, image_properties: ImageProperties
@@ -417,7 +316,6 @@ class CloseupDetector:
         face_detection: FaceDetection,
         face_area_ratio: float,
         inter_ocular_distance: Optional[float],
-        composition_score: float,
     ) -> float:
         """Calculate overall detection confidence based on multiple factors.
 
@@ -425,7 +323,6 @@ class CloseupDetector:
             face_detection: Face detection result
             face_area_ratio: Face area ratio
             inter_ocular_distance: Inter-ocular distance
-            composition_score: Composition quality score
 
         Returns:
             Overall confidence score (0.0 to 1.0)
@@ -443,9 +340,6 @@ class CloseupDetector:
         if face_detection.landmarks and inter_ocular_distance:
             landmark_confidence = min(1.0, inter_ocular_distance / CLOSE_IOD_THRESHOLD)
             confidence_factors.append(landmark_confidence)
-
-        # Factor 4: Composition quality
-        confidence_factors.append(composition_score)
 
         return max(0.3, np.mean(confidence_factors))
 
@@ -517,9 +411,7 @@ class CloseupDetector:
                 "close_iod": CLOSE_IOD_THRESHOLD,
                 "medium_iod": MEDIUM_IOD_THRESHOLD,
             },
-            "composition_constants": {
-                "rule_of_thirds_tolerance": RULE_OF_THIRDS_TOLERANCE,
-                "ideal_face_height_ratio": IDEAL_FACE_HEIGHT_RATIO,
+            "detection_constants": {
                 "shoulder_width_closeup_threshold": SHOULDER_WIDTH_CLOSEUP_THRESHOLD,
             },
         }

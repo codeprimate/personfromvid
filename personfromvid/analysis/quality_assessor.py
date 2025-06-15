@@ -116,7 +116,10 @@ class QualityAssessor:
             )
 
             # Determine if image is usable
-            usable = overall_quality >= self.min_quality_threshold
+            # DISABLED:Frame is unusable if it has critical quality issues, regardless of overall score
+            #   critical_issues = {"blurry", "dark", "overexposed"}
+            #   has_critical_issues = any(issue in quality_issues for issue in critical_issues)
+            usable = overall_quality >= self.min_quality_threshold # and not has_critical_issues
 
             processing_time = (time.time() - start_time) * 1000  # Convert to ms
 

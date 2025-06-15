@@ -222,9 +222,6 @@ class CloseupDetectionConfig(BaseModel):
         le=0.6,
         description="Shoulder width ratio threshold for closeup detection",
     )
-    enable_composition_analysis: bool = Field(
-        default=True, description="Enable frame composition assessment"
-    )
     enable_distance_estimation: bool = Field(
         default=True,
         description="Enable distance estimation using inter-ocular distance",
@@ -324,6 +321,14 @@ class OutputConfig(BaseModel):
         le=10,
         description="Minimum frames to output per pose/angle category",
     )
+
+    max_frames_per_category: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Maximum frames to output per pose/angle category",
+    )
+
     preserve_metadata: bool = Field(
         default=True, description="Preserve metadata in output images"
     )

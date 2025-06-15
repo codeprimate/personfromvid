@@ -133,12 +133,7 @@ class CloseupDetection:
     face_area_ratio: float  # Face area / total frame area
     inter_ocular_distance: Optional[float] = None  # Distance between eyes in pixels
     estimated_distance: Optional[str] = None  # "very_close", "close", "medium", "far"
-    composition_score: float = 0.0  # Frame composition quality (0.0-1.0)
-    composition_notes: List[str] = None  # Notes about composition
     shoulder_width_ratio: Optional[float] = None  # Shoulder width / frame width
-    face_position: Optional[Tuple[str, str]] = (
-        None  # ("center", "upper"), rule of thirds position
-    )
 
     def __post_init__(self):
         """Validate detection results and initialize lists."""
@@ -146,11 +141,6 @@ class CloseupDetection:
             raise ValueError("confidence must be between 0.0 and 1.0")
         if not (0.0 <= self.face_area_ratio <= 1.0):
             raise ValueError("face_area_ratio must be between 0.0 and 1.0")
-        if not (0.0 <= self.composition_score <= 1.0):
-            raise ValueError("composition_score must be between 0.0 and 1.0")
-
-        if self.composition_notes is None:
-            self.composition_notes = []
 
         # Validate shot type
         valid_shot_types = [
@@ -170,16 +160,10 @@ class CloseupDetection:
         return self.shot_type in ["extreme_closeup", "closeup", "medium_closeup"]
 
     @property
-    def is_good_composition(self) -> bool:
-        """Check if frame has good composition for portrait use."""
-        return self.composition_score >= 0.6
-
-    @property
     def quality_factors(self) -> Dict[str, float]:
         """Get quality factors as dictionary."""
         return {
             "face_area_ratio": self.face_area_ratio,
-            "composition_score": self.composition_score,
             "inter_ocular_distance": self.inter_ocular_distance or 0.0,
             "shoulder_width_ratio": self.shoulder_width_ratio or 0.0,
         }

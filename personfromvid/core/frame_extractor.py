@@ -338,12 +338,6 @@ class FrameExtractor:
             # Calculate frame number
             frame_number = int(current_time * self.video_metadata.fps)
 
-            # Check rate limiting - avoid too many frames per second
-            frames_in_current_second = int(current_time) * self.max_frames_per_second
-            if frame_count > frames_in_current_second:
-                current_time += self.temporal_interval
-                continue
-
             candidate = FrameCandidate(
                 timestamp=current_time,
                 frame_number=frame_number,
@@ -375,30 +369,52 @@ class FrameExtractor:
         if interruption_check:
             interruption_check()
 
-        # Start with I-frames (higher priority)
-        all_candidates = i_frames.copy()
+        # Combine all candidates first
+        all_candidates = i_frames.copy() + temporal.copy()
         duplicate_threshold = 0.5  # seconds
 
-        self.logger.debug(f"Deduplicating {len(temporal)} temporal candidates against {len(i_frames)} I-frames")
+        self.logger.debug(f"Deduplicating {len(all_candidates)} total candidates")
 
-        for i, temporal_candidate in enumerate(temporal):
+        # Remove duplicates based on proximity and confidence
+        deduplicated = []
+        for candidate in all_candidates:
             # Check for interruption during deduplication
-            if interruption_check and i % 50 == 0:
+            if interruption_check and len(deduplicated) % 50 == 0:
                 interruption_check()
                 
-            # Check if this temporal candidate is too close to any I-frame
+            # Check if this candidate is too close to any already accepted candidate
             is_duplicate = False
-            for i_frame_candidate in i_frames:
-                time_diff = abs(temporal_candidate.timestamp - i_frame_candidate.timestamp)
+            existing_to_replace = None
+            
+            for j, existing_candidate in enumerate(deduplicated):
+                time_diff = abs(candidate.timestamp - existing_candidate.timestamp)
                 if time_diff < duplicate_threshold:
                     is_duplicate = True
+                    # If this candidate has higher confidence, replace the existing one
+                    if candidate.confidence > existing_candidate.confidence:
+                        existing_to_replace = j
                     break
 
             if not is_duplicate:
-                all_candidates.append(temporal_candidate)
+                deduplicated.append(candidate)
+            elif existing_to_replace is not None:
+                # Replace lower confidence candidate with higher confidence one
+                deduplicated[existing_to_replace] = candidate
+
+        all_candidates = deduplicated
 
         # Sort by timestamp for consistent ordering
         all_candidates.sort(key=lambda x: x.timestamp)
+
+        # Apply rate limiting: max_frames_per_second * duration
+        max_frames = int(self.max_frames_per_second * self.video_metadata.duration)
+        if len(all_candidates) > max_frames:
+            # Sort by confidence (descending) then by timestamp to prioritize best frames
+            all_candidates.sort(key=lambda x: (-x.confidence, x.timestamp))
+            all_candidates = all_candidates[:max_frames]
+            # Re-sort by timestamp for final ordering
+            all_candidates.sort(key=lambda x: x.timestamp)
+            self.logger.debug(f"Applied rate limiting: reduced to {len(all_candidates)} frames (max: {max_frames})")
 
         self.logger.debug(f"Combined candidates: {len(all_candidates)} total ({len(i_frames)} I-frames + {len(all_candidates) - len(i_frames)} temporal)")
 

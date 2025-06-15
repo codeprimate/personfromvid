@@ -297,13 +297,6 @@ class FrameData:
                 return True
         return False
 
-    def has_good_composition(self) -> bool:
-        """Check if frame has good composition for portrait use."""
-        for closeup in self.closeup_detections:
-            if closeup.is_good_composition:
-                return True
-        return False
-
     # Quality assessment
     def is_high_quality(self) -> bool:
         """Check if frame meets high quality standards."""
@@ -398,10 +391,7 @@ class FrameData:
                     "face_area_ratio": closeup.face_area_ratio,
                     "inter_ocular_distance": closeup.inter_ocular_distance,
                     "estimated_distance": closeup.estimated_distance,
-                    "composition_score": closeup.composition_score,
-                    "composition_notes": closeup.composition_notes,
                     "shoulder_width_ratio": closeup.shoulder_width_ratio,
-                    "face_position": closeup.face_position,
                 }
                 for closeup in self.closeup_detections
             ],
@@ -524,14 +514,7 @@ class FrameData:
                 face_area_ratio=closeup_dict.get("face_area_ratio", 0.0),
                 inter_ocular_distance=closeup_dict.get("inter_ocular_distance"),
                 estimated_distance=closeup_dict.get("estimated_distance"),
-                composition_score=closeup_dict.get("composition_score", 0.0),
-                composition_notes=closeup_dict.get("composition_notes", []),
                 shoulder_width_ratio=closeup_dict.get("shoulder_width_ratio"),
-                face_position=(
-                    tuple(closeup_dict.get("face_position", []))
-                    if closeup_dict.get("face_position")
-                    else None
-                ),
             )
             closeup_detections.append(closeup_detection)
 

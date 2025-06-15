@@ -13,7 +13,7 @@ PIPELINE_STEPS = {
     "frame_extraction": "Extract frames from video",
     "face_detection": "Detect faces in frames",
     "pose_analysis": "Analyze body poses and head angles",
-    "closeup_detection": "Detect closeup shots and composition",
+    "closeup_detection": "Detect closeup shots and shot types",
     "quality_assessment": "Assess frame quality",
     "frame_selection": "Select best frames",
     "output_generation": "Generate output files (images, JSON, etc.)",
