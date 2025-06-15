@@ -116,6 +116,8 @@ class FrameExtractor:
                 f"Combined to {len(all_candidates)} unique frame candidates"
             )
 
+
+
             # Step 4: Extract actual frame images
             extracted_frames = self._extract_frame_images(
                 all_candidates, output_dir, progress_callback
@@ -343,6 +345,8 @@ class FrameExtractor:
                     filename = f"{frame_id}.png"
                     frame_path = output_dir / filename
 
+
+
                     # Check for duplicate frames using perceptual hash
                     frame_hash = self._calculate_frame_hash(frame)
                     if frame_hash in self.frame_hashes:
@@ -352,14 +356,17 @@ class FrameExtractor:
 
                     self.frame_hashes.add(frame_hash)
 
-                    # Save frame as PNG with maximum compression
-                    success = cv2.imwrite(
-                        str(frame_path), frame, [cv2.IMWRITE_PNG_COMPRESSION, 4]
-                    )
 
-                    if not success:
-                        self.logger.warning(f"Failed to save frame: {frame_path}")
-                        continue
+                    # Check if frame already exists
+                    if not frame_path.exists():
+                        # Save frame as PNG with maximum compression
+                        success = cv2.imwrite(
+                            str(frame_path), frame, [cv2.IMWRITE_PNG_COMPRESSION, 4]
+                        )
+
+                        if not success:
+                            self.logger.warning(f"Failed to save frame: {frame_path}")
+                            continue
 
                     # Create frame metadata
                     frame_data = self._create_frame_data(

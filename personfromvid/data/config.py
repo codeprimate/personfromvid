@@ -235,7 +235,7 @@ class FrameSelectionConfig(BaseModel):
     """Configuration for frame selection."""
 
     min_quality_threshold: float = Field(
-        default=0.3,
+        default=0.2,
         ge=0.0,
         le=1.0,
         description="Minimum quality threshold for frame selection",

@@ -36,7 +36,7 @@ CONTRAST_WEIGHT = 0.1  # Contrast score weight
 
 # Quality Classification Thresholds
 HIGH_QUALITY_THRESHOLD = 0.7  # Overall score for high quality
-USABLE_QUALITY_THRESHOLD = 0.3  # Minimum score for usable quality
+# Usable quality threshold will be passed from config
 
 # Sobel Variance (Secondary sharpness metric)
 MIN_SOBEL_VARIANCE = 50.0  # Minimum edge sharpness
@@ -54,6 +54,11 @@ class QualityAssessor:
     def __init__(self):
         """Initialize quality assessor."""
         self.logger = get_logger("quality_assessor")
+        
+        # Get minimum quality threshold from app config
+        from ..data.config import get_default_config
+        config = get_default_config()
+        self.min_quality_threshold = config.frame_selection.min_quality_threshold
 
     def assess_quality_in_frame(self, frame: "FrameData"):
         """Assess quality for a single frame and update it in place.
@@ -111,9 +116,7 @@ class QualityAssessor:
             )
 
             # Determine if image is usable
-            usable = (
-                overall_quality >= USABLE_QUALITY_THRESHOLD and len(quality_issues) == 0
-            )
+            usable = overall_quality >= self.min_quality_threshold
 
             processing_time = (time.time() - start_time) * 1000  # Convert to ms
 
