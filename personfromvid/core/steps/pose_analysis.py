@@ -46,7 +46,7 @@ class PoseAnalysisStep(PipelineStep):
 
             body_last_processed, head_last_processed = 0, 0
 
-            def body_progress_callback(processed_count: int):
+            def body_progress_callback(processed_count: int, rate: float = None):
                 nonlocal body_last_processed
                 self._check_interrupted()
                 advance = processed_count - body_last_processed
@@ -57,9 +57,13 @@ class PoseAnalysisStep(PipelineStep):
                 )
                 body_last_processed = processed_count
                 if self.formatter:
-                    self.formatter.update_progress(advance)
+                    # Pass rate information to formatter if available
+                    if rate is not None:
+                        self.formatter.update_progress(advance, rate=rate)
+                    else:
+                        self.formatter.update_progress(advance)
 
-            def head_progress_callback(processed_count: int):
+            def head_progress_callback(processed_count: int, rate: float = None):
                 nonlocal head_last_processed
                 self._check_interrupted()
                 advance = processed_count - head_last_processed
@@ -70,7 +74,11 @@ class PoseAnalysisStep(PipelineStep):
                 )
                 head_last_processed = processed_count
                 if self.formatter:
-                    self.formatter.update_progress(advance)
+                    # Pass rate information to formatter if available
+                    if rate is not None:
+                        self.formatter.update_progress(advance, rate=rate)
+                    else:
+                        self.formatter.update_progress(advance)
 
             # Body and Head pose estimation
             if self.formatter:

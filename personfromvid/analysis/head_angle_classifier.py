@@ -92,6 +92,31 @@ class HeadAngleClassifier:
             head_pose_result.direction = direction
             head_pose_result.direction_confidence = confidence
 
+    def classify_head_angle(self, yaw: float, pitch: float, roll: float) -> str:
+        """Classify head pose angles into cardinal directions.
+
+        Args:
+            yaw: Yaw angle in degrees
+            pitch: Pitch angle in degrees  
+            roll: Roll angle in degrees
+
+        Returns:
+            Direction string from the 9 cardinal directions
+        """
+        try:
+            # Validate input angles
+            self._validate_angles(yaw, pitch, roll)
+
+            # Determine direction based on yaw and pitch
+            direction = self._get_direction_from_angles(yaw, pitch)
+            
+            return direction
+
+        except Exception as e:
+            logger.error(f"Failed to classify head angles yaw={yaw}, pitch={pitch}, roll={roll}: {e}")
+            # Return default classification for failed angles
+            return "front"
+
     def _classify_single_head_pose(
         self, head_pose_result: HeadPoseResult
     ) -> Tuple[str, float]:

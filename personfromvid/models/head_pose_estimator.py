@@ -12,6 +12,7 @@ from typing import List, Optional, Union, Tuple, Dict, Any
 import numpy as np
 import cv2
 import math
+import time
 
 from ..data.detection_results import HeadPoseResult, FaceDetection
 from ..utils.exceptions import ModelInferenceError, HeadPoseEstimationError
@@ -1108,7 +1109,7 @@ class HeadPoseEstimator:
         - Running head pose estimation in batches
         - Updating frame data with head pose results
         - Error handling for individual frames
-        - Progress tracking
+        - Progress tracking with rate calculation
         - Statistics collection
         - Interruption checking
 
@@ -1132,6 +1133,7 @@ class HeadPoseEstimator:
         total_head_poses_found = 0
         head_angles_by_category = {}
         processed_count = 0
+        start_time = time.time()
 
         # Process frames in batches for memory efficiency
         batch_size = self.config.models.batch_size
@@ -1211,7 +1213,15 @@ class HeadPoseEstimator:
             if not batch_face_images:
                 processed_count += len(batch_frames)
                 if progress_callback:
-                    progress_callback(processed_count)
+                    # Calculate current processing rate
+                    elapsed = time.time() - start_time
+                    current_rate = processed_count / elapsed if elapsed > 0 else 0
+                    # Check if progress_callback accepts rate parameter
+                    try:
+                        progress_callback(processed_count, rate=current_rate)
+                    except TypeError:
+                        # Fallback to single argument for backwards compatibility
+                        progress_callback(processed_count)
                 continue
 
             # Check for interruption before running head pose estimation
@@ -1253,15 +1263,20 @@ class HeadPoseEstimator:
 
                         total_head_poses_found += 1
 
-                        # Update statistics
-                        if head_pose_result.head_pose_classifications:
-                            for classification, _ in head_pose_result.head_pose_classifications:
-                                head_angles_by_category[classification] = (
-                                    head_angles_by_category.get(classification, 0) + 1
-                                )
-                                batch_classifications[classification] = (
-                                    batch_classifications.get(classification, 0) + 1
-                                )
+                        # Classify head pose direction using HeadAngleClassifier
+                        direction = self._head_angle_classifier.classify_head_angle(
+                            head_pose_result.yaw, head_pose_result.pitch, head_pose_result.roll
+                        )
+                        head_pose_result.direction = direction
+
+                        # Update statistics with the direction classification
+                        if direction:
+                            head_angles_by_category[direction] = (
+                                head_angles_by_category.get(direction, 0) + 1
+                            )
+                            batch_classifications[direction] = (
+                                batch_classifications.get(direction, 0) + 1
+                            )
 
                 # Log batch results
                 if batch_head_poses_found > 0:
@@ -1279,10 +1294,18 @@ class HeadPoseEstimator:
                 )
                 # Continue with next batch rather than failing completely
 
-            # Update progress
+            # Update progress with rate calculation
             processed_count += len(batch_frames)
             if progress_callback:
-                progress_callback(processed_count)
+                # Calculate current processing rate
+                elapsed = time.time() - start_time
+                current_rate = processed_count / elapsed if elapsed > 0 else 0
+                # Check if progress_callback accepts rate parameter
+                try:
+                    progress_callback(processed_count, rate=current_rate)
+                except TypeError:
+                    # Fallback to single argument for backwards compatibility
+                    progress_callback(processed_count)
 
         logger.debug(
             f"Head pose estimation completed: {total_head_poses_found} head poses found in {total_frames} frames"

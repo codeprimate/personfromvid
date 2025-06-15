@@ -43,7 +43,7 @@ class CloseupDetectionStep(PipelineStep):
 
             last_processed_count = 0
 
-            def progress_callback(processed_count: int):
+            def progress_callback(processed_count: int, rate: float = None):
                 nonlocal last_processed_count
                 self._check_interrupted()
                 advance = processed_count - last_processed_count
@@ -54,7 +54,11 @@ class CloseupDetectionStep(PipelineStep):
                 )
                 last_processed_count = processed_count
                 if self.formatter:
-                    self.formatter.update_progress(advance)
+                    # Pass rate information to formatter if available
+                    if rate is not None:
+                        self.formatter.update_progress(advance, rate=rate)
+                    else:
+                        self.formatter.update_progress(advance)
 
             # Process closeups
             if self.formatter:

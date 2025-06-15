@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Tuple, Dict, Any
 import numpy as np
 import cv2
+import time
 
 from ..data.detection_results import PoseDetection
 from ..utils.exceptions import ModelInferenceError, PoseEstimationError
@@ -755,7 +756,7 @@ class PoseEstimator:
         - Running pose estimation in batches
         - Updating frame data with pose detections
         - Error handling for individual frames
-        - Progress tracking
+        - Progress tracking with rate calculation
         - Statistics collection
         - Interruption checking
 
@@ -778,6 +779,7 @@ class PoseEstimator:
         total_poses_found = 0
         poses_by_category = {}
         processed_count = 0
+        start_time = time.time()
 
         # Process in batches for memory efficiency
         batch_size = self.config.models.batch_size
@@ -822,7 +824,15 @@ class PoseEstimator:
             if not batch_images:
                 processed_count += len(batch_frames)
                 if progress_callback:
-                    progress_callback(processed_count)
+                    # Calculate current processing rate
+                    elapsed = time.time() - start_time
+                    current_rate = processed_count / elapsed if elapsed > 0 else 0
+                    # Check if progress_callback accepts rate parameter
+                    try:
+                        progress_callback(processed_count, rate=current_rate)
+                    except TypeError:
+                        # Fallback to single argument for backwards compatibility
+                        progress_callback(processed_count)
                 continue
 
             # Check for interruption before running pose estimation
@@ -880,10 +890,18 @@ class PoseEstimator:
                 )
                 # Continue with next batch rather than failing completely
 
-            # Update progress
+            # Update progress with rate calculation
             processed_count += len(batch_frames)
             if progress_callback:
-                progress_callback(processed_count)
+                # Calculate current processing rate
+                elapsed = time.time() - start_time
+                current_rate = processed_count / elapsed if elapsed > 0 else 0
+                # Check if progress_callback accepts rate parameter
+                try:
+                    progress_callback(processed_count, rate=current_rate)
+                except TypeError:
+                    # Fallback to single argument for backwards compatibility
+                    progress_callback(processed_count)
 
         logger.debug(
             f"Body pose estimation completed: {total_poses_found} poses found in {total_frames} frames"

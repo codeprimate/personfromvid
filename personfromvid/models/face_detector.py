@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Tuple, Dict, Any
 import numpy as np
 import cv2
+import time
 
 from ..data.detection_results import FaceDetection
 from ..utils.exceptions import ModelInferenceError, FaceDetectionError
@@ -652,7 +653,7 @@ class FaceDetector:
         - Running face detection in batches
         - Adding face detections to FrameData objects in-place
         - Error handling for individual frames
-        - Progress tracking
+        - Progress tracking with rate calculation
         - Interruption checking
 
         Args:
@@ -672,6 +673,7 @@ class FaceDetector:
 
         total_faces_found = 0
         processed_count = 0
+        start_time = time.time()
 
         # Process in batches for memory efficiency
         batch_size = self.config.models.batch_size
@@ -708,7 +710,15 @@ class FaceDetector:
             if not batch_images:
                 processed_count += len(batch_frames)
                 if progress_callback:
-                    progress_callback(processed_count)
+                    # Calculate current processing rate
+                    elapsed = time.time() - start_time
+                    current_rate = processed_count / elapsed if elapsed > 0 else 0
+                    # Check if progress_callback accepts rate parameter
+                    try:
+                        progress_callback(processed_count, rate=current_rate)
+                    except TypeError:
+                        # Fallback to single argument for backwards compatibility
+                        progress_callback(processed_count)
                 continue
 
             # Check for interruption before running detection
@@ -753,10 +763,18 @@ class FaceDetector:
                 )
                 # Continue with next batch rather than failing completely
 
-            # Update progress
+            # Update progress with rate calculation
             processed_count += len(batch_frames)
             if progress_callback:
-                progress_callback(processed_count)
+                # Calculate current processing rate
+                elapsed = time.time() - start_time
+                current_rate = processed_count / elapsed if elapsed > 0 else 0
+                # Check if progress_callback accepts rate parameter
+                try:
+                    progress_callback(processed_count, rate=current_rate)
+                except TypeError:
+                    # Fallback to single argument for backwards compatibility
+                    progress_callback(processed_count)
 
         logger.info(
             f"Face detection completed: {total_faces_found} faces found in "

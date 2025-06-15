@@ -40,14 +40,18 @@ class FaceDetectionStep(PipelineStep):
 
             last_processed_count = 0
 
-            def progress_callback(processed_count: int):
+            def progress_callback(processed_count: int, rate: float = None):
                 nonlocal last_processed_count
                 self._check_interrupted()
                 self.state.update_step_progress(self.step_name, processed_count)
                 advance_amount = processed_count - last_processed_count
                 last_processed_count = processed_count
                 if self.formatter:
-                    self.formatter.update_progress(advance_amount)
+                    # Pass rate information to formatter if available
+                    if rate is not None:
+                        self.formatter.update_progress(advance_amount, rate=rate)
+                    else:
+                        self.formatter.update_progress(advance_amount)
 
             if self.formatter:
                 progress_bar = self.formatter.create_progress_bar(

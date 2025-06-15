@@ -11,6 +11,7 @@ import logging
 import math
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
+import time
 
 from ..data.detection_results import FaceDetection, PoseDetection, CloseupDetection
 from ..data.frame_data import FrameData, ImageProperties
@@ -465,6 +466,7 @@ class CloseupDetector:
             return
 
         total_frames = len(frames_with_faces)
+        start_time = time.time()
 
         logger.info(f"Starting closeup detection on {total_frames} frames")
 
@@ -482,9 +484,18 @@ class CloseupDetector:
                 logger.error(f"Closeup detection failed for frame {frame_id}: {e}")
                 # Continue processing other frames
 
-            # Update progress
+            # Update progress with rate calculation
             if progress_callback:
-                progress_callback(i + 1)
+                processed_count = i + 1
+                # Calculate current processing rate
+                elapsed = time.time() - start_time
+                current_rate = processed_count / elapsed if elapsed > 0 else 0
+                # Check if progress_callback accepts rate parameter
+                try:
+                    progress_callback(processed_count, rate=current_rate)
+                except TypeError:
+                    # Fallback to single argument for backwards compatibility
+                    progress_callback(processed_count)
 
         logger.info(f"Closeup detection completed: {total_frames} frames processed")
 
