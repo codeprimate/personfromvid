@@ -19,7 +19,7 @@ AI-powered video frame extraction and pose categorization tool that analyzes vid
 - 🖼️ **Advanced Quality Assessment**: Uses multiple metrics like blur, brightness, and contrast to select the sharpest, best-lit frames.
 - ⚡ **GPU Acceleration**: Optional CUDA/MPS support for significantly faster processing.
 - 📊 **Rich Progress Tracking**: Modern console interface with real-time progress displays and detailed status.
-- 🔄 **Resumable Processing**: Automatically saves progress and allows resuming interrupted sessions.
+- 🔄 **Resumable Processing**: Automatically saves progress and resumes interrupted sessions (use `--force` to restart from scratch).
 - ⚙️ **Highly Configurable**: Extensive configuration options via CLI, YAML files, or environment variables.
 
 ## Installation
@@ -98,35 +98,65 @@ personfromvid video.mp4 \
 # Resize output images to a maximum of 1024 pixels
 personfromvid video.mp4 --resize 1024
 
-# Resume an interrupted process
-personfromvid video.mp4 --resume
+# Force restart processing (clears previous state)
+personfromvid video.mp4 --force
+
+# Keep temporary files for debugging
+personfromvid video.mp4 --keep-temp
+
+# Disable structured output (use basic logging)
+personfromvid video.mp4 --no-structured-output
 ```
 
 ## Command-line Options
 
-`personfromvid` offers many options to customize its behavior. Here are some of the most common ones:
+`personfromvid` offers many options to customize its behavior. Here are the available options:
 
+### General Options
 | Option | Alias | Description | Default |
 | --- | --- | --- | --- |
-| `--config` | `-c` | Path to a YAML configuration file. | `None` |
+| `--config` | `-c` | Path to a YAML or JSON configuration file. | `None` |
 | `--output-dir` | `-o` | Directory to save output files. | Video's directory |
-| `--device` | | Device to use for AI models (`auto`, `cpu`, `gpu`). | `auto` |
 | `--log-level` | `-l` | Set logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). | `INFO` |
 | `--verbose` | `-v` | Enable verbose output (sets log level to `DEBUG`). | `False` |
 | `--quiet` | `-q` | Suppress non-essential output. | `False` |
-| `--resume` | | Resume from the last saved state. | `True` |
-| `--batch-size`| | Batch size for AI model inference. | `8` |
-| `--confidence`| | Confidence threshold for detections. | `0.3` |
-| `--max-frames`| | Maximum frames to process from the video. | `None` |
-| `--output-format`| | Output image format (`jpeg` or `png`). | `jpeg` |
-| `--output-jpeg-quality`| | Quality for JPEG output (70-100). | `95` |
-| `--resize`| | Maximum dimension for proportional image resizing (256-4096 pixels). | `None` |
-| `--min-frames-per-category`| | Minimum frames to output per pose/angle category (1-10). | `3` |
-| `--no-output-face-crop-enabled`| | Disable generation of cropped face images. | `False` |
-| `--no-output-full-frame-enabled`| | Disable saving of full-frame images. | `False` |
-| `--force` | | Force cleanup of existing temp directory before starting. | `False` |
-| `--keep-temp` | | Keep temporary files after processing for debugging. | `False` |
+| `--no-structured-output` | | Disable structured output format (use basic logging). | `False` |
 | `--version` | | Show version information and exit. | `False` |
+
+### AI Model Options
+| Option | Description | Default |
+| --- | --- | --- |
+| `--device` | Device to use for AI models (`auto`, `cpu`, `gpu`). | `auto` |
+| `--batch-size` | Batch size for AI model inference (1-64). | `1` |
+| `--confidence` | Confidence threshold for detections (0.0-1.0). | `0.3` |
+
+### Frame Processing Options
+| Option | Description | Default |
+| --- | --- | --- |
+| `--max-frames` | Maximum frames to extract per video. | `None` |
+| `--quality-threshold` | Quality threshold for frame selection (0.0-1.0). | `0.2` |
+
+### Output Options
+| Option | Description | Default |
+| --- | --- | --- |
+| `--output-format` | Output image format (`jpeg` or `png`). | `jpeg` |
+| `--output-jpeg-quality` | Quality for JPEG output (70-100). | `95` |
+| `--output-face-crop-enabled` | Enable generation of cropped face images. | `True` |
+| `--no-output-face-crop-enabled` | Disable generation of cropped face images. | `False` |
+| `--output-full-frame-enabled` | Enable saving of full-frame images. | `True` |
+| `--no-output-full-frame-enabled` | Disable saving of full-frame images. | `False` |
+| `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.2` |
+| `--output-png-optimize` | Enable PNG optimization. | `True` |
+| `--no-output-png-optimize` | Disable PNG optimization. | `False` |
+| `--resize` | Maximum dimension for proportional resizing (256-4096 pixels). | `None` |
+| `--min-frames-per-category` | Minimum frames to output per pose/angle category (1-10). | `3` |
+| `--max-frames-per-category` | Maximum frames to output per pose/angle category (1-100). | `5` |
+
+### Processing Control Options
+| Option | Description | Default |
+| --- | --- | --- |
+| `--force` | Force restart analysis by deleting existing state. | `False` |
+| `--keep-temp` | Keep temporary files after processing. | `False` |
 
 For a full list of options, run `personfromvid --help`.
 
@@ -159,10 +189,10 @@ Create a YAML file (e.g., `config.yaml`) to manage settings. CLI arguments will 
 ```yaml
 # config.yaml
 
-# Models and device settings
+# AI Models and device settings
 models:
   device: "auto"  # "cpu", "gpu", or "auto"
-  batch_size: 8
+  batch_size: 1
   confidence_threshold: 0.3
   face_detection_model: "yolov8s-face"
   pose_estimation_model: "yolov8s-pose"
@@ -172,7 +202,9 @@ models:
 frame_extraction:
   temporal_sampling_interval: 0.25 # Seconds between samples
   enable_keyframe_detection: true
+  enable_temporal_sampling: true
   max_frames_per_video: null # No limit
+  deduplication_enabled: true
 
 # Quality assessment thresholds
 quality:
@@ -180,34 +212,80 @@ quality:
   brightness_min: 30.0
   brightness_max: 225.0
   contrast_min: 20.0
+  enable_multiple_metrics: true
+
+# Pose classification thresholds
+pose_classification:
+  standing_hip_knee_angle_min: 160.0
+  sitting_hip_knee_angle_min: 80.0
+  sitting_hip_knee_angle_max: 120.0
+  squatting_hip_knee_angle_max: 90.0
+  closeup_face_area_threshold: 0.15
+
+# Head angle classification
+head_angle:
+  yaw_threshold_degrees: 22.5
+  pitch_threshold_degrees: 22.5
+  max_roll_degrees: 30.0
+  profile_yaw_threshold: 67.5
+
+# Closeup detection settings
+closeup_detection:
+  extreme_closeup_threshold: 0.25
+  closeup_threshold: 0.15
+  medium_closeup_threshold: 0.08
+  medium_shot_threshold: 0.03
+  shoulder_width_threshold: 0.35
+  enable_distance_estimation: true
+
+# Frame selection criteria
+frame_selection:
+  min_quality_threshold: 0.2
+  face_size_weight: 0.3
+  quality_weight: 0.7
+  diversity_threshold: 0.8
 
 # Output settings
 output:
   min_frames_per_category: 3
+  max_frames_per_category: 5
+  preserve_metadata: true
   image:
     format: "jpeg" # 'jpeg' or 'png'
+    face_crop_enabled: true
+    full_frame_enabled: true
+    face_crop_padding: 0.2 # 20% padding around face
+    resize: null # Max dimension for resizing (null for no resizing)
     jpeg:
       quality: 95
     png:
       optimize: true
-    face_crop_enabled: true
-    full_frame_enabled: true
-    face_crop_padding: 0.2 # 20% padding
 
-# Processing and storage behavior
-processing:
-  enable_resume: true
+# Storage and caching
 storage:
   cache_directory: "~/.cache/personfromvid"  # Override default cache location
+  temp_directory: null                       # Auto-generated if null
   keep_temp: false                           # Keep temporary files after processing
   force_temp_cleanup: false                  # Force cleanup before starting
   cleanup_temp_on_success: true              # Clean up temp files on success
   cleanup_temp_on_failure: false             # Keep temp files if processing fails
+  max_cache_size_gb: 5.0
+
+# Processing behavior
+processing:
+  force_restart: false                       # Force restart by deleting existing state
+  save_intermediate_results: true
+  max_processing_time_minutes: null         # No time limit
+  parallel_workers: 1
 
 # Logging configuration
 logging:
-  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  enable_file_logging: false
+  log_file: null
+  enable_rich_console: true
   enable_structured_output: true
+  verbose: false
 ```
 
 Use with:
@@ -372,8 +450,9 @@ Alternative models can be configured.
 ## Performance Tips
 
 1. **Use a GPU**: The single most effective way to speed up processing is to use an NVIDIA GPU with `--device gpu`.
-2. **Adjust Batch Size**: Increase `--batch-size` to improve GPU utilization. A size of 8 or 16 is a good starting point.
+2. **Adjust Batch Size**: Increase `--batch-size` to improve GPU utilization. Start with 4 or 8, then try 16 if you have sufficient GPU memory. Default is 1 for maximum compatibility.
 3. **Limit Frame Extraction**: Use `--max-frames` on very long videos to get results faster.
+4. **Use Structured Output**: The default structured output (`--no-structured-output` to disable) provides better progress tracking and user experience.
 
 ## Troubleshooting
 
@@ -404,6 +483,15 @@ personfromvid video.mp4 --batch-size 1
 ```bash
 # Check output directory permissions
 ls -la /path/to/output/directory
+```
+
+**Processing seems stuck or interrupted:**
+```bash
+# Force restart from the beginning (clears saved state)
+personfromvid video.mp4 --force
+
+# Keep temporary files for debugging
+personfromvid video.mp4 --keep-temp
 ```
 
 ## Contributing
