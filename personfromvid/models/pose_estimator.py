@@ -78,6 +78,7 @@ class PoseEstimator:
         model_name: str,
         device: str = DEFAULT_DEVICE,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        config: Optional["Config"] = None,
     ):
         """Initialize pose estimator with specified model.
 
@@ -85,6 +86,7 @@ class PoseEstimator:
             model_name: Name of the pose estimation model to use
             device: Computation device ("cpu", "cuda", or "auto")
             confidence_threshold: Minimum confidence threshold for detections
+            config: Application configuration object (optional)
 
         Raises:
             PoseEstimationError: If model loading fails or device is unsupported
@@ -92,6 +94,13 @@ class PoseEstimator:
         self.model_name = model_name
         self.device = self._resolve_device(device)
         self.confidence_threshold = confidence_threshold
+        
+        # Store config or get default
+        if config is None:
+            from ..data.config import get_default_config
+            self.config = get_default_config()
+        else:
+            self.config = config
 
         # Get model configuration
         self.model_config = ModelConfigs.get_model(model_name)
@@ -768,7 +777,7 @@ class PoseEstimator:
         processed_count = 0
 
         # Process in batches for memory efficiency
-        batch_size = 16  # Could be made configurable
+        batch_size = self.config.models.batch_size
         total_frames = len(frames_with_faces)
         total_batches = (total_frames + batch_size - 1) // batch_size
 
@@ -869,6 +878,7 @@ def create_pose_estimator(
     model_name: Optional[str] = None,
     device: str = "auto",
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    config: Optional["Config"] = None,
 ) -> PoseEstimator:
     """Factory function to create a PoseEstimator instance.
 
@@ -876,6 +886,7 @@ def create_pose_estimator(
         model_name: Name of pose estimation model (default: use config default)
         device: Computation device preference
         confidence_threshold: Minimum confidence threshold
+        config: Application configuration object (optional)
 
     Returns:
         Configured PoseEstimator instance
@@ -887,4 +898,4 @@ def create_pose_estimator(
         defaults = ModelConfigs.get_default_models()
         model_name = defaults["pose_estimation"]
 
-    return PoseEstimator(model_name, device, confidence_threshold)
+    return PoseEstimator(model_name, device, confidence_threshold, config)

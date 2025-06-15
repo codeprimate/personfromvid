@@ -54,6 +54,7 @@ class FaceDetector:
         model_name: str,
         device: str = DEFAULT_DEVICE,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        config: Optional["Config"] = None,
     ):
         """Initialize face detector with specified model.
 
@@ -61,6 +62,7 @@ class FaceDetector:
             model_name: Name of the face detection model to use
             device: Computation device ("cpu", "cuda", or "auto")
             confidence_threshold: Minimum confidence threshold for detections
+            config: Application configuration object (optional)
 
         Raises:
             FaceDetectionError: If model loading fails or device is unsupported
@@ -68,6 +70,13 @@ class FaceDetector:
         self.model_name = model_name
         self.device = self._resolve_device(device)
         self.confidence_threshold = confidence_threshold
+        
+        # Store config or get default
+        if config is None:
+            from ..data.config import get_default_config
+            self.config = get_default_config()
+        else:
+            self.config = config
 
         # Get model configuration
         self.model_config = ModelConfigs.get_model(model_name)
@@ -662,7 +671,7 @@ class FaceDetector:
         processed_count = 0
 
         # Process in batches for memory efficiency
-        batch_size = 16  # Could be made configurable
+        batch_size = self.config.models.batch_size
 
         for i in range(0, len(frames), batch_size):
             batch_frames = frames[i : i + batch_size]
@@ -824,6 +833,7 @@ def create_face_detector(
     model_name: Optional[str] = None,
     device: str = "auto",
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    config: Optional["Config"] = None,
 ) -> FaceDetector:
     """Factory function to create a FaceDetector instance.
 
@@ -831,6 +841,7 @@ def create_face_detector(
         model_name: Name of face detection model (default: use config default)
         device: Computation device preference
         confidence_threshold: Minimum confidence threshold
+        config: Application configuration object (optional)
 
     Returns:
         Configured FaceDetector instance
@@ -842,4 +853,4 @@ def create_face_detector(
         defaults = ModelConfigs.get_default_models()
         model_name = defaults["face_detection"]
 
-    return FaceDetector(model_name, device, confidence_threshold)
+    return FaceDetector(model_name, device, confidence_threshold, config)

@@ -62,6 +62,7 @@ class HeadPoseEstimator:
         model_name: str,
         device: str = DEFAULT_DEVICE,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        config: Optional["Config"] = None,
     ):
         """Initialize head pose estimator with specified model.
 
@@ -69,6 +70,7 @@ class HeadPoseEstimator:
             model_name: Name of the head pose estimation model to use
             device: Computation device ("cpu", "cuda", or "auto")
             confidence_threshold: Minimum confidence threshold for estimates
+            config: Application configuration object (optional)
 
         Raises:
             HeadPoseEstimationError: If model loading fails or device is unsupported
@@ -76,6 +78,13 @@ class HeadPoseEstimator:
         self.model_name = model_name
         self.device = self._resolve_device(device)
         self.confidence_threshold = confidence_threshold
+        
+        # Store config or get default
+        if config is None:
+            from ..data.config import get_default_config
+            self.config = get_default_config()
+        else:
+            self.config = config
 
         # Angle thresholds for direction classification (degrees)
         self.yaw_threshold = DEFAULT_YAW_THRESHOLD
@@ -642,7 +651,7 @@ class HeadPoseEstimator:
         results = []
 
         # Process in batches for memory efficiency
-        batch_size = 8
+        batch_size = self.config.models.batch_size
         for i in range(0, len(face_images), batch_size):
             batch_images = face_images[i : i + batch_size]
 
@@ -760,7 +769,7 @@ class HeadPoseEstimator:
         results = []
 
         # Process in batches for memory efficiency
-        batch_size = 8
+        batch_size = self.config.models.batch_size
         for i in range(0, len(face_images), batch_size):
             batch_images = face_images[i : i + batch_size]
 
@@ -1118,9 +1127,7 @@ class HeadPoseEstimator:
         processed_count = 0
 
         # Process frames in batches for memory efficiency
-        batch_size = (
-            8  # Process fewer head pose images per batch due to memory constraints
-        )
+        batch_size = self.config.models.batch_size
         total_frames = len(frames_with_faces)
         total_batches = (total_frames + batch_size - 1) // batch_size
 
@@ -1273,6 +1280,7 @@ def create_head_pose_estimator(
     model_name: Optional[str] = None,
     device: str = "auto",
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    config: Optional["Config"] = None,
 ) -> HeadPoseEstimator:
     """Factory function to create a head pose estimator.
 
@@ -1280,6 +1288,7 @@ def create_head_pose_estimator(
         model_name: Name of the head pose model (None for default)
         device: Computation device ("cpu", "cuda", or "auto")
         confidence_threshold: Minimum confidence threshold
+        config: Application configuration object (optional)
 
     Returns:
         Configured HeadPoseEstimator instance
@@ -1293,5 +1302,5 @@ def create_head_pose_estimator(
         model_name = defaults.get("head_pose_estimation", "sixdrepnet")
 
     return HeadPoseEstimator(
-        model_name=model_name, device=device, confidence_threshold=confidence_threshold
+        model_name=model_name, device=device, confidence_threshold=confidence_threshold, config=config
     )

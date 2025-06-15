@@ -15,7 +15,7 @@ from platformdirs import user_cache_dir
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
-DEFAULT_BATCH_SIZE = 8
+DEFAULT_BATCH_SIZE = 1
 DEFAULT_JPEG_QUALITY = 95
 
 
