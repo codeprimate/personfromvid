@@ -376,8 +376,9 @@ class StorageConfig(BaseModel):
 class ProcessingConfig(BaseModel):
     """Configuration for processing behavior."""
 
-    enable_resume: bool = Field(
-        default=True, description="Enable processing resumption from checkpoints"
+    force_restart: bool = Field(
+        default=False, 
+        description="Force restart processing by deleting existing state (preserves extracted frames)"
     )
     save_intermediate_results: bool = Field(
         default=True, description="Save intermediate processing results"

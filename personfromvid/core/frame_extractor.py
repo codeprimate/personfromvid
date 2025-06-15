@@ -395,53 +395,88 @@ class FrameExtractor:
         Returns:
             List of FrameData objects for successfully extracted frames
         """
-        self.logger.debug(f"Extracting {len(candidates)} frame images")
+        self.logger.debug(f"Processing {len(candidates)} frame candidates")
 
         extracted_frames = []
+        processed_count = 0
+        total_candidates = len(candidates)
+        
+        # Separate existing frames from new frames to extract
+        existing_frames = []
+        new_candidates = []
+        
+        for candidate in candidates:
+            frame_id = f"frame_{candidate.frame_number:06d}"
+            frame_path = output_dir / f"{frame_id}.png"
+            
+            if frame_path.exists():
+                # Frame already exists - create FrameData without video extraction
+                existing_frames.append((candidate, frame_path, frame_id))
+            else:
+                # Frame needs to be extracted from video
+                new_candidates.append(candidate)
+        
+        self.logger.debug(f"Found {len(existing_frames)} existing frames, {len(new_candidates)} to extract")
 
-        # Open video capture
-        cap = cv2.VideoCapture(str(self.video_path))
+        # Process existing frames first (no video access needed)
+        for candidate, frame_path, frame_id in existing_frames:
+            try:
+                # Load existing frame to get dimensions and create FrameData
+                frame = cv2.imread(str(frame_path))
+                if frame is not None:
+                    frame_data = self._create_frame_data(candidate, frame, frame_path, frame_id)
+                    extracted_frames.append(frame_data)
+                else:
+                    self.logger.warning(f"Could not load existing frame: {frame_path}")
+            except Exception as e:
+                self.logger.warning(f"Failed to process existing frame {frame_path}: {e}")
+            finally:
+                # Update progress for each existing frame processed
+                processed_count += 1
+                if progress_callback:
+                    progress_callback(processed_count, total_candidates)
 
-        if not cap.isOpened():
-            raise VideoProcessingError(f"Could not open video file: {self.video_path}")
+        # Now extract new frames from video if needed
+        if new_candidates:
+            # Open video capture only if we have new frames to extract
+            cap = cv2.VideoCapture(str(self.video_path))
 
-        try:
-            total_candidates = len(candidates)
+            if not cap.isOpened():
+                raise VideoProcessingError(f"Could not open video file: {self.video_path}")
 
-            for i, candidate in enumerate(candidates):
-                # Check for interruption at the start of each iteration
-                if self._interrupted:
-                    self.logger.info("Interruption detected, terminating application")
-                    raise KeyboardInterrupt("Frame extraction interrupted by user")
+            try:
+                for i, candidate in enumerate(new_candidates):
+                    # Check for interruption at the start of each iteration
+                    if self._interrupted:
+                        self.logger.info("Interruption detected, terminating application")
+                        raise KeyboardInterrupt("Frame extraction interrupted by user")
 
-                try:
-                    # Seek to specific timestamp
-                    cap.set(cv2.CAP_PROP_POS_MSEC, candidate.timestamp * 1000)
+                    try:
+                        # Seek to specific timestamp
+                        cap.set(cv2.CAP_PROP_POS_MSEC, candidate.timestamp * 1000)
 
-                    # Read frame
-                    ret, frame = cap.read()
-                    if not ret:
-                        self.logger.warning(
-                            f"Could not read frame at {candidate.timestamp}s"
-                        )
-                        continue
+                        # Read frame
+                        ret, frame = cap.read()
+                        if not ret:
+                            self.logger.warning(
+                                f"Could not read frame at {candidate.timestamp}s"
+                            )
+                            continue
 
-                    # Generate frame ID and filename
-                    frame_id = f"frame_{candidate.frame_number:06d}"
-                    filename = f"{frame_id}.png"
-                    frame_path = output_dir / filename
+                        # Generate frame ID and filename
+                        frame_id = f"frame_{candidate.frame_number:06d}"
+                        filename = f"{frame_id}.png"
+                        frame_path = output_dir / filename
 
-                    # Check for duplicate frames using perceptual hash
-                    frame_hash = self._calculate_frame_hash(frame)
-                    if frame_hash in self.frame_hashes:
-                        self.logger.debug(f"Skipping duplicate frame: {frame_id}")
-                        self.stats["duplicates_removed"] += 1
-                        continue
+                        # Check for duplicate frames using perceptual hash
+                        frame_hash = self._calculate_frame_hash(frame)
+                        if frame_hash in self.frame_hashes:
+                            self.logger.debug(f"Skipping duplicate frame: {frame_id}")
+                            self.stats["duplicates_removed"] += 1
+                            continue
 
-                    self.frame_hashes.add(frame_hash)
+                        self.frame_hashes.add(frame_hash)
 
-                    # Check if frame already exists
-                    if not frame_path.exists():
                         # Save frame as PNG with maximum compression
                         success = cv2.imwrite(
                             str(frame_path), frame, [cv2.IMWRITE_PNG_COMPRESSION, 4]
@@ -451,25 +486,26 @@ class FrameExtractor:
                             self.logger.warning(f"Failed to save frame: {frame_path}")
                             continue
 
-                    # Create frame metadata
-                    frame_data = self._create_frame_data(
-                        candidate, frame, frame_path, frame_id
-                    )
+                        # Create frame metadata
+                        frame_data = self._create_frame_data(
+                            candidate, frame, frame_path, frame_id
+                        )
 
-                    extracted_frames.append(frame_data)
+                        extracted_frames.append(frame_data)
 
-                except Exception as e:
-                    self.logger.warning(
-                        f"Failed to extract frame at {candidate.timestamp}s: {e}"
-                    )
-                    continue
-                finally:
-                    # Progress callback - always called regardless of success/failure/skipping
-                    if progress_callback:
-                        progress_callback(i + 1, total_candidates)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to extract frame at {candidate.timestamp}s: {e}"
+                        )
+                        continue
+                    finally:
+                        # Update progress for each new frame processed
+                        processed_count += 1
+                        if progress_callback:
+                            progress_callback(processed_count, total_candidates)
 
-        finally:
-            cap.release()
+            finally:
+                cap.release()
 
         return extracted_frames
 

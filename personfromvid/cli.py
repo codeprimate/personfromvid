@@ -62,11 +62,6 @@ def get_version():
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
 @click.option(
-    "--resume/--no-resume",
-    default=True,
-    help="Resume from previous processing state if available",
-)
-@click.option(
     "--device",
     type=click.Choice(["cpu", "gpu", "auto"], case_sensitive=False),
     default="auto",
@@ -136,7 +131,7 @@ def get_version():
 @click.option(
     "--force",
     is_flag=True,
-    help="Force cleanup of existing temp directory before processing",
+    help="Force restart analysis by deleting existing state (preserves extracted frames)",
 )
 
 @click.option(
@@ -151,7 +146,6 @@ def main(
     log_level: str,
     verbose: bool,
     quiet: bool,
-    resume: bool,
     device: str,
     batch_size: Optional[int],
     confidence: Optional[float],
@@ -351,18 +345,14 @@ def main(
                 context=processing_context, formatter=consolidated_formatter
             )
 
-            # Process or resume
-            if resume:
-                # Check if resumable state exists
-                status = pipeline.get_status()
-                if status.can_resume:
-                    logger.info("Resuming from previous processing state...")
-                    result = pipeline.resume()
-                else:
-                    logger.info("No resumable state found, starting new processing...")
-                    result = pipeline.process()
+            # Process with resume by default
+            # Check if resumable state exists
+            status = pipeline.get_status()
+            if status.can_resume:
+                logger.info("Resuming from previous processing state...")
+                result = pipeline.resume()
             else:
-                logger.info("Starting new processing...")
+                logger.info("No resumable state found, starting new processing...")
                 result = pipeline.process()
 
             # Show results
@@ -511,14 +501,12 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
         config.output.min_frames_per_category = cli_args["min_frames_per_category"]
 
     # Processing overrides
-    config.processing.enable_resume = cli_args["resume"]
+    if cli_args["force"]:
+        config.processing.force_restart = True
 
     # Storage overrides
     if cli_args["keep_temp"]:
         config.storage.keep_temp = True
-
-    if cli_args["force"]:
-        config.storage.force_temp_cleanup = True
 
 
 def show_processing_plan(
@@ -535,7 +523,7 @@ def show_processing_plan(
         f"Device: {config.models.device}",
         f"Batch size: {config.models.batch_size}",
         f"Confidence threshold: {config.models.confidence_threshold}",
-        f"Resume enabled: {config.processing.enable_resume}",
+        f"Resume enabled: always (use --force to restart)",
         f"Output format: {config.output.image.format.upper()}",
         f"Output quality: {config.output.image.jpeg.quality if config.output.image.format.lower() in ['jpg', 'jpeg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
         f"Face crops: {'enabled' if config.output.image.face_crop_enabled else 'disabled'}",
@@ -554,8 +542,8 @@ def show_processing_plan(
     else:
         details.append("Temp files: cleaned up after processing")
 
-    if config.storage.force_temp_cleanup:
-        details.append("Force cleanup: existing temp directory will be removed")
+    if config.processing.force_restart:
+        details.append("Force restart: existing state will be deleted to start fresh")
 
     plan_content = "\n".join(details)
 

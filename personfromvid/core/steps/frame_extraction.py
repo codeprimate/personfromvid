@@ -43,10 +43,9 @@ class FrameExtractionStep(PipelineStep):
                     )
                     self.logger.info(f"Combined to {len(all_candidates)} unique frame candidates")
                     
-                    # Step 3: Filter out existing frames
-                    filtered_candidates = frame_extractor._filter_out_existing_frames(all_candidates, frames_dir)
-                    actual_total_frames = len(filtered_candidates)
-                    self.logger.info(f"After filtering existing frames: {actual_total_frames} candidates to process")
+                    # Note: We don't filter out existing frames anymore since _extract_frame_images handles them
+                    actual_total_frames = len(all_candidates)
+                    self.logger.info(f"Processing {actual_total_frames} frame candidates (including existing frames)")
             else:
                 # Fallback for non-formatter mode
                 self.logger.info("🎬 Analyzing frame candidates...")
@@ -64,10 +63,9 @@ class FrameExtractionStep(PipelineStep):
                 )
                 self.logger.info(f"Combined to {len(all_candidates)} unique frame candidates")
                 
-                # Step 3: Filter out existing frames
-                filtered_candidates = frame_extractor._filter_out_existing_frames(all_candidates, frames_dir)
-                actual_total_frames = len(filtered_candidates)
-                self.logger.info(f"After filtering existing frames: {actual_total_frames} candidates to process")
+                # Note: We don't filter out existing frames anymore since _extract_frame_images handles them
+                actual_total_frames = len(all_candidates)
+                self.logger.info(f"Processing {actual_total_frames} frame candidates (including existing frames)")
 
             self.state.get_step_progress(self.step_name).start(actual_total_frames)
 
@@ -88,18 +86,18 @@ class FrameExtractionStep(PipelineStep):
                     )
                     self.formatter.update_step_progress(advance_amount, rate=rate)
 
-            # Extract frames using pre-calculated candidates
+            # Extract frames using all candidates (existing frames will be loaded, new ones extracted)
             if self.formatter and hasattr(self.formatter, "step_progress_context"):
                 with self.formatter.step_progress_context(
-                    "Extracting frames", actual_total_frames
+                    "Processing frames", actual_total_frames
                 ):
                     extracted_frames = frame_extractor.extract_frames(
-                        frames_dir, progress_callback, pre_calculated_candidates=filtered_candidates
+                        frames_dir, progress_callback, pre_calculated_candidates=all_candidates
                     )
             else:
-                self.logger.info("🎬 Starting frame extraction...")
+                self.logger.info("🎬 Starting frame processing...")
                 extracted_frames = frame_extractor.extract_frames(
-                    frames_dir, progress_callback, pre_calculated_candidates=filtered_candidates
+                    frames_dir, progress_callback, pre_calculated_candidates=all_candidates
                 )
 
             # Update state with final results

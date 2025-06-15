@@ -175,15 +175,6 @@ class ProcessingPipeline:
             self._setup_interruption_handling()
             self._initialize_state_management()
 
-            # Handle force cleanup if requested
-            if self.config.storage.force_temp_cleanup:
-                self.logger.info(
-                    "Force cleanup requested - removing existing temp directory"
-                )
-                self.temp_manager.cleanup_temp_files()
-                # Recreate temp structure after cleanup
-                self.temp_manager.create_temp_structure()
-
             self._initialize_steps()
 
             if self.state and self.state.can_resume():
@@ -311,6 +302,13 @@ class ProcessingPipeline:
         # Initialize components using ProcessingContext
         self.state_manager = StateManager(context=self.context)
         self.video_processor = VideoProcessor(str(self.video_path))
+
+        # Handle force restart if requested - delete state before loading
+        if self.config.processing.force_restart:
+            self.logger.info(
+                "Force restart requested - deleting existing state to start fresh"
+            )
+            self.state_manager.delete_state()
 
         existing_state = self.state_manager.load_state()
 
