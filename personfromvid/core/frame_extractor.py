@@ -337,6 +337,10 @@ class FrameExtractor:
                 
             # Calculate frame number
             frame_number = int(current_time * self.video_metadata.fps)
+            
+            # Skip if frame number would exceed total frames available
+            if frame_number >= self.video_metadata.total_frames:
+                break
 
             candidate = FrameCandidate(
                 timestamp=current_time,
