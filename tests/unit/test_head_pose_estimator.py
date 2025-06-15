@@ -596,6 +596,7 @@ class TestCreateHeadPoseEstimator:
         call_args = mock_estimator_class.call_args
         assert call_args[1]['device'] == "auto"
         assert call_args[1]['confidence_threshold'] == DEFAULT_CONFIDENCE_THRESHOLD
+        assert call_args[1]['config'] is None
 
     @patch('personfromvid.models.head_pose_estimator.HeadPoseEstimator')
     def test_create_custom(self, mock_estimator_class):
@@ -611,7 +612,8 @@ class TestCreateHeadPoseEstimator:
         mock_estimator_class.assert_called_once_with(
             model_name="sixdrepnet", 
             device="cpu", 
-            confidence_threshold=0.8
+            confidence_threshold=0.8,
+            config=None
         )
 
 

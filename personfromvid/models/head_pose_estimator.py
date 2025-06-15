@@ -397,6 +397,10 @@ class HeadPoseEstimator:
                 raise HeadPoseEstimationError(
                     "safetensors not installed. Install with: pip install safetensors"
                 )
+            except Exception as e:
+                raise HeadPoseEstimationError(
+                    f"Failed to load safetensors model from {self.model_path}: {str(e)}"
+                ) from e
         else:
             state_dict = torch.load(str(self.model_path), map_location=self.device)
             if "state_dict" in state_dict:

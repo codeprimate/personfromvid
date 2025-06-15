@@ -382,7 +382,7 @@ class TestCreateFaceDetector:
         
         detector = create_face_detector()
         
-        mock_face_detector.assert_called_once_with("TEST_FACE_MODEL", "auto", DEFAULT_CONFIDENCE_THRESHOLD)
+        mock_face_detector.assert_called_once_with("TEST_FACE_MODEL", "auto", DEFAULT_CONFIDENCE_THRESHOLD, None)
         assert detector == mock_detector
 
     @patch('personfromvid.models.face_detector.FaceDetector')
@@ -397,7 +397,7 @@ class TestCreateFaceDetector:
             confidence_threshold=0.85
         )
         
-        mock_face_detector.assert_called_once_with("yolov8n-face", "cuda", 0.85)
+        mock_face_detector.assert_called_once_with("yolov8n-face", "cuda", 0.85, None)
         assert detector == mock_detector
 
 

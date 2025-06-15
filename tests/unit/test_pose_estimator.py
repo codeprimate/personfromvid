@@ -512,7 +512,7 @@ class TestCreatePoseEstimator:
         create_pose_estimator()
         
         mock_get_defaults.assert_called_once()
-        mock_pose_estimator.assert_called_once_with("yolov8s-pose", "auto", DEFAULT_CONFIDENCE_THRESHOLD)
+        mock_pose_estimator.assert_called_once_with("yolov8s-pose", "auto", DEFAULT_CONFIDENCE_THRESHOLD, None)
 
     @patch('personfromvid.models.pose_estimator.PoseEstimator')
     def test_create_with_custom_params(self, mock_pose_estimator):
@@ -523,7 +523,7 @@ class TestCreatePoseEstimator:
             confidence_threshold=0.85
         )
         
-        mock_pose_estimator.assert_called_once_with("yolov8s-pose", "cuda", 0.85)
+        mock_pose_estimator.assert_called_once_with("yolov8s-pose", "cuda", 0.85, None)
 
 
 class TestIntegrationScenarios:
