@@ -6,6 +6,7 @@ using a hybrid approach combining I-frame detection and temporal sampling.
 
 import hashlib
 import json
+import signal
 import time
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional, Any
@@ -66,6 +67,10 @@ class FrameExtractor:
         # Processing state
         self.extracted_frames: List[FrameData] = []
         self.frame_hashes: Set[str] = set()  # For deduplication
+        
+        # Interrupt handling
+        self._interrupted = False
+        self._original_sigint_handler = None
 
         # Statistics
         self.stats = {
@@ -74,7 +79,24 @@ class FrameExtractor:
             "duplicates_removed": 0,
             "total_extracted": 0,
             "processing_time": 0.0,
+            "interrupted": False,
         }
+
+    def _setup_interrupt_handler(self):
+        """Setup CTRL-C interrupt handler."""
+        def signal_handler(signum, frame):
+            self.logger.info("Received CTRL-C (SIGINT), interrupting frame extraction...")
+            self._interrupted = True
+            # Don't raise KeyboardInterrupt here, just set the flag
+
+        self._original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
+        self.logger.debug("Interrupt handler set up, press CTRL-C to stop extraction")
+
+    def _restore_interrupt_handler(self):
+        """Restore original CTRL-C interrupt handler."""
+        if self._original_sigint_handler is not None:
+            signal.signal(signal.SIGINT, self._original_sigint_handler)
+            self._original_sigint_handler = None
 
     def extract_frames(
         self, output_dir: Path, progress_callback: Optional[callable] = None
@@ -93,6 +115,9 @@ class FrameExtractor:
         """
         start_time = time.time()
         self.logger.info(f"Starting frame extraction from: {self.video_path}")
+
+        # Setup interrupt handler
+        self._setup_interrupt_handler()
 
         try:
             # Create output directory
@@ -116,6 +141,8 @@ class FrameExtractor:
                 f"Combined to {len(all_candidates)} unique frame candidates"
             )
 
+            # Step 3.1 Filter out frames where the frame is already in the output directory
+            all_candidates = self._filter_out_existing_frames(all_candidates, output_dir)
 
 
             # Step 4: Extract actual frame images
@@ -126,18 +153,39 @@ class FrameExtractor:
             # Update statistics
             self.stats["total_extracted"] = len(extracted_frames)
             self.stats["processing_time"] = time.time() - start_time
+            self.stats["interrupted"] = self._interrupted
 
-            self.logger.info(
-                f"Frame extraction completed: {len(extracted_frames)} frames "
-                f"extracted in {self.stats['processing_time']:.1f}s"
-            )
+            if self._interrupted:
+                self.logger.info(
+                    f"Frame extraction interrupted: {len(extracted_frames)} frames "
+                    f"extracted before interruption in {self.stats['processing_time']:.1f}s"
+                )
+            else:
+                self.logger.info(
+                    f"Frame extraction completed: {len(extracted_frames)} frames "
+                    f"extracted in {self.stats['processing_time']:.1f}s"
+                )
 
             self.extracted_frames = extracted_frames
             return extracted_frames
 
+        except KeyboardInterrupt:
+            self.logger.info("Received KeyboardInterrupt, terminating application")
+            self._interrupted = True
+            self.stats["interrupted"] = True
+            self.stats["processing_time"] = time.time() - start_time
+            # Re-raise to terminate the application
+            raise
         except Exception as e:
             self.logger.error(f"Frame extraction failed: {e}")
             raise VideoProcessingError(f"Frame extraction failed: {e}")
+        finally:
+            # Always restore the original interrupt handler
+            self._restore_interrupt_handler()
+
+    def _filter_out_existing_frames(self, candidates: List[FrameCandidate], output_dir: Path) -> List[FrameCandidate]:
+        """Filter out frames where the frame is already in the output directory."""
+        return [candidate for candidate in candidates if not (output_dir / f"{candidate.frame_number:06d}.png").exists()]
 
     def _extract_i_frames(self) -> List[FrameCandidate]:
         """Extract I-frame timestamps using FFmpeg.
@@ -328,9 +376,19 @@ class FrameExtractor:
             total_candidates = len(candidates)
 
             for i, candidate in enumerate(candidates):
+                # Check for interruption at the start of each iteration
+                if self._interrupted:
+                    self.logger.info("Interruption detected, terminating application")
+                    raise KeyboardInterrupt("Frame extraction interrupted by user")
+
                 try:
                     # Seek to specific timestamp
                     cap.set(cv2.CAP_PROP_POS_MSEC, candidate.timestamp * 1000)
+
+                    # Check for interruption after seek operation
+                    if self._interrupted:
+                        self.logger.info("Interruption detected, terminating application")
+                        raise KeyboardInterrupt("Frame extraction interrupted by user")
 
                     # Read frame
                     ret, frame = cap.read()
@@ -340,12 +398,15 @@ class FrameExtractor:
                         )
                         continue
 
+                    # Check for interruption after read operation
+                    if self._interrupted:
+                        self.logger.info("Interruption detected, terminating application")
+                        raise KeyboardInterrupt("Frame extraction interrupted by user")
+
                     # Generate frame ID and filename
                     frame_id = f"frame_{candidate.frame_number:06d}"
                     filename = f"{frame_id}.png"
                     frame_path = output_dir / filename
-
-
 
                     # Check for duplicate frames using perceptual hash
                     frame_hash = self._calculate_frame_hash(frame)
@@ -356,6 +417,10 @@ class FrameExtractor:
 
                     self.frame_hashes.add(frame_hash)
 
+                    # Check for interruption before saving to disk
+                    if self._interrupted:
+                        self.logger.info("Interruption detected, terminating application")
+                        raise KeyboardInterrupt("Frame extraction interrupted by user")
 
                     # Check if frame already exists
                     if not frame_path.exists():
@@ -367,6 +432,11 @@ class FrameExtractor:
                         if not success:
                             self.logger.warning(f"Failed to save frame: {frame_path}")
                             continue
+
+                    # Check for interruption after saving
+                    if self._interrupted:
+                        self.logger.info("Interruption detected, terminating application")
+                        raise KeyboardInterrupt("Frame extraction interrupted by user")
 
                     # Create frame metadata
                     frame_data = self._create_frame_data(
@@ -509,3 +579,25 @@ class FrameExtractor:
                 self.logger.warning(f"Failed to delete temp frame {frame_path}: {e}")
 
         self.logger.info(f"Cleaned up {deleted_count} temporary frame files")
+
+    def test_interrupt_handler(self):
+        """Test method to verify interrupt handling works.
+        
+        This method sets up the interrupt handler and waits for a signal.
+        Press CTRL-C to test if the interrupt is detected.
+        """
+        import time
+        
+        self.logger.info("Testing interrupt handler - press CTRL-C to test...")
+        self._setup_interrupt_handler()
+        
+        try:
+            for i in range(100):  # Wait up to 10 seconds
+                if self._interrupted:
+                    self.logger.info("SUCCESS: Interrupt detected!")
+                    break
+                time.sleep(0.1)
+            else:
+                self.logger.info("No interrupt received within 10 seconds")
+        finally:
+            self._restore_interrupt_handler()
