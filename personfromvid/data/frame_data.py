@@ -72,20 +72,21 @@ class ImageProperties:
 @dataclass
 class SelectionInfo:
     """Information about frame selection for output."""
-
-    selected_for_poses: List[str] = field(
-        default_factory=list
-    )  # List of pose categories this frame was selected for
-    selected_for_head_angles: List[str] = field(
-        default_factory=list
-    )  # List of head angle categories
-    final_output: bool = False  # Whether this frame made it to final output
-    output_files: List[str] = field(default_factory=list)  # List of output file names
-    crop_regions: Dict[str, Tuple[int, int, int, int]] = field(
-        default_factory=dict
-    )  # Named crop regions
-    selection_rank: Optional[int] = None  # Rank within category (1-3)
-    quality_rank: Optional[int] = None  # Quality rank among all candidates
+    
+    selected_for_poses: List[str] = field(default_factory=list)
+    selected_for_head_angles: List[str] = field(default_factory=list)
+    final_output: bool = False
+    output_files: List[str] = field(default_factory=list)
+    crop_regions: Dict[str, Tuple[int, int, int, int]] = field(default_factory=dict)
+    selection_rank: Optional[int] = None
+    quality_rank: Optional[int] = None
+    category_scores: Dict[str, float] = field(default_factory=dict)
+    category_score_breakdowns: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    category_ranks: Dict[str, int] = field(default_factory=dict)
+    primary_selection_category: Optional[str] = None
+    selection_competition: Dict[str, str] = field(default_factory=dict)
+    final_selection_score: Optional[float] = None
+    rejection_reason: Optional[str] = None
 
 
 @dataclass
@@ -108,15 +109,13 @@ class ProcessingStepInfo:
 class FrameData:
     """Comprehensive frame data containing all processing information."""
 
-    frame_id: str  # Unique identifier for the frame
-    file_path: Path  # Path to frame image file
-    source_info: SourceInfo  # Frame extraction metadata
-    image_properties: ImageProperties  # Image dimensions and properties
+    frame_id: str
+    file_path: Path
+    source_info: SourceInfo
+    image_properties: ImageProperties
 
     # Optional cached image data (loaded on demand)
-    _image: Optional[np.ndarray] = field(
-        default=None, init=False, repr=False
-    )  # BGR image array (OpenCV format)
+    _image: Optional[np.ndarray] = field(default=None, init=False, repr=False)
 
     # Processing results (populated during pipeline)
     face_detections: List[FaceDetection] = field(default_factory=list)
@@ -165,7 +164,6 @@ class FrameData:
             else:
                 raise FileNotFoundError(f"Image file not found: {self.file_path}")
         except Exception as e:
-            # Log the error but don't raise to allow graceful handling
             import logging
 
             logger = logging.getLogger(__name__)
@@ -176,7 +174,6 @@ class FrameData:
         """Unload cached image to free memory."""
         self._image = None
 
-    # Processing step tracking
     def start_processing_step(
         self, step_name: str, model_version: Optional[str] = None
     ) -> None:
@@ -210,7 +207,6 @@ class FrameData:
         if step_name in self.processing_steps:
             self.processing_steps[step_name].add_warning(warning)
 
-    # Detection queries
     def has_faces(self) -> bool:
         """Check if frame has any face detections."""
         return len(self.face_detections) > 0
@@ -251,7 +247,6 @@ class FrameData:
             return None
         return max(self.closeup_detections, key=lambda c: c.confidence)
 
-    # Classification queries
     def get_pose_classifications(self) -> List[str]:
         """Get all unique pose classifications."""
         classifications = []
@@ -277,7 +272,6 @@ class FrameData:
         """Check if frame has specific head direction."""
         return direction in self.get_head_directions()
 
-    # Closeup detection queries
     def get_shot_types(self) -> List[str]:
         """Get all unique shot types from closeup detections."""
         shot_types = []
@@ -297,7 +291,6 @@ class FrameData:
                 return True
         return False
 
-    # Quality assessment
     def is_high_quality(self) -> bool:
         """Check if frame meets high quality standards."""
         return self.quality_metrics is not None and self.quality_metrics.is_high_quality
@@ -308,7 +301,6 @@ class FrameData:
             self.quality_metrics is None or self.quality_metrics.usable
         )
 
-    # Selection status
     def is_selected(self) -> bool:
         """Check if frame is selected for any output."""
         return self.selections.final_output
@@ -321,7 +313,6 @@ class FrameData:
         """Check if frame is selected for specific head angle category."""
         return angle in self.selections.selected_for_head_angles
 
-    # Serialization helpers
     def to_dict(self) -> Dict[str, Any]:
         """Convert frame data to dictionary for JSON serialization."""
         return {
@@ -403,6 +394,13 @@ class FrameData:
                 "crop_regions": self.selections.crop_regions,
                 "selection_rank": self.selections.selection_rank,
                 "quality_rank": self.selections.quality_rank,
+                "category_scores": self.selections.category_scores,
+                "category_score_breakdowns": self.selections.category_score_breakdowns,
+                "category_ranks": self.selections.category_ranks,
+                "primary_selection_category": self.selections.primary_selection_category,
+                "selection_competition": self.selections.selection_competition,
+                "final_selection_score": self.selections.final_selection_score,
+                "rejection_reason": self.selections.rejection_reason,
             },
             "processing_timings": {
                 "face_detection_ms": self.processing_timings.face_detection_ms,
@@ -529,6 +527,25 @@ class FrameData:
             total_processing_ms=timings_dict.get("total_processing_ms"),
         )
 
+        # Reconstruct selections - NEW FORMAT REQUIRED (no backward compatibility)
+        selections_dict = frame_dict["selections"]  # Will raise KeyError if missing
+        selections = SelectionInfo(
+            selected_for_poses=selections_dict.get("selected_for_poses", []),
+            selected_for_head_angles=selections_dict.get("selected_for_head_angles", []),
+            final_output=selections_dict.get("final_output", False),
+            output_files=selections_dict.get("output_files", []),
+            crop_regions=selections_dict.get("crop_regions", {}),
+            selection_rank=selections_dict.get("selection_rank"),
+            quality_rank=selections_dict.get("quality_rank"),
+            category_scores=selections_dict.get("category_scores", {}),
+            category_score_breakdowns=selections_dict.get("category_score_breakdowns", {}),
+            category_ranks=selections_dict.get("category_ranks", {}),
+            primary_selection_category=selections_dict.get("primary_selection_category"),
+            selection_competition=selections_dict.get("selection_competition", {}),
+            final_selection_score=selections_dict.get("final_selection_score"),
+            rejection_reason=selections_dict.get("rejection_reason"),
+        )
+
         # Create FrameData object
         frame_data = cls(
             frame_id=frame_dict.get("frame_id", ""),
@@ -540,7 +557,11 @@ class FrameData:
             head_poses=head_poses,
             quality_metrics=quality_metrics,
             closeup_detections=closeup_detections,
+            selections=selections,
             processing_timings=processing_timings,
         )
+        
+        # Set debug_info separately since it's not a constructor parameter
+        frame_data.debug_info = frame_dict.get("debug_info", {})
 
         return frame_data

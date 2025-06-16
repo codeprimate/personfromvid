@@ -83,6 +83,20 @@ class NamingConvention:
         # Handle collisions
         return self._ensure_unique_filename(base_filename)
 
+    def get_crop_suffixed_filename(self, base_filename: str) -> str:
+        """Generate crop-suffixed filename by inserting '_crop' before extension.
+
+        Args:
+            base_filename: Base filename to add crop suffix to
+
+        Returns:
+            Filename with '_crop' suffix inserted before extension
+        """
+        path = Path(base_filename)
+        name_without_ext = path.stem
+        extension = path.suffix
+        return f"{name_without_ext}_crop{extension}"
+
     def get_full_output_path(self, filename: str) -> Path:
         """Get full output path for a filename.
 

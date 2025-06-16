@@ -67,11 +67,7 @@ class OutputGenerationStep(PipelineStep):
                         if i % 5 == 0:
                             self._check_interrupted()
                             
-                        output_files = image_writer.save_frame_outputs(
-                            frame,
-                            frame.selections.selected_for_poses,
-                            frame.selections.selected_for_head_angles,
-                        )
+                        output_files = image_writer.save_frame_outputs(frame)
                         all_output_files.extend(output_files)
                         progress_callback(i + 1)
             else:
@@ -80,11 +76,7 @@ class OutputGenerationStep(PipelineStep):
                     if i % 5 == 0:
                         self._check_interrupted()
                         
-                    output_files = image_writer.save_frame_outputs(
-                        frame,
-                        frame.selections.selected_for_poses,
-                        frame.selections.selected_for_head_angles,
-                    )
+                    output_files = image_writer.save_frame_outputs(frame)
                     all_output_files.extend(output_files)
                     progress_callback(i + 1)
 

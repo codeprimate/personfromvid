@@ -109,6 +109,16 @@ def get_version():
     help="Padding around face bounding box for crops",
 )
 @click.option(
+    "--crop",
+    is_flag=True,
+    help="Enable generation of cropped pose images",
+)
+@click.option(
+    "--crop-padding",
+    type=click.FloatRange(0.0, 1.0),
+    help="Padding around pose bounding box for crops",
+)
+@click.option(
     "--output-png-optimize/--no-output-png-optimize",
     default=None,
     help="Enable/disable PNG optimization",
@@ -161,6 +171,8 @@ def main(
     output_face_crop_enabled: Optional[bool],
     output_full_frame_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
+    crop: bool,
+    crop_padding: Optional[float],
     output_png_optimize: Optional[bool],
     resize: Optional[int],
     min_frames_per_category: Optional[int],
@@ -496,6 +508,12 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
 
     if cli_args["output_face_crop_padding"]:
         config.output.image.face_crop_padding = cli_args["output_face_crop_padding"]
+
+    if cli_args["crop"]:
+        config.output.image.enable_pose_cropping = cli_args["crop"]
+
+    if cli_args["crop_padding"]:
+        config.output.image.pose_crop_padding = cli_args["crop_padding"]
 
     if cli_args["output_png_optimize"] is not None:
         config.output.image.png.optimize = cli_args["output_png_optimize"]

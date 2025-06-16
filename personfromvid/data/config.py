@@ -290,7 +290,7 @@ class OutputImageConfig(BaseModel):
     """Configuration for output generation."""
 
     format: str = Field(
-        "jpeg", description="The output image format ('png' or 'jpeg')."
+        "png", description="The output image format ('png' or 'jpeg'). 'jpg' is used as the extension for 'jpeg'."
     )
     face_crop_enabled: bool = Field(
         True, description="Enable generation of cropped face images."
@@ -299,7 +299,13 @@ class OutputImageConfig(BaseModel):
         True, description="Enable saving of full-frame images."
     )
     face_crop_padding: float = Field(
-        0.2, ge=0.0, le=1.0, description="Padding around face bounding box."
+        0.3, ge=0.0, le=1.0, description="Padding around face bounding box."
+    )
+    enable_pose_cropping: bool = Field(
+        False, description="Enable generation of cropped pose images."
+    )
+    pose_crop_padding: float = Field(
+        0.1, ge=0.0, le=1.0, description="Padding around pose bounding box."
     )
     resize: Optional[int] = Field(
         default=None,

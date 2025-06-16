@@ -109,6 +109,15 @@ class TestNamingConvention:
         filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "jpg")
         assert filename == "test_video_face_front_001.jpg"
 
+    def test_crop_suffixed_filename(self, processing_context):
+        """Test crop suffix filename generation."""
+        naming = NamingConvention(context=processing_context)
+        
+        # Test various filename formats
+        assert naming.get_crop_suffixed_filename("video_pose_001.jpg") == "video_pose_001_crop.jpg"
+        assert naming.get_crop_suffixed_filename("test.png") == "test_crop.png"
+        assert naming.get_crop_suffixed_filename("complex_name_with_underscores.jpeg") == "complex_name_with_underscores_crop.jpeg"
+
 
 class TestImageWriter:
     """Tests for ImageWriter class."""
@@ -125,9 +134,13 @@ class TestImageWriter:
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = 'png'
         
+        # Set up enhanced selection data for pose category
+        sample_frame_data.selections.primary_selection_category = "pose_standing"
+        sample_frame_data.selections.selection_rank = 1
+        
         writer = ImageWriter(context=processing_context)
 
-        output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=["standing"], head_angle_categories=[])
+        output_files = writer.save_frame_outputs(sample_frame_data)
         
         assert len(output_files) == 1
         mock_pil_image.save.assert_called_once()
@@ -138,6 +151,7 @@ class TestImageWriter:
         """Test saving a cropped face image."""
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
+        mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
 
@@ -146,13 +160,17 @@ class TestImageWriter:
         processing_context.config.output.image.face_crop_enabled = True
         processing_context.config.output.image.format = 'jpeg'
         
+        # Set up enhanced selection data for head angle category
+        sample_frame_data.selections.primary_selection_category = "head_angle_front"
+        sample_frame_data.selections.selection_rank = 1
+        
         writer = ImageWriter(context=processing_context)
 
-        output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=[], head_angle_categories=["front"])
+        output_files = writer.save_frame_outputs(sample_frame_data)
         
         assert len(output_files) == 1
         mock_pil_image.save.assert_called_once()
-        assert output_files[0].endswith('.jpeg')
+        assert output_files[0].endswith('.jpg')
 
     @patch('personfromvid.output.image_writer.Image.fromarray')
     def test_resize_full_frame(self, mock_fromarray, processing_context, sample_frame_data):
@@ -167,8 +185,12 @@ class TestImageWriter:
         processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         
+        # Set up enhanced selection data for pose category
+        sample_frame_data.selections.primary_selection_category = "pose_standing"
+        sample_frame_data.selections.selection_rank = 1
+        
         writer = ImageWriter(context=processing_context)
-        output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=["standing"], head_angle_categories=[])
+        output_files = writer.save_frame_outputs(sample_frame_data)
         
         # Should call resize since original image is 1920x1080 (larger than 1024)
         mock_pil_image.resize.assert_called_once()
@@ -184,6 +206,7 @@ class TestImageWriter:
         """Test face crop respects resize configuration instead of default 512."""
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
+        mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
 
@@ -191,6 +214,10 @@ class TestImageWriter:
         processing_context.config.output.image.resize = 256
         processing_context.config.output.image.face_crop_enabled = True
         processing_context.config.output.image.full_frame_enabled = False
+        
+        # Set up enhanced selection data for head angle category
+        sample_frame_data.selections.primary_selection_category = "head_angle_front"
+        sample_frame_data.selections.selection_rank = 1
         
         writer = ImageWriter(context=processing_context)
         
@@ -201,7 +228,7 @@ class TestImageWriter:
             small_face_crop = np.zeros((100, 100, 3), dtype=np.uint8)
             mock_crop_face.return_value = small_face_crop
             
-            output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=[], head_angle_categories=["front"])
+            output_files = writer.save_frame_outputs(sample_frame_data)
             
             # _crop_face should have been called
             mock_crop_face.assert_called_once()
@@ -218,8 +245,12 @@ class TestImageWriter:
         processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         
+        # Set up enhanced selection data for pose category
+        sample_frame_data.selections.primary_selection_category = "pose_standing"
+        sample_frame_data.selections.selection_rank = 1
+        
         writer = ImageWriter(context=processing_context)
-        output_files = writer.save_frame_outputs(sample_frame_data, pose_categories=["standing"], head_angle_categories=[])
+        output_files = writer.save_frame_outputs(sample_frame_data)
         
         # Should NOT call resize since image is smaller than target
         mock_pil_image.resize.assert_not_called()
@@ -349,4 +380,89 @@ class TestImageWriter:
         writer = ImageWriter(context=processing_context)
         
         stats = writer.get_output_statistics()
-        assert stats["resize"] is None 
+        assert stats["resize"] is None
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_pose_cropping_feature_enabled(self, mock_fromarray, processing_context, sample_frame_data):
+        """Test pose cropping feature when enabled."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+
+        # Enable pose cropping feature
+        processing_context.config.output.image.enable_pose_cropping = True
+        processing_context.config.output.image.pose_crop_padding = 0.2
+        processing_context.config.output.image.full_frame_enabled = True
+        processing_context.config.output.image.face_crop_enabled = False
+        processing_context.config.output.image.format = "jpeg"
+        
+        # Set up enhanced selection data for pose category
+        sample_frame_data.selections.primary_selection_category = "pose_standing"
+        sample_frame_data.selections.selection_rank = 1
+        
+        # Add required pose detection data for pose cropping
+        from personfromvid.data.detection_results import PoseDetection
+        pose_detection = PoseDetection(
+            bbox=(400, 200, 800, 900),  # x1, y1, x2, y2
+            confidence=0.9,
+            keypoints={},  # Not needed for cropping
+            pose_classifications=[("standing", 0.95)]  # Pose type with confidence
+        )
+        sample_frame_data.pose_detections.append(pose_detection)
+        
+        writer = ImageWriter(context=processing_context)
+
+        with patch.object(writer, '_crop_region') as mock_crop_region:
+            mock_crop_region.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+            
+            output_files = writer.save_frame_outputs(sample_frame_data)
+            
+            # Should have 2 files: full frame + pose crop
+            assert len(output_files) == 2
+            
+            # Should call _crop_region for pose cropping
+            mock_crop_region.assert_called_once()
+            
+            # Should call PIL save twice (once for full frame, once for crop)
+            assert mock_pil_image.save.call_count == 2
+            
+            # Verify we have both a regular file and a crop file
+            crop_files = [f for f in output_files if '_crop.jpg' in f]
+            regular_files = [f for f in output_files if '_crop.jpg' not in f]
+            assert len(crop_files) == 1
+            assert len(regular_files) == 1
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_pose_cropping_feature_disabled(self, mock_fromarray, processing_context, sample_frame_data):
+        """Test pose cropping feature when disabled."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+
+        # Disable pose cropping feature (default)
+        processing_context.config.output.image.enable_pose_cropping = False
+        processing_context.config.output.image.full_frame_enabled = True
+        processing_context.config.output.image.face_crop_enabled = False
+        processing_context.config.output.image.format = "jpeg"
+        
+        # Set up enhanced selection data for pose category
+        sample_frame_data.selections.primary_selection_category = "pose_standing"
+        sample_frame_data.selections.selection_rank = 1
+        
+        writer = ImageWriter(context=processing_context)
+
+        with patch.object(writer, '_crop_region') as mock_crop_region:
+            output_files = writer.save_frame_outputs(sample_frame_data)
+            
+            # Should have only 1 file: full frame
+            assert len(output_files) == 1
+            
+            # Should NOT call _crop_region
+            mock_crop_region.assert_not_called()
+            
+            # Should call PIL save only once (for full frame)
+            mock_pil_image.save.assert_called_once()
+            
+            # No files should have _crop suffix
+            crop_files = [f for f in output_files if '_crop.jpg' in f]
+            assert len(crop_files) == 0 

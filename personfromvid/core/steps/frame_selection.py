@@ -71,7 +71,8 @@ class FrameSelectionStep(PipelineStep):
             )
 
             criteria = SelectionCriteria(
-                min_frames_per_category=dynamic_max_frames,
+                min_frames_per_category=self.config.output.min_frames_per_category,
+                max_frames_per_category=dynamic_max_frames,
                 min_quality_threshold=self.config.frame_selection.min_quality_threshold,
                 face_size_weight=self.config.frame_selection.face_size_weight,
                 quality_weight=self.config.frame_selection.quality_weight,

@@ -2,6 +2,7 @@ from .base import PipelineStep
 from ...analysis.quality_assessor import create_quality_assessor
 from ...utils.logging import get_logger
 from collections import defaultdict
+from typing import List
 
 
 class QualityAssessmentStep(PipelineStep):
@@ -96,6 +97,9 @@ class QualityAssessmentStep(PipelineStep):
                         frame.unload_image()
                         progress_callback(i + 1)
 
+            # PHASE 2: Rank all assessed frames by quality
+            self._rank_frames_by_quality(self.state.frames)
+
             total_assessed = len(frames_for_quality)
             quality_stats = {
                 "high_quality": high_quality_count,
@@ -137,3 +141,39 @@ class QualityAssessmentStep(PipelineStep):
             self.logger.error(f"❌ Quality assessment failed: {e}")
             self.state.fail_step(self.step_name, str(e))
             raise
+
+    def _rank_frames_by_quality(self, frames: List["FrameData"]) -> None:
+        """Rank frames globally by their overall quality score.
+        
+        This method assigns a global quality_rank to frames based on their
+        quality_metrics.overall_quality score. Only frames that have been
+        quality assessed (have quality_metrics populated) receive a rank.
+        
+        Args:
+            frames: List of all frames in the pipeline state
+        """
+        # Filter to only frames that have been quality assessed
+        assessed_frames = [
+            frame for frame in frames 
+            if frame.quality_metrics is not None
+        ]
+        
+        if not assessed_frames:
+            self.logger.debug("No frames were quality assessed - no ranking performed")
+            return
+        
+        # Sort frames by overall quality in descending order (higher score = better)
+        # Using stable sort to handle ties gracefully
+        assessed_frames.sort(
+            key=lambda frame: frame.quality_metrics.overall_quality,
+            reverse=True
+        )
+        
+        # Assign ranks (1 = highest quality)
+        for rank, frame in enumerate(assessed_frames, start=1):
+            frame.selections.quality_rank = rank
+        
+        self.logger.debug(
+            f"Assigned quality ranks to {len(assessed_frames)} frames "
+            f"(range: 1-{len(assessed_frames)})"
+        )

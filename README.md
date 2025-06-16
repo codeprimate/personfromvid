@@ -251,7 +251,7 @@ output:
   max_frames_per_category: 5
   preserve_metadata: true
   image:
-    format: "jpeg" # 'jpeg' or 'png'
+    format: "png" # 'jpeg' or 'png'
     face_crop_enabled: true
     full_frame_enabled: true
     face_crop_padding: 0.2 # 20% padding around face
