@@ -63,4 +63,4 @@ class InitializationStep(PipelineStep):
             error_msg = f"Video validation failed: {e}"
             self.logger.error(f"❌ {error_msg}")
             self.state.fail_step(self.step_name, error_msg)
-            raise VideoProcessingError(error_msg)
+            raise VideoProcessingError(error_msg) from e

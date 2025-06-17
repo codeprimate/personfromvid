@@ -394,10 +394,10 @@ class HeadPoseEstimator:
                 from safetensors.torch import load_file
 
                 state_dict = load_file(str(self.model_path))
-            except ImportError:
+            except ImportError as e:
                 raise HeadPoseEstimationError(
                     "safetensors not installed. Install with: pip install safetensors"
-                )
+                ) from e
             except Exception as e:
                 raise HeadPoseEstimationError(
                     f"Failed to load safetensors model from {self.model_path}: {str(e)}"

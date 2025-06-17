@@ -101,7 +101,7 @@ def validate_video_file(video_path: Path) -> Dict[str, Any]:
             )
 
     except OSError as e:
-        raise VideoFileError(f"Could not access video file: {e}")
+        raise VideoFileError(f"Could not access video file: {e}") from e
 
     # Validate file extension
     extension = video_path.suffix.lower()
@@ -157,7 +157,7 @@ def validate_output_path(output_path: Path, create_if_missing: bool = True) -> b
             try:
                 parent_dir.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                raise ValidationError(f"Cannot create output directory: {e}")
+                raise ValidationError(f"Cannot create output directory: {e}") from e
         else:
             raise ValidationError(f"Output directory does not exist: {parent_dir}")
 
@@ -176,7 +176,7 @@ def validate_output_path(output_path: Path, create_if_missing: bool = True) -> b
                 f"Available: {available_gb:.1f}GB, Required: {MIN_DISK_SPACE_GB}GB"
             )
     except OSError as e:
-        raise ValidationError(f"Could not check disk space: {e}")
+        raise ValidationError(f"Could not check disk space: {e}") from e
 
     return True
 
@@ -314,12 +314,12 @@ def _get_video_metadata_ffprobe(video_path: Path) -> Dict[str, Any]:
             "pixel_format": video_stream.get("pix_fmt", "unknown"),
         }
 
-    except subprocess.TimeoutExpired:
-        raise VideoFileError("Video metadata extraction timed out")
+    except subprocess.TimeoutExpired as e:
+        raise VideoFileError("Video metadata extraction timed out") from e
     except json.JSONDecodeError as e:
-        raise VideoFileError(f"Could not parse video metadata: {e}")
+        raise VideoFileError(f"Could not parse video metadata: {e}") from e
     except Exception as e:
-        raise VideoFileError(f"Video metadata extraction failed: {e}")
+        raise VideoFileError(f"Video metadata extraction failed: {e}") from e
 
 
 def _check_executable(executable_name: str) -> bool:

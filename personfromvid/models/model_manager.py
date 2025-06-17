@@ -85,7 +85,7 @@ class ModelManager:
             # Clean up on failure
             if model_cache_dir.exists():
                 shutil.rmtree(model_cache_dir)
-            raise ModelDownloadError(f"Failed to download model '{model_name}': {e}")
+            raise ModelDownloadError(f"Failed to download model '{model_name}': {e}") from e
 
     def _download_file(
         self, file_info, file_path: Path, provider: ModelProvider
@@ -114,7 +114,7 @@ class ModelManager:
                         pbar.update(len(chunk))
 
         except requests.RequestException as e:
-            raise ModelDownloadError(f"Failed to download from {file_info.url}: {e}")
+            raise ModelDownloadError(f"Failed to download from {file_info.url}: {e}") from e
 
     def get_model_path(self, model_name: str) -> Path:
         """Get the path to a cached model's primary file.

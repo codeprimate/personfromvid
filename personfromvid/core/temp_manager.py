@@ -94,7 +94,7 @@ class TempManager:
             self.logger.error(f"Failed to create temp directory structure: {e}")
             # Clean up any partially created directories
             self._cleanup_partial_creation()
-            raise TempDirectoryError(f"Cannot create temp directory: {e}")
+            raise TempDirectoryError(f"Cannot create temp directory: {e}") from e
 
     def cleanup_temp_files(self) -> None:
         """Remove temporary directory and all contents.

@@ -38,7 +38,7 @@ class VideoProcessor:
             with open(self.video_path, "rb") as f:
                 f.read(1)
         except (IOError, OSError) as e:
-            raise VideoProcessingError(f"Cannot read video file: {e}")
+            raise VideoProcessingError(f"Cannot read video file: {e}") from e
 
     def extract_metadata(self) -> VideoMetadata:
         """Extract comprehensive video metadata using FFmpeg.
@@ -143,15 +143,15 @@ class VideoProcessor:
             error_msg = f"FFmpeg error during metadata extraction: {e}"
             if hasattr(e, "stderr") and e.stderr:
                 error_msg += f"\nFFmpeg stderr: {e.stderr.decode()}"
-            raise VideoProcessingError(error_msg)
+            raise VideoProcessingError(error_msg) from e
 
         except (KeyError, ValueError, TypeError) as e:
-            raise VideoProcessingError(f"Failed to parse video metadata: {e}")
+            raise VideoProcessingError(f"Failed to parse video metadata: {e}") from e
 
         except Exception as e:
             raise VideoProcessingError(
                 f"Unexpected error during metadata extraction: {e}"
-            )
+            ) from e
 
     def calculate_hash(self) -> str:
         """Calculate SHA256 hash of video file for integrity checking.
@@ -179,10 +179,10 @@ class VideoProcessor:
             return file_hash
 
         except (IOError, OSError) as e:
-            raise VideoProcessingError(f"Failed to read video file for hashing: {e}")
+            raise VideoProcessingError(f"Failed to read video file for hashing: {e}") from e
 
         except Exception as e:
-            raise VideoProcessingError(f"Unexpected error during hash calculation: {e}")
+            raise VideoProcessingError(f"Unexpected error during hash calculation: {e}") from e
 
     def validate_format(self) -> bool:
         """Validate video format and codec compatibility.
@@ -266,7 +266,7 @@ class VideoProcessor:
         except Exception as e:
             raise VideoProcessingError(
                 f"Unexpected error during format validation: {e}"
-            )
+            ) from e
 
     def get_duration(self) -> float:
         """Get video duration in seconds.

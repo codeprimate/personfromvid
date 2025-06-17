@@ -77,7 +77,7 @@ class StateManager:
 
         except Exception as e:
             self.logger.error(f"Failed to load pipeline state: {e}")
-            raise StateLoadError(f"Cannot load state from {self.state_file_path}: {e}")
+            raise StateLoadError(f"Cannot load state from {self.state_file_path}: {e}") from e
 
     def save_state(self, state: PipelineState) -> None:
         """Save pipeline state to JSON file.
@@ -106,7 +106,7 @@ class StateManager:
             # Try to restore backup if save failed
             self._restore_backup_if_exists()
 
-            raise StateSaveError(f"Cannot save state to {self.state_file_path}: {e}")
+            raise StateSaveError(f"Cannot save state to {self.state_file_path}: {e}") from e
 
     def update_step_progress(self, step: str, progress: Dict[str, Any]) -> None:
         """Update progress for a specific step.
@@ -264,7 +264,7 @@ class StateManager:
                 for chunk in iter(lambda: f.read(8192), b""):
                     hash_sha256.update(chunk)
         except Exception as e:
-            raise VideoFileError(f"Cannot read video file for hashing: {e}")
+            raise VideoFileError(f"Cannot read video file for hashing: {e}") from e
 
         return hash_sha256.hexdigest()
 
