@@ -140,7 +140,7 @@ class HeadPoseEstimator:
 
     def _resolve_device(self, device: str) -> str:
         """Resolve device string to actual device."""
-        if device == "auto":
+        if device in ["auto", "gpu"]:
             # Check for CUDA availability
             try:
                 import torch
