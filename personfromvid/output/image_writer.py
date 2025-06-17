@@ -66,19 +66,21 @@ class ImageWriter:
             # Generate outputs for ALL pose categories the frame was selected for
             pose_categories = frame.selections.selected_for_poses
             if pose_categories:
-                for category in pose_categories:
-                    filename = self.naming.get_full_frame_filename(
-                        frame, category, rank, extension
-                    )
-                    output_path = self.naming.get_full_output_path(filename)
+                # Only generate full frames if pose cropping is disabled
+                if not self.config.enable_pose_cropping:
+                    for category in pose_categories:
+                        filename = self.naming.get_full_frame_filename(
+                            frame, category, rank, extension
+                        )
+                        output_path = self.naming.get_full_output_path(filename)
 
-                    # Apply resize if configured
-                    resized_image = self._apply_resize(source_image)
-                    self._save_image(resized_image, output_path)
-                    output_files.append(str(output_path))
-                    self.logger.debug(f"Saved full frame: {filename}")
+                        # Apply resize if configured
+                        resized_image = self._apply_resize(source_image)
+                        self._save_image(resized_image, output_path)
+                        output_files.append(str(output_path))
+                        self.logger.debug(f"Saved full frame: {filename}")
 
-                # NEW FEATURE: Generate pose crop if enabled
+                # Generate pose crop if enabled (replaces full frames when enabled)
                 if self.config.enable_pose_cropping and frame.pose_detections:
                     best_pose = frame.get_best_pose()
                     if best_pose:
@@ -164,8 +166,8 @@ class ImageWriter:
             # Load the source image
             source_image = self._load_frame_image(frame)
 
-            # Save full frame images for pose categories (legacy)
-            if pose_categories:
+            # Save full frame images for pose categories (legacy) - only if pose cropping disabled
+            if pose_categories and not self.config.enable_pose_cropping:
                 for category in pose_categories:
                     rank = frame.selections.selection_rank or 1
                     filename = self.naming.get_full_frame_filename(
@@ -200,6 +202,27 @@ class ImageWriter:
                         self._save_image(face_crop, output_path)
                         output_files.append(str(output_path))
                         self.logger.debug(f"Saved face crop (legacy): {filename}")
+
+            # Generate pose crop if enabled (replaces full frames when enabled) - legacy
+            if self.config.enable_pose_cropping and pose_categories and frame.pose_detections:
+                best_pose = frame.get_best_pose()
+                if best_pose:
+                    pose_crop = self._crop_region(
+                        source_image, best_pose.bbox, self.config.pose_crop_padding
+                    )
+                    
+                    # Generate crop for the first pose category (legacy behavior)
+                    category = pose_categories[0]
+                    rank = frame.selections.selection_rank or 1
+                    base_filename = self.naming.get_full_frame_filename(
+                        frame, category, rank, extension
+                    )
+                    crop_filename = self.naming.get_crop_suffixed_filename(base_filename)
+                    crop_output_path = self.naming.get_full_output_path(crop_filename)
+
+                    self._save_image(pose_crop, crop_output_path)
+                    output_files.append(str(crop_output_path))
+                    self.logger.debug(f"Saved pose crop (legacy): {crop_filename}")
 
             # Update frame's output files list
             frame.selections.output_files.extend(output_files)

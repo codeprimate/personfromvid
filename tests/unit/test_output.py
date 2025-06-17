@@ -388,7 +388,7 @@ class TestImageWriter:
 
     @patch('personfromvid.output.image_writer.Image.fromarray')
     def test_pose_cropping_feature_enabled(self, mock_fromarray, processing_context, sample_frame_data):
-        """Test pose cropping feature when enabled."""
+        """Test pose cropping feature when enabled - should only generate crops, no full frames."""
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
@@ -420,20 +420,20 @@ class TestImageWriter:
             
             output_files = writer.save_frame_outputs(sample_frame_data)
             
-            # Should have 2 files: full frame + pose crop
-            assert len(output_files) == 2
+            # Should have only 1 file: pose crop (no full frame when cropping enabled)
+            assert len(output_files) == 1
             
             # Should call _crop_region for pose cropping
             mock_crop_region.assert_called_once()
             
-            # Should call PIL save twice (once for full frame, once for crop)
-            assert mock_pil_image.save.call_count == 2
+            # Should call PIL save only once (for pose crop)
+            assert mock_pil_image.save.call_count == 1
             
-            # Verify we have both a regular file and a crop file
+            # Should only have crop file, no regular full frame
             crop_files = [f for f in output_files if '_crop.jpg' in f]
             regular_files = [f for f in output_files if '_crop.jpg' not in f]
             assert len(crop_files) == 1
-            assert len(regular_files) == 1
+            assert len(regular_files) == 0
 
     @patch('personfromvid.output.image_writer.Image.fromarray')
     def test_pose_cropping_feature_disabled(self, mock_fromarray, processing_context, sample_frame_data):
