@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "personfromvid"
-version = "1.1.0"
+version = "1.1.1"
 description = "Extract and categorize high-quality frames containing people in specific poses from video files"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
