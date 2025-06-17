@@ -1,3 +1,4 @@
+import time
 from .base import PipelineStep
 from ...analysis.quality_assessor import create_quality_assessor
 from ...utils.logging import get_logger
@@ -47,12 +48,16 @@ class QualityAssessmentStep(PipelineStep):
 
             issue_counts = defaultdict(int)
             high_quality_count = 0
+            step_start_time = time.time()
 
             def progress_callback(processed_count: int):
                 self._check_interrupted()
                 self.state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
-                    self.formatter.update_progress(1)
+                    # Calculate rate
+                    elapsed = time.time() - step_start_time
+                    rate = processed_count / elapsed if elapsed > 0 else 0
+                    self.formatter.update_progress(1, rate=rate)
 
             if self.formatter and hasattr(self.formatter, "step_progress_context"):
                 with self.formatter.step_progress_context(
@@ -75,8 +80,10 @@ class QualityAssessmentStep(PipelineStep):
                         finally:
                             # Unload image from memory to conserve resources
                             frame.unload_image()
+                            # Update both formatter context and pipeline state progress
                             if callable(progress_updater):
                                 progress_updater(i + 1)
+                            progress_callback(i + 1)
             else:
                 for i, frame in enumerate(frames_for_quality):
                     # Check for interruption at regular intervals

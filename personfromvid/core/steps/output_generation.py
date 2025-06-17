@@ -1,3 +1,4 @@
+import time
 from .base import PipelineStep
 from ...output.image_writer import ImageWriter
 from ...data.constants import ALL_SELECTED_FRAMES_KEY
@@ -51,12 +52,16 @@ class OutputGenerationStep(PipelineStep):
             self.state.get_step_progress(self.step_name).start(total_frames)
 
             all_output_files = []
+            step_start_time = time.time()
 
             def progress_callback(processed_count):
                 self._check_interrupted()
                 self.state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
-                    self.formatter.update_progress(1)
+                    # Calculate rate
+                    elapsed = time.time() - step_start_time
+                    rate = processed_count / elapsed if elapsed > 0 else 0
+                    self.formatter.update_progress(1, rate=rate)
 
             if self.formatter:
                 with self.formatter.create_progress_bar(
