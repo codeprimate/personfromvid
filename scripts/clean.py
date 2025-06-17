@@ -24,7 +24,7 @@ def main():
         "personfromvid.egg-info",
         ".pytest_cache",
         ".mypy_cache",
-        "tmp",
+        ".ruff_cache"
     ]
 
     for directory in directories_to_remove:
@@ -33,16 +33,14 @@ def main():
             print(f"  - Removing directory: {directory}")
             shutil.rmtree(dir_path)
 
-    # Individual files to remove
-    files_to_remove = [
-        ".coverage",
-    ]
+    # Find and remove files by pattern
+    file_patterns_to_remove = [".coverage*", ".DS_Store"]
 
-    for file in files_to_remove:
-        file_path = Path(file)
-        if file_path.is_file():
-            print(f"  - Removing file: {file}")
-            file_path.unlink()
+    for pattern in file_patterns_to_remove:
+        for file_path in project_root.glob(pattern):
+            if file_path.is_file():
+                print(f"  - Removing file: {file_path.name}")
+                file_path.unlink()
 
     # Find and remove __pycache__ directories
     print("  - Removing Python cache files...")
