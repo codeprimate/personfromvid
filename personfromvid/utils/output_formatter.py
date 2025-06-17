@@ -160,6 +160,8 @@ class ConsolidatedFormatter:
             CompactProgressColumn(),
             MofNCompleteColumn(),
             TextColumn("• {task.fields[rate]}", style="cyan"),
+            TextColumn("•"),
+            TimeRemainingColumn(),
             transient=True,
         )
 
