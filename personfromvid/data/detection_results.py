@@ -108,7 +108,8 @@ class HeadPoseResult:
             import warnings
 
             warnings.warn(
-                f"Extreme angle values detected: yaw={self.yaw}, pitch={self.pitch}, roll={self.roll}"
+                f"Extreme angle values detected: yaw={self.yaw}, pitch={self.pitch}, roll={self.roll}",
+                stacklevel=2
             )
 
     @property

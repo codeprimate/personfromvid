@@ -251,7 +251,7 @@ class TestModelManagerIntegration:
             assert model_path.is_file()
 
         # Simulate successful model loading
-        for model_name, model_path in model_paths.items():
+        for _model_name, model_path in model_paths.items():
             # In real usage, this would be something like:
             # model = load_onnx_model(model_path)
             # or: model = torch.load(model_path)

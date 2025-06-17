@@ -7,7 +7,7 @@ downloading and caching.
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -16,6 +16,10 @@ from ..data.detection_results import PoseDetection
 from ..utils.exceptions import PoseEstimationError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
+
+if TYPE_CHECKING:
+    from ..data.config import Config
+    from ..data.frame_data import FrameData
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +300,7 @@ class PoseEstimator:
 
             # Add pose classification for each image
             classified_batch = []
-            for i, (image, detections) in enumerate(zip(images, batch_detections)):
+            for _i, (image, detections) in enumerate(zip(images, batch_detections, strict=False)):
                 image_shape = (image.shape[0], image.shape[1])  # (height, width)
                 classified_detections = self.classify_pose_detections(
                     detections, image_shape
@@ -687,7 +691,7 @@ class PoseEstimator:
         # Weighted average with higher weight for better keypoints
         weights = [1.0 / (i + 1) for i in range(len(top_confidences))]
         weighted_sum = sum(
-            conf * weight for conf, weight in zip(top_confidences, weights)
+            conf * weight for conf, weight in zip(top_confidences, weights, strict=False)
         )
         weight_sum = sum(weights)
 
@@ -847,7 +851,7 @@ class PoseEstimator:
 
                 # Process results for each frame in batch
                 for j, (frame_data, poses) in enumerate(
-                    zip(batch_frame_data, batch_pose_results)
+                    zip(batch_frame_data, batch_pose_results, strict=False)
                 ):
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:

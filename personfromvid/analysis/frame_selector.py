@@ -575,7 +575,7 @@ class FrameSelector:
         # These are for crops, so they don't conflict with pose ranks
         for category_name, selection in head_angle_selections.items():
             category_key = f"head_angle_{category_name}"
-            for rank, frame in enumerate(selection.selected_frames, 1):
+            for _rank, frame in enumerate(selection.selected_frames, 1):
                 # Add to head angle selections, but don't overwrite primary pose rank
                 if category_name not in frame.selections.selected_for_head_angles:
                     frame.selections.selected_for_head_angles.append(category_name)
@@ -661,7 +661,7 @@ class FrameSelector:
         scored_frames.sort(key=lambda x: x[1], reverse=True)
 
         # Populate ranking fields (NEW)
-        for rank, (frame, score) in enumerate(scored_frames, 1):
+        for rank, (frame, _score) in enumerate(scored_frames, 1):
             frame.selections.category_ranks[category_key] = rank
 
         return scored_frames

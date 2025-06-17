@@ -121,7 +121,7 @@ def validate_video_file(video_path: Path) -> Dict[str, Any]:
         # Not always reliable, so just warn
         import warnings
 
-        warnings.warn(f"Unexpected MIME type for video file: {mimetype}")
+        warnings.warn(f"Unexpected MIME type for video file: {mimetype}", stacklevel=2)
 
     # Try to get basic video metadata using ffprobe if available
     try:

@@ -100,7 +100,6 @@ class RichFormatter:
 
     def print_app_header(self, video_path: str) -> None:
         """Print the application header."""
-        Path(video_path).name
         self.console.print(f"\npersonfromvid {video_path}")
         self.console.print()
         self.console.print(f"{EMOJIS['app']} Person From Vid")
@@ -256,7 +255,7 @@ class RichFormatter:
                     and "step_results" in step_progress.data
                 ):
                     results = step_progress.data["step_results"]
-            except:
+            except Exception:
                 pass  # Ignore errors in extracting step results
 
         # Print results if available

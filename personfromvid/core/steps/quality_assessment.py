@@ -1,9 +1,12 @@
 import time
 from collections import defaultdict
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from ...analysis.quality_assessor import create_quality_assessor
 from .base import PipelineStep
+
+if TYPE_CHECKING:
+    from ...data.frame_data import FrameData
 
 
 class QualityAssessmentStep(PipelineStep):

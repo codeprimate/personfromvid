@@ -201,7 +201,7 @@ class FrameExtractor:
                 raise
             else:
                 self.logger.error(f"Frame extraction failed: {e}")
-                raise VideoProcessingError(f"Frame extraction failed: {e}")
+                raise VideoProcessingError(f"Frame extraction failed: {e}") from e
 
     def _filter_out_existing_frames(
         self,

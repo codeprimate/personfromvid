@@ -8,7 +8,7 @@ downloading and caching.
 import logging
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -18,6 +18,10 @@ from ..data.detection_results import HeadPoseResult
 from ..utils.exceptions import HeadPoseEstimationError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
+
+if TYPE_CHECKING:
+    from ..data.config import Config
+    from ..data.frame_data import FrameData
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +187,6 @@ class HeadPoseEstimator:
         """Load HopeNet model from pickle file."""
         try:
             import torch
-            import torch.nn as nn
             import torchvision.transforms as transforms
         except ImportError as e:
             raise HeadPoseEstimationError(
@@ -222,9 +225,7 @@ class HeadPoseEstimator:
     def _create_hopenet_model(self):
         """Create HopeNet model architecture."""
         try:
-            import torch
             import torch.nn as nn
-            import torchvision.models as models
         except ImportError as e:
             raise HeadPoseEstimationError("PyTorch not installed") from e
 
@@ -381,7 +382,6 @@ class HeadPoseEstimator:
         """Load PyTorch model (including safetensors format)."""
         try:
             import torch
-            import torch.nn as nn
             import torchvision.transforms as transforms
         except ImportError as e:
             raise HeadPoseEstimationError(
@@ -433,9 +433,7 @@ class HeadPoseEstimator:
     def _create_sixdrepnet_model(self):
         """Create 6DRepNet model architecture with RepVGG-A0 backbone to match X01D model."""
         try:
-            import torch
             import torch.nn as nn
-            import torch.nn.functional as F
         except ImportError as e:
             raise HeadPoseEstimationError("PyTorch not installed") from e
 
@@ -1239,7 +1237,7 @@ class HeadPoseEstimator:
 
                 # Process results for each face crop in batch
                 for j, (frame_data, face_idx, head_pose_result) in enumerate(
-                    zip(batch_frame_data, batch_face_indices, batch_head_pose_results)
+                    zip(batch_frame_data, batch_face_indices, batch_head_pose_results, strict=False)
                 ):
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:

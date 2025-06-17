@@ -404,7 +404,7 @@ def main(
                 and app_config.storage.cleanup_temp_on_failure
             ):
                 processing_context.temp_manager.cleanup_temp_files()
-        except:
+        except Exception:
             pass  # Don't fail cleanup on error
 
         sys.exit(1)
@@ -419,7 +419,7 @@ def main(
                 console.print(
                     "[green]Temporary files preserved due to --keep-temp flag.[/green]"
                 )
-        except:
+        except Exception:
             pass  # Don't fail cleanup on error
 
         sys.exit(1)
@@ -435,7 +435,7 @@ def main(
                 and app_config.storage.cleanup_temp_on_failure
             ):
                 processing_context.temp_manager.cleanup_temp_files()
-        except:
+        except Exception:
             pass  # Don't fail cleanup on error
 
         sys.exit(1)

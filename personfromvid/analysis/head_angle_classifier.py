@@ -282,7 +282,8 @@ class HeadAngleClassifier:
         # Warn about extreme values but don't fail
         if abs(yaw) > 180 or abs(pitch) > 90 or abs(roll) > 180:
             warnings.warn(
-                f"Extreme angle values detected: yaw={yaw}, pitch={pitch}, roll={roll}"
+                f"Extreme angle values detected: yaw={yaw}, pitch={pitch}, roll={roll}",
+                stacklevel=2
             )
 
     def _calculate_direction_confidence(

@@ -517,7 +517,7 @@ class TestProcessingPipeline:
                          "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names):
+                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()
@@ -574,7 +574,7 @@ class TestProcessingPipeline:
                          "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names):
+                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()
@@ -641,7 +641,7 @@ class TestProcessingPipeline:
                          "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names):
+                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()

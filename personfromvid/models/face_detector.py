@@ -8,7 +8,7 @@ downloading and caching.
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -17,6 +17,11 @@ from ..data.detection_results import FaceDetection
 from ..utils.exceptions import FaceDetectionError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
+
+if TYPE_CHECKING:
+    from ..data.config import Config
+    from ..data.frame_data import FrameData
+    from ..data.pipeline_state import VideoMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -730,7 +735,7 @@ class FaceDetector:
 
                 # Process results and add face detections to FrameData objects
                 for j, (faces, frame) in enumerate(
-                    zip(batch_face_results, valid_frames)
+                    zip(batch_face_results, valid_frames, strict=False)
                 ):
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:

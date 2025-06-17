@@ -6,6 +6,11 @@ high-quality frames containing people in specific poses and head orientations.
 
 from pathlib import Path
 
+# Public API exports - moved here to fix E402
+from .data.config import Config, get_default_config, load_config
+from .utils.exceptions import PersonFromVidError
+from .utils.logging import get_logger, setup_logging
+
 
 def _get_version() -> str:
     """Get version from pyproject.toml file."""
@@ -34,10 +39,7 @@ __version__ = _get_version()
 __author__ = "Person From Vid Project"
 __description__ = "Extract and categorize high-quality frames containing people in specific poses from video files"
 
-# Public API exports
-from .data.config import Config, get_default_config, load_config
-from .utils.exceptions import PersonFromVidError
-from .utils.logging import get_logger, setup_logging
+# Public API exports removed from here - moved to top of file
 
 __all__ = [
     "Config",

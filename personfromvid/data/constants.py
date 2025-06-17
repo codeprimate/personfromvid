@@ -62,8 +62,8 @@ def get_step_index(step_name: str) -> int:
     """
     try:
         return PIPELINE_STEP_NAMES.index(step_name)
-    except ValueError:
-        raise ValueError(f"Unknown pipeline step: {step_name}")
+    except ValueError as e:
+        raise ValueError(f"Unknown pipeline step: {step_name}") from e
 
 
 def get_step_description(step_name: str) -> str:
@@ -80,8 +80,8 @@ def get_step_description(step_name: str) -> str:
     """
     try:
         return PIPELINE_STEPS[step_name]
-    except KeyError:
-        raise ValueError(f"Unknown pipeline step: {step_name}")
+    except KeyError as e:
+        raise ValueError(f"Unknown pipeline step: {step_name}") from e
 
 
 def is_valid_step(step_name: str) -> bool:

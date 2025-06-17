@@ -5,13 +5,16 @@ with configurable thresholds for easy adjustment.
 """
 
 import time
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import cv2
 import numpy as np
 
 from ..data.detection_results import QualityMetrics
 from ..utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from ..data.frame_data import FrameData
 
 # =============================================================================
 # ADJUSTABLE QUALITY CONSTANTS
