@@ -371,7 +371,9 @@ class ProcessingPipeline:
                 start_index = get_pipeline_step_names().index(start_from)
             except ValueError:
                 self.logger.error(f"Cannot resume from unknown step: {start_from}")
-                raise StateManagementError(f"Resume step '{start_from}' not found.") from None
+                raise StateManagementError(
+                    f"Resume step '{start_from}' not found."
+                ) from None
 
         for i, (step_name, step_instance) in enumerate(
             steps_to_execute[start_index:], start_index + 1

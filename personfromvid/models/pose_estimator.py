@@ -300,7 +300,9 @@ class PoseEstimator:
 
             # Add pose classification for each image
             classified_batch = []
-            for _i, (image, detections) in enumerate(zip(images, batch_detections, strict=False)):
+            for _i, (image, detections) in enumerate(
+                zip(images, batch_detections, strict=False)
+            ):
                 image_shape = (image.shape[0], image.shape[1])  # (height, width)
                 classified_detections = self.classify_pose_detections(
                     detections, image_shape
@@ -691,7 +693,8 @@ class PoseEstimator:
         # Weighted average with higher weight for better keypoints
         weights = [1.0 / (i + 1) for i in range(len(top_confidences))]
         weighted_sum = sum(
-            conf * weight for conf, weight in zip(top_confidences, weights, strict=False)
+            conf * weight
+            for conf, weight in zip(top_confidences, weights, strict=False)
         )
         weight_sum = sum(weights)
 

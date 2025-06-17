@@ -179,10 +179,14 @@ class VideoProcessor:
             return file_hash
 
         except (IOError, OSError) as e:
-            raise VideoProcessingError(f"Failed to read video file for hashing: {e}") from e
+            raise VideoProcessingError(
+                f"Failed to read video file for hashing: {e}"
+            ) from e
 
         except Exception as e:
-            raise VideoProcessingError(f"Unexpected error during hash calculation: {e}") from e
+            raise VideoProcessingError(
+                f"Unexpected error during hash calculation: {e}"
+            ) from e
 
     def validate_format(self) -> bool:
         """Validate video format and codec compatibility.

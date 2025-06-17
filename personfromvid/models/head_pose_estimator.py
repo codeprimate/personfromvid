@@ -1237,7 +1237,12 @@ class HeadPoseEstimator:
 
                 # Process results for each face crop in batch
                 for j, (frame_data, face_idx, head_pose_result) in enumerate(
-                    zip(batch_frame_data, batch_face_indices, batch_head_pose_results, strict=False)
+                    zip(
+                        batch_frame_data,
+                        batch_face_indices,
+                        batch_head_pose_results,
+                        strict=False,
+                    )
                 ):
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:
