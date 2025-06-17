@@ -8,11 +8,12 @@ This module provides comprehensive closeup detection capabilities including:
 
 import logging
 import math
-from typing import Dict, List, Optional, Tuple, Any
-import numpy as np
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..data.detection_results import FaceDetection, PoseDetection, CloseupDetection
+import numpy as np
+
+from ..data.detection_results import CloseupDetection, FaceDetection, PoseDetection
 from ..data.frame_data import FrameData, ImageProperties
 from ..utils.exceptions import AnalysisError
 
@@ -218,8 +219,6 @@ class CloseupDetector:
 
         return result
 
-
-
     def _calculate_shoulder_width_ratio_from_pose(
         self, pose_detection: PoseDetection, image_properties: ImageProperties
     ) -> Optional[float]:
@@ -242,7 +241,6 @@ class CloseupDetector:
             and left_shoulder[2] >= MIN_LANDMARK_CONFIDENCE
             and right_shoulder[2] >= MIN_LANDMARK_CONFIDENCE
         ):
-
             shoulder_width = abs(right_shoulder[0] - left_shoulder[0])
             return shoulder_width / image_properties.width
 
@@ -368,7 +366,7 @@ class CloseupDetector:
             # Check for interruption at regular intervals
             if interruption_check and i % 10 == 0:
                 interruption_check()
-                
+
             try:
                 # Use the new standardized method
                 self.detect_closeups_in_frame(frame_data)

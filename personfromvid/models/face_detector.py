@@ -7,15 +7,14 @@ downloading and caching.
 """
 
 import logging
-import warnings
-from pathlib import Path
-from typing import List, Optional, Union, Tuple, Dict, Any
-import numpy as np
-import cv2
 import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import cv2
+import numpy as np
 
 from ..data.detection_results import FaceDetection
-from ..utils.exceptions import ModelInferenceError, FaceDetectionError
+from ..utils.exceptions import FaceDetectionError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
 
@@ -71,10 +70,11 @@ class FaceDetector:
         self.model_name = model_name
         self.device = self._resolve_device(device)
         self.confidence_threshold = confidence_threshold
-        
+
         # Store config or get default
         if config is None:
             from ..data.config import get_default_config
+
             self.config = get_default_config()
         else:
             self.config = config
@@ -509,7 +509,7 @@ class FaceDetector:
         anchor_centers = []
         for y in range(feat_h):
             for x in range(feat_w):
-                for anchor_idx in range(num_anchors_per_location):
+                for _anchor_idx in range(num_anchors_per_location):
                     anchor_x = (x + 0.5) * stride
                     anchor_y = (y + 0.5) * stride
                     anchor_centers.append([anchor_x, anchor_y])
@@ -669,7 +669,6 @@ class FaceDetector:
             return
 
         from ..data.detection_results import FaceDetection
-        from pathlib import Path
 
         total_faces_found = 0
         processed_count = 0
@@ -682,7 +681,7 @@ class FaceDetector:
             # Check for interruption at the start of each batch
             if interruption_check:
                 interruption_check()
-                
+
             batch_frames = frames[i : i + batch_size]
             batch_images = []
             valid_frames = []
@@ -692,7 +691,7 @@ class FaceDetector:
                 # Check for interruption periodically during frame loading
                 if interruption_check and len(batch_images) % 10 == 0:
                     interruption_check()
-                    
+
                 if frame.file_path.exists():
                     try:
                         image = cv2.imread(str(frame.file_path))
@@ -736,7 +735,7 @@ class FaceDetector:
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:
                         interruption_check()
-                        
+
                     if faces:  # Add face detections to the frame
                         # Convert faces to FaceDetection objects if needed
                         face_detections = []
@@ -799,9 +798,10 @@ class FaceDetector:
         Returns:
             FrameData object with face detections populated
         """
-        from ..data.frame_data import FrameData, SourceInfo, ImageProperties
-        from ..data.detection_results import FaceDetection
         from pathlib import Path
+
+        from ..data.detection_results import FaceDetection
+        from ..data.frame_data import FrameData, ImageProperties, SourceInfo
 
         # Convert faces to FaceDetection objects if needed
         face_detections = []

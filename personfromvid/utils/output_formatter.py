@@ -5,31 +5,26 @@ duplicate content and excessive whitespace while maintaining clear progress
 indication and transparency about processing work.
 """
 
-import time
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
-from dataclasses import dataclass
-from contextlib import contextmanager
 import re
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from rich.console import Console
+from rich.live import Live
 from rich.progress import (
-    Progress,
-    TaskID,
     BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    TaskID,
     TextColumn,
     TimeRemainingColumn,
-    MofNCompleteColumn,
-    SpinnerColumn,
-    ProgressColumn,
 )
-from rich.panel import Panel
-from rich.live import Live
-from rich.layout import Layout
-from rich.table import Table
 
-from ..data import VideoMetadata, ProcessingResult
-from ..data.constants import get_total_pipeline_steps
+from ..data import ProcessingResult
 
 
 @dataclass
@@ -327,9 +322,7 @@ class ConsolidatedFormatter:
                         # Extract and display count information
                         if "High quality:" in value or "Usable quality:" in value:
                             # Extract just the meaningful part
-                            clean_value = value.replace("📊 ", "").replace(
-                                " frames", ""
-                            )
+                            clean_value = value.replace("📊 ", "").replace(" frames", "")
                             self.console.print(f"  • {clean_value}")
 
         elif step_name == "frame_selection":
@@ -385,9 +378,7 @@ class ConsolidatedFormatter:
                 self.console.print(f"  • Generated {files_text} output files")
 
                 if "location_info" in results:
-                    location_text = results["location_info"].replace(
-                        "📂 Location: ", ""
-                    )
+                    location_text = results["location_info"].replace("📂 Location: ", "")
                     self.console.print(f"  • Saved to: {location_text}")
 
     def debug(self, message: str) -> None:

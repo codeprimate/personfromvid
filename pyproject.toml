@@ -66,6 +66,7 @@ dev = [
     "pre-commit==3.6.0",
     "build==1.2.2.post1",
     "twine==6.1.0",
+    "ruff==0.5.5",
 ]
 gpu = [
     "onnxruntime-gpu>=1.15.0",
@@ -128,4 +129,18 @@ python_functions = ["test_*"]
 addopts = "-v --cov=personfromvid --cov-report=term-missing --cov-report=html"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-] 
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+]
+ignore = ["E501"] # Ignore line length 

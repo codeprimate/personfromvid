@@ -1,5 +1,5 @@
-from .base import PipelineStep
 from ...analysis.closeup_detector import CloseupDetector
+from .base import PipelineStep
 
 
 class CloseupDetectionStep(PipelineStep):
@@ -30,9 +30,7 @@ class CloseupDetectionStep(PipelineStep):
 
             total_frames = len(frames_with_faces)
             if self.formatter:
-                self.formatter.print_info(
-                    "🎯 Analyzing shot types...", "targeting"
-                )
+                self.formatter.print_info("🎯 Analyzing shot types...", "targeting")
             else:
                 self.logger.info(
                     f"🎯 Starting closeup detection on {total_frames} frames..."
@@ -66,13 +64,15 @@ class CloseupDetectionStep(PipelineStep):
                     "Detecting closeups", total_frames
                 ):
                     closeup_detector.process_frame_batch(
-                        frames_with_faces, progress_callback,
-                        interruption_check=self._check_interrupted
+                        frames_with_faces,
+                        progress_callback,
+                        interruption_check=self._check_interrupted,
                     )
             else:
                 closeup_detector.process_frame_batch(
-                    frames_with_faces, progress_callback,
-                    interruption_check=self._check_interrupted
+                    frames_with_faces,
+                    progress_callback,
+                    interruption_check=self._check_interrupted,
                 )
 
             # Collect and store stats

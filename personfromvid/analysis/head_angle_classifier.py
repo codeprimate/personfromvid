@@ -5,8 +5,8 @@ based on yaw, pitch, and roll angles from head pose estimation models.
 """
 
 import logging
-from typing import Dict, List, Tuple, Any, Optional
 import warnings
+from typing import Any, Dict, Optional, Tuple
 
 from ..data.detection_results import HeadPoseResult
 from ..data.frame_data import FrameData
@@ -97,7 +97,7 @@ class HeadAngleClassifier:
 
         Args:
             yaw: Yaw angle in degrees
-            pitch: Pitch angle in degrees  
+            pitch: Pitch angle in degrees
             roll: Roll angle in degrees
 
         Returns:
@@ -109,11 +109,13 @@ class HeadAngleClassifier:
 
             # Determine direction based on yaw and pitch
             direction = self._get_direction_from_angles(yaw, pitch)
-            
+
             return direction
 
         except Exception as e:
-            logger.error(f"Failed to classify head angles yaw={yaw}, pitch={pitch}, roll={roll}: {e}")
+            logger.error(
+                f"Failed to classify head angles yaw={yaw}, pitch={pitch}, roll={roll}: {e}"
+            )
             # Return default classification for failed angles
             return "front"
 

@@ -4,24 +4,23 @@ This module manages pipeline state saving, loading, and validation to enable
 resumption from interruptions.
 """
 
-import json
 import hashlib
-from pathlib import Path
-from typing import Dict, Any, Optional, TYPE_CHECKING
+import json
 from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from ..data import PipelineState, VideoMetadata, ProcessingContext
-from ..utils.logging import get_logger
+from ..data import PipelineState, ProcessingContext
 from ..utils.exceptions import (
-    StateManagementError,
     StateLoadError,
     StateSaveError,
     VideoFileError,
 )
+from ..utils.logging import get_logger
 
 # Avoid circular imports
 if TYPE_CHECKING:
-    from .temp_manager import TempManager
+    pass
 
 
 class StateManager:
@@ -297,7 +296,7 @@ class StateManager:
                 with open(self.state_file_path, "w", encoding="utf-8") as dst:
                     dst.write(content)
 
-                self.logger.info(f"Restored backup state file")
+                self.logger.info("Restored backup state file")
 
                 # Remove backup after successful restore
                 backup_path.unlink()

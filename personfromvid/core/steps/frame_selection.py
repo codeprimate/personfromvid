@@ -1,6 +1,6 @@
-from .base import PipelineStep
-from ...analysis.frame_selector import create_frame_selector, SelectionCriteria
+from ...analysis.frame_selector import SelectionCriteria, create_frame_selector
 from ...data.constants import ALL_SELECTED_FRAMES_KEY
+from .base import PipelineStep
 
 
 class FrameSelectionStep(PipelineStep):
@@ -27,7 +27,7 @@ class FrameSelectionStep(PipelineStep):
         """
         additional_frames = max(0, int((video_duration - 30.0) // 10))
         calculated_frames = baseline_frames + additional_frames
-        
+
         # Respect the max_frames_per_category configuration limit
         max_allowed = self.config.output.max_frames_per_category
         return min(calculated_frames, max_allowed)
@@ -97,13 +97,15 @@ class FrameSelectionStep(PipelineStep):
                     "Selecting frames", total_candidates
                 ):
                     selection_summary = frame_selector.select_best_frames(
-                        candidate_frames, progress_callback,
-                        interruption_check=self._check_interrupted
+                        candidate_frames,
+                        progress_callback,
+                        interruption_check=self._check_interrupted,
                     )
             else:
                 selection_summary = frame_selector.select_best_frames(
-                    candidate_frames, lambda m: self.logger.debug(f"   {m}"),
-                    interruption_check=self._check_interrupted
+                    candidate_frames,
+                    lambda m: self.logger.debug(f"   {m}"),
+                    interruption_check=self._check_interrupted,
                 )
 
             self.state.update_step_progress(

@@ -4,11 +4,10 @@ This module defines configuration classes and metadata for all AI models used in
 including download URLs, versions, checksums, and device compatibility information.
 """
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
-from enum import Enum
 import hashlib
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from ..data.config import DeviceType
 

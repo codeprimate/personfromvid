@@ -6,19 +6,18 @@ downloading and caching.
 """
 
 import logging
-import warnings
-from pathlib import Path
-from typing import List, Optional, Union, Tuple, Dict, Any
-import numpy as np
-import cv2
 import math
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..data.detection_results import HeadPoseResult, FaceDetection
-from ..utils.exceptions import ModelInferenceError, HeadPoseEstimationError
+import cv2
+import numpy as np
+
+from ..analysis.head_angle_classifier import HeadAngleClassifier
+from ..data.detection_results import HeadPoseResult
+from ..utils.exceptions import HeadPoseEstimationError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
-from ..analysis.head_angle_classifier import HeadAngleClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +78,11 @@ class HeadPoseEstimator:
         self.model_name = model_name
         self.device = self._resolve_device(device)
         self.confidence_threshold = confidence_threshold
-        
+
         # Store config or get default
         if config is None:
             from ..data.config import get_default_config
+
             self.config = get_default_config()
         else:
             self.config = config
@@ -279,7 +279,7 @@ class HeadPoseEstimator:
                 layers = []
                 layers.append(block(self.inplanes, planes, stride, downsample))
                 self.inplanes = planes * block.expansion
-                for i in range(1, blocks):
+                for _i in range(1, blocks):
                     layers.append(block(self.inplanes, planes))
 
                 return nn.Sequential(*layers)
@@ -1127,7 +1127,6 @@ class HeadPoseEstimator:
         if not frames_with_faces:
             return {}, 0
 
-        from pathlib import Path
         import cv2
 
         total_head_poses_found = 0
@@ -1148,7 +1147,7 @@ class HeadPoseEstimator:
             # Check for interruption at the start of each batch
             if interruption_check:
                 interruption_check()
-                
+
             batch_num = i // batch_size + 1
             batch_frames = frames_with_faces[i : i + batch_size]
 
@@ -1165,7 +1164,7 @@ class HeadPoseEstimator:
                 # Check for interruption periodically during frame processing
                 if interruption_check and len(batch_face_images) % 10 == 0:
                     interruption_check()
-                    
+
                 try:
                     # Load frame image
                     frame_path = frame_data.file_path
@@ -1245,18 +1244,17 @@ class HeadPoseEstimator:
                     # Check for interruption during result processing
                     if interruption_check and j % 5 == 0:
                         interruption_check()
-                        
+
                     if head_pose_result:
                         batch_head_poses_found += 1
 
                         # Update the face detection with head pose information
-                        if (
-                            face_idx < len(frame_data.face_detections)
-                            and hasattr(frame_data.face_detections[face_idx], "head_pose")
+                        if face_idx < len(frame_data.face_detections) and hasattr(
+                            frame_data.face_detections[face_idx], "head_pose"
                         ):
-                            frame_data.face_detections[face_idx].head_pose = (
-                                head_pose_result
-                            )
+                            frame_data.face_detections[
+                                face_idx
+                            ].head_pose = head_pose_result
 
                         # Add to frame's head_poses list
                         frame_data.head_poses.append(head_pose_result)
@@ -1265,7 +1263,9 @@ class HeadPoseEstimator:
 
                         # Classify head pose direction using HeadAngleClassifier
                         direction = self._head_angle_classifier.classify_head_angle(
-                            head_pose_result.yaw, head_pose_result.pitch, head_pose_result.roll
+                            head_pose_result.yaw,
+                            head_pose_result.pitch,
+                            head_pose_result.roll,
                         )
                         head_pose_result.direction = direction
 
@@ -1345,5 +1345,8 @@ def create_head_pose_estimator(
         model_name = defaults.get("head_pose_estimation", "sixdrepnet")
 
     return HeadPoseEstimator(
-        model_name=model_name, device=device, confidence_threshold=confidence_threshold, config=config
+        model_name=model_name,
+        device=device,
+        confidence_threshold=confidence_threshold,
+        config=config,
     )

@@ -4,10 +4,11 @@ This module provides image quality evaluation using essential metrics
 with configurable thresholds for easy adjustment.
 """
 
+import time
+from typing import List
+
 import cv2
 import numpy as np
-from typing import Dict, List, Optional, Tuple
-import time
 
 from ..data.detection_results import QualityMetrics
 from ..utils.logging import get_logger
@@ -54,9 +55,10 @@ class QualityAssessor:
     def __init__(self):
         """Initialize quality assessor."""
         self.logger = get_logger("quality_assessor")
-        
+
         # Get minimum quality threshold from app config
         from ..data.config import get_default_config
+
         config = get_default_config()
         self.min_quality_threshold = config.frame_selection.min_quality_threshold
 
@@ -119,7 +121,9 @@ class QualityAssessor:
             # DISABLED:Frame is unusable if it has critical quality issues, regardless of overall score
             #   critical_issues = {"blurry", "dark", "overexposed"}
             #   has_critical_issues = any(issue in quality_issues for issue in critical_issues)
-            usable = overall_quality >= self.min_quality_threshold # and not has_critical_issues
+            usable = (
+                overall_quality >= self.min_quality_threshold
+            )  # and not has_critical_issues
 
             processing_time = (time.time() - start_time) * 1000  # Convert to ms
 

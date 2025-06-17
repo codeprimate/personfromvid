@@ -1,7 +1,8 @@
 import time
-from .base import PipelineStep
-from ...output.image_writer import ImageWriter
+
 from ...data.constants import ALL_SELECTED_FRAMES_KEY
+from ...output.image_writer import ImageWriter
+from .base import PipelineStep
 
 
 class OutputGenerationStep(PipelineStep):
@@ -71,7 +72,7 @@ class OutputGenerationStep(PipelineStep):
                         # Check for interruption at regular intervals
                         if i % 5 == 0:
                             self._check_interrupted()
-                            
+
                         output_files = image_writer.save_frame_outputs(frame)
                         all_output_files.extend(output_files)
                         progress_callback(i + 1)
@@ -80,7 +81,7 @@ class OutputGenerationStep(PipelineStep):
                     # Check for interruption at regular intervals
                     if i % 5 == 0:
                         self._check_interrupted()
-                        
+
                     output_files = image_writer.save_frame_outputs(frame)
                     all_output_files.extend(output_files)
                     progress_callback(i + 1)

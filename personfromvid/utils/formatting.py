@@ -5,27 +5,23 @@ with emojis, separators, and consistent styling across all processing steps.
 """
 
 import time
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 from rich.console import Console
 from rich.progress import (
-    Progress,
-    TaskID,
     BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeRemainingColumn,
-    TimeElapsedColumn,
-    MofNCompleteColumn,
-    SpinnerColumn,
 )
-from rich.panel import Panel
-from rich.text import Text
-from rich.columns import Columns
 
-from ..data import VideoMetadata, ProcessingResult
+from ..data import ProcessingResult, VideoMetadata
 from ..data.constants import get_total_pipeline_steps
-
 
 # Visual constants
 MAIN_SEPARATOR = "═" * 79
@@ -104,7 +100,7 @@ class RichFormatter:
 
     def print_app_header(self, video_path: str) -> None:
         """Print the application header."""
-        filename = Path(video_path).name
+        Path(video_path).name
         self.console.print(f"\npersonfromvid {video_path}")
         self.console.print()
         self.console.print(f"{EMOJIS['app']} Person From Vid")
@@ -265,7 +261,7 @@ class RichFormatter:
 
         # Print results if available
         if results:
-            for key, value in results.items():
+            for _key, value in results.items():
                 if isinstance(value, str):
                     self.console.print(f"{EMOJIS['success']} {value}")
                 elif isinstance(value, dict):

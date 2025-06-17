@@ -4,14 +4,13 @@ This module defines configuration classes and default settings for the video pro
 pipeline, with support for environment variable overrides and validation.
 """
 
-import os
-from pathlib import Path
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import List, Optional
+
 import yaml
-from pydantic import BaseModel, Field, field_validator, field_serializer, ConfigDict
 from platformdirs import user_cache_dir
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
@@ -290,7 +289,8 @@ class OutputImageConfig(BaseModel):
     """Configuration for output generation."""
 
     format: str = Field(
-        "png", description="The output image format ('png' or 'jpeg'). 'jpg' is used as the extension for 'jpeg'."
+        "png",
+        description="The output image format ('png' or 'jpeg'). 'jpg' is used as the extension for 'jpeg'.",
     )
     face_crop_enabled: bool = Field(
         default=True,
@@ -310,7 +310,7 @@ class OutputImageConfig(BaseModel):
         default=None,
         ge=256,
         le=4096,
-        description="Maximum dimension for proportional image resizing (None for no resizing)"
+        description="Maximum dimension for proportional image resizing (None for no resizing)",
     )
 
     png: PngConfig = Field(default_factory=PngConfig)
@@ -387,8 +387,8 @@ class ProcessingConfig(BaseModel):
     """Configuration for processing behavior."""
 
     force_restart: bool = Field(
-        default=False, 
-        description="Force restart processing by deleting existing state (preserves extracted frames)"
+        default=False,
+        description="Force restart processing by deleting existing state (preserves extracted frames)",
     )
     save_intermediate_results: bool = Field(
         default=True, description="Save intermediate processing results"

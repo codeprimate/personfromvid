@@ -6,9 +6,9 @@ file logging support, and configurable verbosity levels.
 
 import logging
 import sys
-from pathlib import Path
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Dict, Optional
+
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback

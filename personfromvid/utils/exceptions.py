@@ -4,7 +4,7 @@ This module defines the exception hierarchy for the video processing pipeline,
 providing structured error handling and informative error messages.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 class PersonFromVidError(Exception):

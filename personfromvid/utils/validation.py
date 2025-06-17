@@ -1,18 +1,17 @@
 """Input validation utilities for Person From Vid.
 
-This module provides validation functions for video files, paths, and system 
+This module provides validation functions for video files, paths, and system
 requirements to ensure proper input handling throughout the pipeline.
 """
 
-import os
 import mimetypes
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple
-import subprocess
+import os
 import shutil
+import subprocess
+from pathlib import Path
+from typing import Any, Dict, List
 
-from .exceptions import ValidationError, VideoFileError, DependencyError
-
+from .exceptions import ValidationError, VideoFileError
 
 # Supported video file extensions and MIME types
 SUPPORTED_VIDEO_EXTENSIONS = {

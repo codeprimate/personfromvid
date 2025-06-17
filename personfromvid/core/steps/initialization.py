@@ -1,5 +1,5 @@
-from .base import PipelineStep
 from ...utils.exceptions import VideoProcessingError
+from .base import PipelineStep
 
 
 class InitializationStep(PipelineStep):

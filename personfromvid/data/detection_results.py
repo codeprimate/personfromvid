@@ -6,7 +6,6 @@ pose estimation, and head pose estimation models.
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from pathlib import Path
 
 
 @dataclass
@@ -91,9 +90,9 @@ class HeadPoseResult:
     confidence: float
     face_id: int = 0  # Index of face in frame
     direction: Optional[str] = None  # Classified cardinal direction
-    direction_confidence: Optional[float] = (
-        None  # Confidence of direction classification
-    )
+    direction_confidence: Optional[
+        float
+    ] = None  # Confidence of direction classification
 
     def __post_init__(self):
         """Validate angle ranges and confidence."""

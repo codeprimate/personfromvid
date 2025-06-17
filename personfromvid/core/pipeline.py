@@ -5,48 +5,37 @@ the entire video processing workflow with state management and resumption.
 """
 
 import signal
-import sys
 import time
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
-
-import numpy as np
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from ..data import (
-    Config,
-    PipelineState,
-    VideoMetadata,
     FrameData,
-    SourceInfo,
-    ImageProperties,
-    StepProgress,
+    PipelineState,
     ProcessingContext,
-)
-from ..utils.logging import get_logger, get_formatter
-from ..utils.exceptions import (
-    PersonFromVidError,
-    VideoProcessingError,
-    StateManagementError,
-    InterruptionError,
-    VideoFileError,
+    VideoMetadata,
 )
 from ..data.constants import (
-    get_pipeline_steps,
     get_pipeline_step_names,
     get_total_pipeline_steps,
 )
+from ..utils.exceptions import (
+    InterruptionError,
+    StateManagementError,
+    VideoFileError,
+)
+from ..utils.logging import get_formatter, get_logger
 from .steps import (
-    InitializationStep,
-    FrameExtractionStep,
-    FaceDetectionStep,
-    PoseAnalysisStep,
     CloseupDetectionStep,
-    QualityAssessmentStep,
+    FaceDetectionStep,
+    FrameExtractionStep,
     FrameSelectionStep,
+    InitializationStep,
     OutputGenerationStep,
     PipelineStep,
+    PoseAnalysisStep,
+    QualityAssessmentStep,
 )
 
 
@@ -491,7 +480,7 @@ class ProcessingPipeline:
         head_angles_found = self.state.get_head_angles_found()
         processing_time = self._get_elapsed_time()
 
-        self.logger.info(f"📊 RESULTS SUMMARY:")
+        self.logger.info("📊 RESULTS SUMMARY:")
         self.logger.info(f"   • Total frames extracted: {total_frames}")
         self.logger.info(f"   • Faces detected: {faces_found}")
 
@@ -507,13 +496,13 @@ class ProcessingPipeline:
         self.logger.info("")
 
         if poses_found:
-            self.logger.info(f"🏆 TOP BODY POSES:")
+            self.logger.info("🏆 TOP BODY POSES:")
             sorted_poses = sorted(poses_found.items(), key=lambda x: x[1], reverse=True)
             for pose, count in sorted_poses[:3]:
                 self.logger.info(f"   • {pose}: {count} instances")
 
         if head_angles_found:
-            self.logger.info(f"🎯 TOP HEAD POSES:")
+            self.logger.info("🎯 TOP HEAD POSES:")
             sorted_head_poses = sorted(
                 head_angles_found.items(), key=lambda x: x[1], reverse=True
             )

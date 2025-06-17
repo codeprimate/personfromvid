@@ -7,6 +7,7 @@ import os
 import shutil
 from pathlib import Path
 
+
 def main():
     """Main function to clean the project."""
     # Change to the project root directory
@@ -67,4 +68,4 @@ def main():
     print("✅ Cleaning complete.")
 
 if __name__ == "__main__":
-    main() 
+    main()

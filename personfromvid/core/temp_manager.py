@@ -6,16 +6,13 @@ video processing, including automatic cleanup and disk space monitoring.
 
 import os
 import shutil
-import tempfile
-import logging
 import stat
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
-
-from ..utils.logging import get_logger
-from ..utils.exceptions import TempDirectoryError
 from ..data.config import Config
+from ..utils.exceptions import TempDirectoryError
+from ..utils.logging import get_logger
 
 
 class TempManager:
@@ -89,7 +86,7 @@ class TempManager:
             self.logger.info(
                 f"Created temporary directory structure: {self.temp_dir_path}"
             )
-            self.logger.debug(f"Subdirectories: frames")
+            self.logger.debug("Subdirectories: frames")
 
             return self.temp_dir_path
 
@@ -319,7 +316,7 @@ class TempManager:
         """
         total_size = 0
         try:
-            for dirpath, dirnames, filenames in os.walk(directory):
+            for dirpath, _dirnames, filenames in os.walk(directory):
                 for filename in filenames:
                     filepath = os.path.join(dirpath, filename)
                     try:
@@ -344,7 +341,7 @@ class TempManager:
         """
         count = 0
         try:
-            for dirpath, dirnames, filenames in os.walk(directory):
+            for _dirpath, _dirnames, filenames in os.walk(directory):
                 count += len(filenames)
         except Exception:
             pass

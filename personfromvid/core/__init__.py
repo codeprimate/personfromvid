@@ -4,11 +4,11 @@ This module provides the main pipeline orchestrator, state management,
 and temporary directory management components.
 """
 
-from .pipeline import ProcessingPipeline, ProcessingResult, PipelineStatus
+from .frame_extractor import FrameExtractor
+from .pipeline import PipelineStatus, ProcessingPipeline, ProcessingResult
 from .state_manager import StateManager
 from .temp_manager import TempManager
 from .video_processor import VideoProcessor
-from .frame_extractor import FrameExtractor
 
 __all__ = [
     # Pipeline orchestration

@@ -6,7 +6,6 @@ including the definition of processing steps and their order.
 
 from typing import List, Tuple
 
-
 # Pipeline step definitions
 PIPELINE_STEPS = {
     "initialization": "Initialize processing environment",
@@ -28,7 +27,7 @@ ALL_SELECTED_FRAMES_KEY = "all_selected_frames"
 
 def get_pipeline_steps() -> List[Tuple[str, str]]:
     """Get a list of all pipeline steps and their descriptions."""
-    return [(step, description) for step, description in PIPELINE_STEPS.items()]
+    return list(PIPELINE_STEPS.items())
 
 
 def get_pipeline_step_names() -> List[str]:

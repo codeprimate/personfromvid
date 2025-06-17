@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Any, Dict, List, Optional
 
 from .constants import get_pipeline_step_names, get_total_pipeline_steps
 from .frame_data import FrameData

@@ -1,6 +1,6 @@
-from .base import PipelineStep
-from ...models.pose_estimator import PoseEstimator
 from ...models.head_pose_estimator import HeadPoseEstimator
+from ...models.pose_estimator import PoseEstimator
+from .base import PipelineStep
 
 
 class PoseAnalysisStep(PipelineStep):
@@ -86,26 +86,31 @@ class PoseAnalysisStep(PipelineStep):
                     "Analyzing body poses", total_frames
                 ):
                     poses_by_category, _ = pose_estimator.process_frame_batch(
-                        frames_with_faces, body_progress_callback,
-                        interruption_check=self._check_interrupted
+                        frames_with_faces,
+                        body_progress_callback,
+                        interruption_check=self._check_interrupted,
                     )
                 with self.formatter.create_progress_bar(
                     "Analyzing head angles", total_frames
                 ):
-                    head_angles_by_category, _ = (
-                        head_pose_estimator.process_frame_batch(
-                            frames_with_faces, head_progress_callback,
-                            interruption_check=self._check_interrupted
-                        )
+                    (
+                        head_angles_by_category,
+                        _,
+                    ) = head_pose_estimator.process_frame_batch(
+                        frames_with_faces,
+                        head_progress_callback,
+                        interruption_check=self._check_interrupted,
                     )
             else:
                 poses_by_category, _ = pose_estimator.process_frame_batch(
-                    frames_with_faces, body_progress_callback,
-                    interruption_check=self._check_interrupted
+                    frames_with_faces,
+                    body_progress_callback,
+                    interruption_check=self._check_interrupted,
                 )
                 head_angles_by_category, _ = head_pose_estimator.process_frame_batch(
-                    frames_with_faces, head_progress_callback,
-                    interruption_check=self._check_interrupted
+                    frames_with_faces,
+                    head_progress_callback,
+                    interruption_check=self._check_interrupted,
                 )
 
             # Store results
@@ -152,7 +157,7 @@ class PoseAnalysisStep(PipelineStep):
                     "step_results", results
                 )
             else:
-                self.logger.info(f"✅ Pose analysis completed")
+                self.logger.info("✅ Pose analysis completed")
                 self.logger.info(
                     f"   📊 Body poses: {total_poses_found} across {len(poses_by_category)} categories"
                 )

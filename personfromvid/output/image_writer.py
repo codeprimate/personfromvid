@@ -4,19 +4,18 @@ This module implements the ImageWriter class that handles high-quality image
 processing and file I/O operations for generating the final output images.
 """
 
-import logging
 from pathlib import Path
-from typing import Tuple, List
-import numpy as np
-from PIL import Image, ImageOps
-import cv2
+from typing import List, Tuple
 
-from ..data.config import OutputImageConfig
-from ..data.frame_data import FrameData
-from ..data.detection_results import FaceDetection
+import cv2
+import numpy as np
+from PIL import Image
+
 from ..data.context import ProcessingContext
-from ..utils.logging import get_logger
+from ..data.detection_results import FaceDetection
+from ..data.frame_data import FrameData
 from ..utils.exceptions import ImageWriteError
+from ..utils.logging import get_logger
 from .naming_convention import NamingConvention
 
 
@@ -49,7 +48,7 @@ class ImageWriter:
         # Guard clause: Check for new enhanced selection data
         primary_category = frame.selections.primary_selection_category
         rank = frame.selections.selection_rank
-        
+
         if not primary_category or rank is None:
             # Fall back to legacy behavior for backward compatibility
             return self._save_frame_outputs_legacy(frame)
@@ -87,17 +86,25 @@ class ImageWriter:
                         pose_crop = self._crop_region(
                             source_image, best_pose.bbox, self.config.pose_crop_padding
                         )
-                        
+
                         # Generate crop for the primary pose category only to avoid duplicates
                         primary_pose_category = next(
-                            (cat for cat in pose_categories if f"pose_{cat}" == primary_category),
-                            pose_categories[0]  # fallback to first pose category
+                            (
+                                cat
+                                for cat in pose_categories
+                                if f"pose_{cat}" == primary_category
+                            ),
+                            pose_categories[0],  # fallback to first pose category
                         )
                         base_filename = self.naming.get_full_frame_filename(
                             frame, primary_pose_category, rank, extension
                         )
-                        crop_filename = self.naming.get_crop_suffixed_filename(base_filename)
-                        crop_output_path = self.naming.get_full_output_path(crop_filename)
+                        crop_filename = self.naming.get_crop_suffixed_filename(
+                            base_filename
+                        )
+                        crop_output_path = self.naming.get_full_output_path(
+                            crop_filename
+                        )
 
                         self._save_image(pose_crop, crop_output_path)
                         output_files.append(str(crop_output_path))
@@ -105,21 +112,29 @@ class ImageWriter:
 
             # Generate outputs for ALL head angle categories the frame was selected for
             head_angle_categories = frame.selections.selected_for_head_angles
-            if self.config.face_crop_enabled and head_angle_categories and frame.face_detections:
+            if (
+                self.config.face_crop_enabled
+                and head_angle_categories
+                and frame.face_detections
+            ):
                 best_face = frame.get_best_face()
                 if best_face:
                     face_crop = self._crop_face(source_image, best_face)
-                    
+
                     # Only generate ONE face crop per frame using the primary head angle category
                     # to avoid duplicate face images with different category names
                     primary_head_angle = None
                     if "head_angle_" in primary_category:
                         # Extract the head angle part from primary_selection_category
                         primary_head_angle = primary_category.replace("head_angle_", "")
-                    
+
                     # Use primary head angle if available, otherwise first head angle category
-                    face_category = primary_head_angle if primary_head_angle in head_angle_categories else head_angle_categories[0]
-                    
+                    face_category = (
+                        primary_head_angle
+                        if primary_head_angle in head_angle_categories
+                        else head_angle_categories[0]
+                    )
+
                     filename = self.naming.get_face_crop_filename(
                         frame, face_category, rank, extension
                     )
@@ -140,17 +155,17 @@ class ImageWriter:
             error_msg = f"Failed to save outputs for frame {frame.frame_id}: {e}"
             self.logger.error(error_msg)
             raise ImageWriteError(error_msg) from e
-    
+
     def _save_frame_outputs_legacy(self, frame: FrameData) -> List[str]:
         """Legacy save method for backward compatibility with old selection data.
-        
+
         This method uses the old selection fields (selected_for_poses, selected_for_head_angles)
         to maintain compatibility with frames that haven't been processed by the enhanced
         frame selection system.
-        
+
         Args:
             frame: Frame data with legacy selection metadata
-            
+
         Returns:
             List of output file paths that were created
         """
@@ -161,7 +176,7 @@ class ImageWriter:
         # Determine the correct file extension
         file_format = self.config.format.lower()
         extension = "jpg" if file_format == "jpeg" else file_format
-        
+
         try:
             # Load the source image
             source_image = self._load_frame_image(frame)
@@ -204,20 +219,26 @@ class ImageWriter:
                         self.logger.debug(f"Saved face crop (legacy): {filename}")
 
             # Generate pose crop if enabled (replaces full frames when enabled) - legacy
-            if self.config.enable_pose_cropping and pose_categories and frame.pose_detections:
+            if (
+                self.config.enable_pose_cropping
+                and pose_categories
+                and frame.pose_detections
+            ):
                 best_pose = frame.get_best_pose()
                 if best_pose:
                     pose_crop = self._crop_region(
                         source_image, best_pose.bbox, self.config.pose_crop_padding
                     )
-                    
+
                     # Generate crop for the first pose category (legacy behavior)
                     category = pose_categories[0]
                     rank = frame.selections.selection_rank or 1
                     base_filename = self.naming.get_full_frame_filename(
                         frame, category, rank, extension
                     )
-                    crop_filename = self.naming.get_crop_suffixed_filename(base_filename)
+                    crop_filename = self.naming.get_crop_suffixed_filename(
+                        base_filename
+                    )
                     crop_output_path = self.naming.get_full_output_path(crop_filename)
 
                     self._save_image(pose_crop, crop_output_path)
@@ -230,7 +251,9 @@ class ImageWriter:
             return output_files
 
         except Exception as e:
-            error_msg = f"Failed to save outputs for frame {frame.frame_id} (legacy): {e}"
+            error_msg = (
+                f"Failed to save outputs for frame {frame.frame_id} (legacy): {e}"
+            )
             self.logger.error(error_msg)
             raise ImageWriteError(error_msg) from e
 
@@ -291,7 +314,7 @@ class ImageWriter:
 
         # Determine minimum dimension: use resize value if configured, otherwise default to 512
         min_dimension = self.config.resize if self.config.resize is not None else 512
-        
+
         # Upscale if both dimensions are smaller than the minimum dimension
         crop_height, crop_width = cropped.shape[:2]
 
@@ -325,7 +348,9 @@ class ImageWriter:
         Returns:
             Cropped and potentially upscaled face image as numpy array
         """
-        return self._crop_region(image, face_detection.bbox, self.config.face_crop_padding)
+        return self._crop_region(
+            image, face_detection.bbox, self.config.face_crop_padding
+        )
 
     def _save_image(self, image: np.ndarray, output_path: Path) -> None:
         """Save image to file with appropriate format and quality settings.
@@ -419,22 +444,22 @@ class ImageWriter:
         """
         if self.config.resize is None:
             return image
-            
+
         height, width = image.shape[:2]
         max_dimension = self.config.resize
-        
+
         # Only resize if image is larger than the target size
         if max(width, height) > max_dimension:
             # Calculate scale factor to ensure the larger dimension equals max_dimension
             scale_factor = max_dimension / max(width, height)
             new_width = int(width * scale_factor)
             new_height = int(height * scale_factor)
-            
+
             # Convert to PIL for high-quality Lanczos downscaling
             pil_image = Image.fromarray(image)
             resized_pil = pil_image.resize((new_width, new_height), Image.LANCZOS)
             resized_image = np.array(resized_pil)
-            
+
             self.logger.debug(
                 f"Resized image from {width}x{height} to {new_width}x{new_height} (scale: {scale_factor:.2f})"
             )

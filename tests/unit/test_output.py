@@ -1,19 +1,22 @@
 """Unit tests for output generation components."""
 
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import numpy as np
-from PIL import Image
+from unittest.mock import Mock, patch
 
-from personfromvid.output.naming_convention import NamingConvention
-from personfromvid.output.image_writer import ImageWriter
+import numpy as np
+import pytest
+
 from personfromvid.data import Config, ProcessingContext
-from personfromvid.data.config import OutputImageConfig, PngConfig, JpegConfig
-from personfromvid.data.frame_data import FrameData, SourceInfo, ImageProperties, SelectionInfo
 from personfromvid.data.detection_results import FaceDetection
-from personfromvid.core import TempManager
+from personfromvid.data.frame_data import (
+    FrameData,
+    ImageProperties,
+    SelectionInfo,
+    SourceInfo,
+)
+from personfromvid.output.image_writer import ImageWriter
+from personfromvid.output.naming_convention import NamingConvention
 
 
 @pytest.fixture
@@ -29,25 +32,25 @@ def processing_context(tmp_path):
     # Create a test video file
     video_file = tmp_path / "test_video.mp4"
     video_file.write_bytes(b'dummy video content')
-    
+
     # Create components
     config = Config()
     output_dir = tmp_path / 'output'
-    
+
     # Create ProcessingContext
     with patch('personfromvid.core.temp_manager.TempManager') as MockTempManager:
         # If tests need the temp_manager, you can configure the mock here
         # For NamingConvention and ImageWriter, they might need paths from it
         mock_temp_manager = MockTempManager.return_value
         mock_temp_manager.get_temp_path.return_value = tmp_path / '.temp'
-        
+
         context = ProcessingContext(
             video_path=video_file,
             video_base_name=video_file.stem,
             config=config,
             output_directory=output_dir
         )
-        
+
         yield context
 
 
@@ -59,7 +62,7 @@ def sample_frame_data(tmp_path):
 
     # Create a mock image
     mock_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    
+
     frame = FrameData(
         frame_id="test_frame_001",
         file_path=frame_file,
@@ -112,7 +115,7 @@ class TestNamingConvention:
     def test_crop_suffixed_filename(self, processing_context):
         """Test crop suffix filename generation."""
         naming = NamingConvention(context=processing_context)
-        
+
         # Test various filename formats
         assert naming.get_crop_suffixed_filename("video_pose_001.jpg") == "video_pose_001_crop.jpg"
         assert naming.get_crop_suffixed_filename("test.png") == "test_crop.png"
@@ -133,15 +136,15 @@ class TestImageWriter:
         # Update config to enable full frame output
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = 'png'
-        
+
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
         sample_frame_data.selections.selection_rank = 1
-        
+
         writer = ImageWriter(context=processing_context)
 
         output_files = writer.save_frame_outputs(sample_frame_data)
-        
+
         assert len(output_files) == 1
         mock_pil_image.save.assert_called_once()
         assert output_files[0].endswith('.png')
@@ -158,23 +161,23 @@ class TestImageWriter:
         # Update config to enable face crop output
         processing_context.config.output.image.face_crop_enabled = True
         processing_context.config.output.image.format = 'jpeg'
-        
+
         # Set up enhanced selection data for head angle category
         sample_frame_data.selections.primary_selection_category = "head_angle_front"
         sample_frame_data.selections.selection_rank = 1
-        
+
         # Clear pose categories to prevent full frame generation for this test
         sample_frame_data.selections.selected_for_poses = []
-        
+
         writer = ImageWriter(context=processing_context)
 
         output_files = writer.save_frame_outputs(sample_frame_data)
-        
+
         # Expect only 1 file: face crop for head angle (no full frame since no pose)
         assert len(output_files) == 1
         mock_pil_image.save.assert_called_once()
         assert output_files[0].endswith('.jpg')
-        
+
         # Verify it's a face crop file
         assert 'face' in output_files[0]
 
@@ -190,18 +193,18 @@ class TestImageWriter:
         # Configure resize to 1024px
         processing_context.config.output.image.resize = 1024
         processing_context.config.output.image.face_crop_enabled = False
-        
+
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
         sample_frame_data.selections.selection_rank = 1
-        
+
         writer = ImageWriter(context=processing_context)
-        output_files = writer.save_frame_outputs(sample_frame_data)
-        
+        writer.save_frame_outputs(sample_frame_data)
+
         # Should call resize since original image is 1920x1080 (larger than 1024)
         mock_pil_image.resize.assert_called_once()
         resize_call = mock_pil_image.resize.call_args[0][0]  # Get the size tuple
-        
+
         # Check that the larger dimension (1920) was scaled to 1024
         # Expected: scale_factor = 1024/1920 = 0.533...
         # New dimensions: width=1024, height=576
@@ -219,22 +222,22 @@ class TestImageWriter:
         # Configure resize to 256px (smaller than default 512)
         processing_context.config.output.image.resize = 256
         processing_context.config.output.image.face_crop_enabled = True
-        
+
         # Set up enhanced selection data for head angle category
         sample_frame_data.selections.primary_selection_category = "head_angle_front"
         sample_frame_data.selections.selection_rank = 1
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create a small face crop that would normally be upscaled to 512
         # but should now be upscaled to 256
         with patch.object(writer, '_crop_face') as mock_crop_face:
             # Mock a small face crop (100x100) that needs upscaling
             small_face_crop = np.zeros((100, 100, 3), dtype=np.uint8)
             mock_crop_face.return_value = small_face_crop
-            
-            output_files = writer.save_frame_outputs(sample_frame_data)
-            
+
+            writer.save_frame_outputs(sample_frame_data)
+
             # _crop_face should have been called
             mock_crop_face.assert_called_once()
 
@@ -248,14 +251,14 @@ class TestImageWriter:
         # Configure resize to 4096px (larger than test image 1920x1080)
         processing_context.config.output.image.resize = 4096
         processing_context.config.output.image.face_crop_enabled = False
-        
+
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
         sample_frame_data.selections.selection_rank = 1
-        
+
         writer = ImageWriter(context=processing_context)
-        output_files = writer.save_frame_outputs(sample_frame_data)
-        
+        writer.save_frame_outputs(sample_frame_data)
+
         # Should NOT call resize since image is smaller than target
         mock_pil_image.resize.assert_not_called()
 
@@ -263,21 +266,21 @@ class TestImageWriter:
         """Test _apply_resize method for downscaling."""
         processing_context.config.output.image.resize = 512
         writer = ImageWriter(context=processing_context)
-        
+
         # Create a large test image
         large_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        
+
         with patch('personfromvid.output.image_writer.Image.fromarray') as mock_fromarray:
             mock_pil_image = Mock()
             mock_fromarray.return_value = mock_pil_image
             mock_pil_image.resize.return_value = mock_pil_image
-            
-            result = writer._apply_resize(large_image)
-            
+
+            writer._apply_resize(large_image)
+
             # Should call resize with calculated dimensions
             mock_pil_image.resize.assert_called_once()
             resize_call = mock_pil_image.resize.call_args[0][0]
-            
+
             # Scale factor should be 512/1920 = 0.2667
             # New dimensions: width=512, height=288
             assert resize_call == (512, 288)
@@ -286,12 +289,12 @@ class TestImageWriter:
         """Test _apply_resize method when no resize is needed."""
         processing_context.config.output.image.resize = 2048
         writer = ImageWriter(context=processing_context)
-        
+
         # Create a small test image
         small_image = np.zeros((512, 768, 3), dtype=np.uint8)
-        
+
         result = writer._apply_resize(small_image)
-        
+
         # Should return original image unchanged
         assert np.array_equal(result, small_image)
 
@@ -299,10 +302,10 @@ class TestImageWriter:
         """Test _apply_resize method when resize is not configured."""
         processing_context.config.output.image.resize = None
         writer = ImageWriter(context=processing_context)
-        
+
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         result = writer._apply_resize(test_image)
-        
+
         # Should return original image unchanged
         assert np.array_equal(result, test_image)
 
@@ -310,7 +313,7 @@ class TestImageWriter:
         """Test that face crop uses resize value instead of hardcoded 512."""
         processing_context.config.output.image.resize = 256
         writer = ImageWriter(context=processing_context)
-        
+
         # Create a test image with a small face crop area
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         face_detection = FaceDetection(
@@ -318,14 +321,14 @@ class TestImageWriter:
             confidence=0.9,
             landmarks=[]
         )
-        
+
         with patch('personfromvid.output.image_writer.Image.fromarray') as mock_fromarray:
             mock_pil_image = Mock()
             mock_fromarray.return_value = mock_pil_image
             mock_pil_image.resize.return_value = mock_pil_image
-            
-            result = writer._crop_face(test_image, face_detection)
-            
+
+            writer._crop_face(test_image, face_detection)
+
             # Should call resize because face crop will be small and need upscaling to 256
             mock_pil_image.resize.assert_called_once()
 
@@ -333,7 +336,7 @@ class TestImageWriter:
         """Test that face crop uses default 512 when resize is not configured."""
         processing_context.config.output.image.resize = None
         writer = ImageWriter(context=processing_context)
-        
+
         # Create a test image with a small face crop area
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         face_detection = FaceDetection(
@@ -341,48 +344,47 @@ class TestImageWriter:
             confidence=0.9,
             landmarks=[]
         )
-        
+
         with patch('personfromvid.output.image_writer.Image.fromarray') as mock_fromarray:
             mock_pil_image = Mock()
             mock_fromarray.return_value = mock_pil_image
             mock_pil_image.resize.return_value = mock_pil_image
-            
-            result = writer._crop_face(test_image, face_detection)
-            
+
+            writer._crop_face(test_image, face_detection)
+
             # Should call resize to upscale to default 512
             mock_pil_image.resize.assert_called_once()
 
     def test_config_validation_resize(self, processing_context):
         """Test configuration validation for resize values."""
-        from personfromvid.utils.exceptions import ImageWriteError
-        
+
         # Test valid resize value
         processing_context.config.output.image.resize = 1024
-        writer = ImageWriter(context=processing_context)  # Should not raise
-        
+        ImageWriter(context=processing_context)  # Should not raise
+
         # Test invalid resize values
         processing_context.config.output.image.resize = 100  # Too small
         with pytest.raises(ValueError, match="Resize dimension must be between 256 and 4096"):
-            writer = ImageWriter(context=processing_context)
-        
+            ImageWriter(context=processing_context)
+
         processing_context.config.output.image.resize = 5000  # Too large
         with pytest.raises(ValueError, match="Resize dimension must be between 256 and 4096"):
-            writer = ImageWriter(context=processing_context)
+            ImageWriter(context=processing_context)
 
     def test_get_output_statistics_includes_resize(self, processing_context):
         """Test that output statistics include resize information."""
         processing_context.config.output.image.resize = 1024
         writer = ImageWriter(context=processing_context)
-        
+
         stats = writer.get_output_statistics()
-        
+
         assert "resize" in stats
         assert stats["resize"] == 1024
-        
+
         # Test with no resize configured
         processing_context.config.output.image.resize = None
         writer = ImageWriter(context=processing_context)
-        
+
         stats = writer.get_output_statistics()
         assert stats["resize"] is None
 
@@ -398,11 +400,11 @@ class TestImageWriter:
         processing_context.config.output.image.pose_crop_padding = 0.2
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = "jpeg"
-        
+
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
         sample_frame_data.selections.selection_rank = 1
-        
+
         # Add required pose detection data for pose cropping
         from personfromvid.data.detection_results import PoseDetection
         pose_detection = PoseDetection(
@@ -412,23 +414,23 @@ class TestImageWriter:
             pose_classifications=[("standing", 0.95)]  # Pose type with confidence
         )
         sample_frame_data.pose_detections.append(pose_detection)
-        
+
         writer = ImageWriter(context=processing_context)
 
         with patch.object(writer, '_crop_region') as mock_crop_region:
             mock_crop_region.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
-            
+
             output_files = writer.save_frame_outputs(sample_frame_data)
-            
+
             # Should have only 1 file: pose crop (no full frame when cropping enabled)
             assert len(output_files) == 1
-            
+
             # Should call _crop_region for pose cropping
             mock_crop_region.assert_called_once()
-            
+
             # Should call PIL save only once (for pose crop)
             assert mock_pil_image.save.call_count == 1
-            
+
             # Should only have crop file, no regular full frame
             crop_files = [f for f in output_files if '_crop.jpg' in f]
             regular_files = [f for f in output_files if '_crop.jpg' not in f]
@@ -446,25 +448,25 @@ class TestImageWriter:
         processing_context.config.output.image.enable_pose_cropping = False
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = "jpeg"
-        
+
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
         sample_frame_data.selections.selection_rank = 1
-        
+
         writer = ImageWriter(context=processing_context)
 
         with patch.object(writer, '_crop_region') as mock_crop_region:
             output_files = writer.save_frame_outputs(sample_frame_data)
-            
+
             # Should have only 1 file: full frame
             assert len(output_files) == 1
-            
+
             # Should NOT call _crop_region
             mock_crop_region.assert_not_called()
-            
+
             # Should call PIL save only once (for full frame)
             mock_pil_image.save.assert_called_once()
-            
+
             # No files should have _crop suffix
             crop_files = [f for f in output_files if '_crop.jpg' in f]
-            assert len(crop_files) == 0 
+            assert len(crop_files) == 0

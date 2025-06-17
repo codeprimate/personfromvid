@@ -4,13 +4,12 @@ This module implements the NamingConvention class that generates standardized,
 descriptive filenames for output images based on frame metadata.
 """
 
-import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Set
-from collections import defaultdict
 
-from ..data.frame_data import FrameData
 from ..data.context import ProcessingContext
+from ..data.frame_data import FrameData
 from ..utils.logging import get_logger
 
 

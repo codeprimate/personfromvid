@@ -3,18 +3,16 @@
 Simple model downloading and caching with automatic availability checking.
 """
 
+import logging
 import shutil
 from pathlib import Path
-from typing import Optional, Union, List
-from datetime import datetime
-import logging
-import requests
+from typing import List, Optional, Union
 
+import requests
 from tqdm import tqdm
 
+from ..utils.exceptions import ModelDownloadError, ModelNotFoundError
 from .model_configs import ModelConfigs, ModelProvider
-from ..utils.exceptions import ModelError, ModelNotFoundError, ModelDownloadError
-
 
 logger = logging.getLogger(__name__)
 

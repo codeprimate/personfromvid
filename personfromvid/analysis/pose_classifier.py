@@ -6,7 +6,8 @@ body poses into standing, sitting, squatting, and closeup categories.
 
 import logging
 import math
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
 from ..data.detection_results import PoseDetection
@@ -188,7 +189,6 @@ class PoseClassifier:
             and left_shoulder[2] >= self.min_keypoint_confidence
             and right_shoulder[2] >= self.min_keypoint_confidence
         ):
-
             shoulder_width = abs(right_shoulder[0] - left_shoulder[0])
             shoulder_width_ratio = shoulder_width / width
 
@@ -610,7 +610,6 @@ class PoseClassifier:
             and left_shoulder[2] >= self.min_keypoint_confidence
             and right_shoulder[2] >= self.min_keypoint_confidence
         ):
-
             shoulder_width = abs(right_shoulder[0] - left_shoulder[0])
             shoulder_width_ratio = shoulder_width / image_shape[1]
             shoulder_confidence = min(

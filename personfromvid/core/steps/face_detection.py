@@ -1,6 +1,6 @@
-from .base import PipelineStep
 from ...models.face_detector import create_face_detector
 from ...models.head_pose_estimator import create_head_pose_estimator
+from .base import PipelineStep
 
 
 class FaceDetectionStep(PipelineStep):
@@ -60,13 +60,17 @@ class FaceDetectionStep(PipelineStep):
                 )
                 with progress_bar:
                     face_detector.process_frame_batch(
-                        self.state.frames, self.state.video_metadata, progress_callback,
-                        interruption_check=self._check_interrupted
+                        self.state.frames,
+                        self.state.video_metadata,
+                        progress_callback,
+                        interruption_check=self._check_interrupted,
                     )
             else:
                 face_detector.process_frame_batch(
-                    self.state.frames, self.state.video_metadata, progress_callback,
-                    interruption_check=self._check_interrupted
+                    self.state.frames,
+                    self.state.video_metadata,
+                    progress_callback,
+                    interruption_check=self._check_interrupted,
                 )
 
             # Filter out non-forward-facing detections
@@ -106,9 +110,7 @@ class FaceDetectionStep(PipelineStep):
 
     def _filter_forward_facing_detections(self) -> None:
         """Filter face detections to keep only forward-facing faces."""
-        import cv2
-        import time
-        
+
         if self.formatter:
             self.formatter.print_info("🎯 Filtering for forward-facing faces...", "face")
         else:
@@ -127,21 +129,27 @@ class FaceDetectionStep(PipelineStep):
 
         frames_with_faces = [f for f in self.state.frames if f.has_faces()]
         total_original_faces = sum(len(f.face_detections) for f in frames_with_faces)
-        
+
         # Process frames with appropriate progress tracking
-        total_filtered_faces = self._process_frames_for_filtering(frames_with_faces, head_pose_estimator)
+        total_filtered_faces = self._process_frames_for_filtering(
+            frames_with_faces, head_pose_estimator
+        )
 
         faces_removed = total_original_faces - total_filtered_faces
-        
+
         if self.formatter:
-            self.logger.info(f"   🎯 Filtering complete: kept {total_filtered_faces}/{total_original_faces} faces (removed {faces_removed} non-forward-facing)")
+            self.logger.info(
+                f"   🎯 Filtering complete: kept {total_filtered_faces}/{total_original_faces} faces (removed {faces_removed} non-forward-facing)"
+            )
         else:
-            self.logger.info(f"🎯 Forward-facing filter: kept {total_filtered_faces}/{total_original_faces} faces (removed {faces_removed})")
+            self.logger.info(
+                f"🎯 Forward-facing filter: kept {total_filtered_faces}/{total_original_faces} faces (removed {faces_removed})"
+            )
 
     def _process_frames_for_filtering(self, frames_with_faces, head_pose_estimator):
         """Process frames for face filtering with appropriate progress tracking."""
         import time
-        
+
         total_filtered_faces = 0
         processed_frames = 0
         start_time = time.time()
@@ -162,40 +170,48 @@ class FaceDetectionStep(PipelineStep):
             )
             with progress_bar:
                 for frame in frames_with_faces:
-                    filtered_count = self._filter_frame_faces(frame, head_pose_estimator)
+                    filtered_count = self._filter_frame_faces(
+                        frame, head_pose_estimator
+                    )
                     total_filtered_faces += filtered_count
                     filtering_progress_callback()
         else:
             for frame in frames_with_faces:
                 filtered_count = self._filter_frame_faces(frame, head_pose_estimator)
                 total_filtered_faces += filtered_count
-        
+
         return total_filtered_faces
 
     def _filter_frame_faces(self, frame, head_pose_estimator):
         """Filter faces in a single frame, returning the count of kept faces."""
         self._check_interrupted()
-        
+
         if not frame.face_detections:
             return 0
 
         # Load frame image
         image = frame.image
         if image is None:
-            self.logger.warning(f"Could not load image for frame {frame.frame_id}, keeping all detections")
+            self.logger.warning(
+                f"Could not load image for frame {frame.frame_id}, keeping all detections"
+            )
             return len(frame.face_detections)
 
         filtered_detections = []
-        
+
         for face_detection in frame.face_detections:
-            if self._is_face_forward_facing(face_detection, image, head_pose_estimator, frame.frame_id):
+            if self._is_face_forward_facing(
+                face_detection, image, head_pose_estimator, frame.frame_id
+            ):
                 filtered_detections.append(face_detection)
 
         # Replace face detections with filtered ones
         frame.face_detections = filtered_detections
         return len(filtered_detections)
 
-    def _is_face_forward_facing(self, face_detection, image, head_pose_estimator, frame_id):
+    def _is_face_forward_facing(
+        self, face_detection, image, head_pose_estimator, frame_id
+    ):
         """Check if a single face detection is forward-facing."""
         try:
             # Crop face from image
@@ -206,23 +222,21 @@ class FaceDetectionStep(PipelineStep):
             y1 = max(0, y1 - padding)
             x2 = min(image.shape[1], x2 + padding)
             y2 = min(image.shape[0], y2 + padding)
-            
+
             face_crop = image[y1:y2, x1:x2]
-            
+
             # Skip if crop is too small
             if face_crop.shape[0] < 30 or face_crop.shape[1] < 30:
                 return False
-            
+
             # Estimate head pose
             head_pose_result = head_pose_estimator.estimate_head_pose(face_crop)
-            
+
             # Check if face is forward-facing
             return head_pose_estimator.is_facing_forward(
-                head_pose_result.yaw, 
-                head_pose_result.pitch, 
-                head_pose_result.roll
+                head_pose_result.yaw, head_pose_result.pitch, head_pose_result.roll
             )
-                            
+
         except Exception as e:
             self.logger.debug(f"Error filtering face in frame {frame_id}: {e}")
             # In case of error, keep the detection to be safe

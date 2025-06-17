@@ -5,16 +5,14 @@ and extracting metadata using FFmpeg.
 """
 
 import hashlib
-import subprocess
-import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 import ffmpeg
 
 from ..data import VideoMetadata
-from ..utils.logging import get_logger
 from ..utils.exceptions import VideoProcessingError
+from ..utils.logging import get_logger
 
 
 class VideoProcessor:

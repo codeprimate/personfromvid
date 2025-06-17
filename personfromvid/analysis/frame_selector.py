@@ -5,14 +5,11 @@ frames from each pose category and head angle category based on comprehensive
 quality metrics and diversity considerations.
 """
 
-import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Callable
-from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
 from ..data.frame_data import FrameData
-from ..data.detection_results import QualityMetrics, FaceDetection, CloseupDetection
 from ..utils.logging import get_logger
 
 
@@ -56,22 +53,22 @@ class SelectionSummary:
 @dataclass
 class SelectionContext:
     """State container for the frame selection process.
-    
+
     This class encapsulates all the state and intermediate results during
     the frame selection process, making the main orchestration method
     cleaner and more testable.
     """
-    
+
     # Input data
     candidate_frames: List[FrameData]
     progress_callback: Optional[Callable[[str], None]]
     interruption_check: Optional[Callable[[], None]]
-    
+
     # Intermediate processing results
     usable_frames: List[FrameData] = field(default_factory=list)
     pose_groups: Dict[str, List[FrameData]] = field(default_factory=dict)
     head_angle_groups: Dict[str, List[FrameData]] = field(default_factory=dict)
-    
+
     # Final selection results
     pose_selections: Dict[str, CategorySelection] = field(default_factory=dict)
     head_angle_selections: Dict[str, CategorySelection] = field(default_factory=dict)
@@ -135,7 +132,7 @@ class FrameSelector:
         context = self._prepare_selection_context(
             candidate_frames, progress_callback, interruption_check
         )
-        
+
         # Early exit if no usable frames
         if not context.usable_frames:
             return self._create_empty_summary(len(candidate_frames))
@@ -143,7 +140,7 @@ class FrameSelector:
         # Phase 2: Process pose categories (with priority claiming)
         if context.progress_callback:
             context.progress_callback("Selecting best frames for pose categories...")
-            
+
         context.pose_selections = self._process_categories(
             context,
             context.pose_groups,
@@ -154,8 +151,10 @@ class FrameSelector:
 
         # Phase 3: Process head angle categories (without priority claiming)
         if context.progress_callback:
-            context.progress_callback("Selecting best frames for head angle categories...")
-            
+            context.progress_callback(
+                "Selecting best frames for head angle categories..."
+            )
+
         context.head_angle_selections = self._process_categories(
             context,
             context.head_angle_groups,
@@ -166,23 +165,27 @@ class FrameSelector:
 
         # Phase 4: Finalization
         self._finalize_selection(context)
-        
+
         # Phase 5: Update metadata and create summary
         if context.progress_callback:
             context.progress_callback("Updating frame selection metadata...")
-            
+
         self._update_frame_selection_metadata(
             context.pose_selections, context.head_angle_selections
         )
-        
+
         summary = self._create_selection_summary(context)
-        
+
         self.logger.info(
             f"Frame selection completed: {summary.total_selected} unique frames selected"
         )
         return summary
 
-    def group_by_pose(self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None) -> Dict[str, List[FrameData]]:
+    def group_by_pose(
+        self,
+        frames: List[FrameData],
+        interruption_check: Optional[Callable[[], None]] = None,
+    ) -> Dict[str, List[FrameData]]:
         """Group frames by pose classification.
 
         Args:
@@ -215,7 +218,9 @@ class FrameSelector:
         return dict(pose_groups)
 
     def group_by_head_angle(
-        self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None
+        self,
+        frames: List[FrameData],
+        interruption_check: Optional[Callable[[], None]] = None,
     ) -> Dict[str, List[FrameData]]:
         """Group frames by head angle direction.
 
@@ -261,7 +266,11 @@ class FrameSelector:
 
         return sorted(frames, key=get_quality_score, reverse=True)
 
-    def _filter_usable_frames(self, frames: List[FrameData], interruption_check: Optional[Callable[[], None]] = None) -> List[FrameData]:
+    def _filter_usable_frames(
+        self,
+        frames: List[FrameData],
+        interruption_check: Optional[Callable[[], None]] = None,
+    ) -> List[FrameData]:
         """Filter frames to only include usable ones.
 
         Args:
@@ -294,7 +303,9 @@ class FrameSelector:
 
             # Must be marked as usable
             if not frame.quality_metrics.usable:
-                frame.selections.rejection_reason = "marked_unusable_by_quality_assessment"
+                frame.selections.rejection_reason = (
+                    "marked_unusable_by_quality_assessment"
+                )
                 continue
 
             usable.append(frame)
@@ -305,10 +316,11 @@ class FrameSelector:
 
         return usable
 
-
-
     def _select_diverse_frames(
-        self, scored_frames: List[Tuple[FrameData, float]], max_count: int, interruption_check: Optional[Callable[[], None]] = None
+        self,
+        scored_frames: List[Tuple[FrameData, float]],
+        max_count: int,
+        interruption_check: Optional[Callable[[], None]] = None,
     ) -> Tuple[List[FrameData], List[FrameData]]:
         """Select diverse frames to avoid similar selections.
 
@@ -326,7 +338,7 @@ class FrameSelector:
         selected = []
         rejected_diversity = []
 
-        for i, (frame, score) in enumerate(scored_frames):
+        for i, (frame, _score) in enumerate(scored_frames):
             if len(selected) >= max_count:
                 # Frames that exceed max count are not processed further
                 break
@@ -334,7 +346,7 @@ class FrameSelector:
             # Check for interruption during selection
             if interruption_check and i % 5 == 0:
                 interruption_check()
-                
+
             # Check diversity against already selected frames
             if self._is_diverse_enough(frame, selected):
                 selected.append(frame)
@@ -372,7 +384,9 @@ class FrameSelector:
 
         return True
 
-    def _calculate_pose_frame_score(self, frame: FrameData, return_breakdown: bool = False) -> float | Tuple[float, Dict[str, float]]:
+    def _calculate_pose_frame_score(
+        self, frame: FrameData, return_breakdown: bool = False
+    ) -> float | Tuple[float, Dict[str, float]]:
         """Calculate selection score for pose category frames (full frames).
 
         Args:
@@ -404,17 +418,16 @@ class FrameSelector:
         )
 
         final_score = min(1.0, max(0.0, final_score))
-        
+
         if return_breakdown:
-            breakdown = {
-                "quality": quality_score,
-                "pose_confidence": pose_score
-            }
+            breakdown = {"quality": quality_score, "pose_confidence": pose_score}
             return final_score, breakdown
-        
+
         return final_score
 
-    def _calculate_head_angle_frame_score(self, frame: FrameData, return_breakdown: bool = False) -> float | Tuple[float, Dict[str, float]]:
+    def _calculate_head_angle_frame_score(
+        self, frame: FrameData, return_breakdown: bool = False
+    ) -> float | Tuple[float, Dict[str, float]]:
         """Calculate selection score for head angle category frames (face crops).
 
         Args:
@@ -426,7 +439,11 @@ class FrameSelector:
         """
         if frame.quality_metrics is None:
             if return_breakdown:
-                return 0.0, {"quality": 0.0, "face_size": 0.0, "head_pose_confidence": 0.0}
+                return 0.0, {
+                    "quality": 0.0,
+                    "face_size": 0.0,
+                    "head_pose_confidence": 0.0,
+                }
             return 0.0
 
         quality_score = frame.quality_metrics.overall_quality
@@ -459,15 +476,15 @@ class FrameSelector:
         )
 
         final_score = min(1.0, max(0.0, final_score))
-        
+
         if return_breakdown:
             breakdown = {
                 "quality": quality_score,
                 "face_size": face_size_score,
-                "head_pose_confidence": head_pose_score
+                "head_pose_confidence": head_pose_score,
             }
             return final_score, breakdown
-        
+
         return final_score
 
     def _create_selection_rationale(
@@ -516,7 +533,7 @@ class FrameSelector:
 
             if selected_count < total_candidates:
                 rationale_parts.append(
-                    f"Diversity filtering applied to avoid similar frames."
+                    "Diversity filtering applied to avoid similar frames."
                 )
 
         return " ".join(rationale_parts)
@@ -546,11 +563,13 @@ class FrameSelector:
                 if frame.frame_id not in updated_frames:
                     frame.selections.selection_rank = rank
                     updated_frames.add(frame.frame_id)
-                    
+
                 # Set primary selection category and final score (NEW)
                 if frame.selections.primary_selection_category is None:
                     frame.selections.primary_selection_category = category_key
-                    frame.selections.final_selection_score = frame.selections.category_scores.get(category_key, 0.0)
+                    frame.selections.final_selection_score = (
+                        frame.selections.category_scores.get(category_key, 0.0)
+                    )
 
         # Update head angle selection metadata
         # These are for crops, so they don't conflict with pose ranks
@@ -561,11 +580,13 @@ class FrameSelector:
                 if category_name not in frame.selections.selected_for_head_angles:
                     frame.selections.selected_for_head_angles.append(category_name)
                 frame.selections.final_output = True
-                
+
                 # Set primary selection category and final score only if not already set by pose selection (NEW)
                 if frame.selections.primary_selection_category is None:
                     frame.selections.primary_selection_category = category_key
-                    frame.selections.final_selection_score = frame.selections.category_scores.get(category_key, 0.0)
+                    frame.selections.final_selection_score = (
+                        frame.selections.category_scores.get(category_key, 0.0)
+                    )
 
     def _create_empty_summary(self, total_candidates: int) -> SelectionSummary:
         """Create empty selection summary when no frames are usable.
@@ -613,14 +634,14 @@ class FrameSelector:
 
         # Generate unique category key
         category_key = f"{category_type}_{category_name}"
-        
+
         # Score all frames and populate transparency fields
         scored_frames = []
         for i, frame in enumerate(frames):
             # Check for interruption during scoring
             if interruption_check and i % 5 == 0:
                 interruption_check()
-                
+
             # Get score with breakdown for transparency
             score_result = score_function(frame, return_breakdown=True)
             if isinstance(score_result, tuple):
@@ -629,14 +650,14 @@ class FrameSelector:
                 # Fallback for functions that don't support breakdown yet
                 score = score_result
                 breakdown = {}
-            
+
             # Populate transparency fields (NEW)
             frame.selections.category_scores[category_key] = score
             frame.selections.category_score_breakdowns[category_key] = breakdown
-            
+
             scored_frames.append((frame, score))
 
-        # Sort by score (highest first) 
+        # Sort by score (highest first)
         scored_frames.sort(key=lambda x: x[1], reverse=True)
 
         # Populate ranking fields (NEW)
@@ -652,22 +673,24 @@ class FrameSelector:
         interruption_check: Optional[Callable[[], None]] = None,
     ) -> SelectionContext:
         """Prepare the selection context with filtered and grouped frames.
-        
+
         Args:
             candidate_frames: Input frames to process
             progress_callback: Optional callback for progress updates
             interruption_check: Optional callback to check for interruption
-            
+
         Returns:
             SelectionContext with usable frames and category groups prepared
         """
         context = SelectionContext(
             candidate_frames=candidate_frames,
             progress_callback=progress_callback,
-            interruption_check=interruption_check
+            interruption_check=interruption_check,
         )
-        
-        self.logger.info(f"Starting frame selection from {len(candidate_frames)} candidates")
+
+        self.logger.info(
+            f"Starting frame selection from {len(candidate_frames)} candidates"
+        )
 
         # Check for interruption at the start
         if interruption_check:
@@ -677,8 +700,12 @@ class FrameSelector:
             progress_callback("Filtering candidate frames...")
 
         # Filter to usable frames only
-        context.usable_frames = self._filter_usable_frames(candidate_frames, interruption_check)
-        self.logger.info(f"Found {len(context.usable_frames)} usable frames after filtering")
+        context.usable_frames = self._filter_usable_frames(
+            candidate_frames, interruption_check
+        )
+        self.logger.info(
+            f"Found {len(context.usable_frames)} usable frames after filtering"
+        )
 
         if not context.usable_frames:
             return context
@@ -691,8 +718,12 @@ class FrameSelector:
             progress_callback("Grouping frames by categories...")
 
         # Group frames by categories
-        context.pose_groups = self.group_by_pose(context.usable_frames, interruption_check)
-        context.head_angle_groups = self.group_by_head_angle(context.usable_frames, interruption_check)
+        context.pose_groups = self.group_by_pose(
+            context.usable_frames, interruption_check
+        )
+        context.head_angle_groups = self.group_by_head_angle(
+            context.usable_frames, interruption_check
+        )
 
         # Check for interruption after grouping
         if interruption_check:
@@ -701,29 +732,26 @@ class FrameSelector:
         return context
 
     def _calculate_selection_statistics(
-        self, 
-        candidate_frames: List[FrameData]
+        self, candidate_frames: List[FrameData]
     ) -> Tuple[Tuple[float, float], float]:
         """Calculate quality statistics for a set of candidate frames.
-        
+
         Args:
             candidate_frames: Frames to calculate statistics for
-            
+
         Returns:
             Tuple of (quality_range, average_quality)
         """
         quality_scores = [
-            f.quality_metrics.overall_quality 
-            for f in candidate_frames 
+            f.quality_metrics.overall_quality
+            for f in candidate_frames
             if f.quality_metrics
         ]
         quality_range = (
-            (min(quality_scores), max(quality_scores)) 
-            if quality_scores else (0.0, 0.0)
+            (min(quality_scores), max(quality_scores)) if quality_scores else (0.0, 0.0)
         )
         average_quality = (
-            sum(quality_scores) / len(quality_scores) 
-            if quality_scores else 0.0
+            sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
         )
         return quality_range, average_quality
 
@@ -735,18 +763,20 @@ class FrameSelector:
         candidate_frames: List[FrameData],
     ) -> CategorySelection:
         """Create a CategorySelection object with all required metadata.
-        
+
         Args:
             category_name: Name of the category
             category_type: Type of category ("pose" or "head_angle")
             selected_frames: Frames that were selected
             candidate_frames: All candidate frames for this category
-            
+
         Returns:
             CategorySelection object with complete metadata
         """
-        quality_range, average_quality = self._calculate_selection_statistics(candidate_frames)
-        
+        quality_range, average_quality = self._calculate_selection_statistics(
+            candidate_frames
+        )
+
         rationale = self._create_selection_rationale(
             category_name,
             category_type,
@@ -775,27 +805,31 @@ class FrameSelector:
         use_priority_claiming: bool = False,
     ) -> Dict[str, CategorySelection]:
         """Process categories generically, handling both poses and head angles.
-        
+
         Args:
             context: Selection context with all state
             category_groups: Dictionary of category_name -> frames
             category_type: "pose" or "head_angle"
             score_function: Function to score frames for this category type
             use_priority_claiming: Whether to check for already-claimed frames
-            
+
         Returns:
             Dictionary of category_name -> CategorySelection
         """
         selections = {}
-        
+
         for category_name, candidate_frames in category_groups.items():
             if context.interruption_check:
                 context.interruption_check()
-                
-            if context.progress_callback:
-                context.progress_callback(f"Processing {category_type} category: {category_name}")
 
-            self.logger.info(f"Processing {category_type} '{category_name}' with {len(candidate_frames)} candidates")
+            if context.progress_callback:
+                context.progress_callback(
+                    f"Processing {category_type} category: {category_name}"
+                )
+
+            self.logger.info(
+                f"Processing {category_type} '{category_name}' with {len(candidate_frames)} candidates"
+            )
 
             # Step 1: Score and rank all candidates for this category
             scored_frames = self._score_and_rank_candidates_for_category(
@@ -805,20 +839,26 @@ class FrameSelector:
             # Step 2: Filter available candidates (priority claiming for poses only)
             if use_priority_claiming:
                 available_candidates = [
-                    (frame, score) for frame, score in scored_frames
+                    (frame, score)
+                    for frame, score in scored_frames
                     if frame.selections.primary_selection_category is None
                 ]
                 # Log competition for frames lost to higher priority
                 for frame, _ in scored_frames:
                     if frame.selections.primary_selection_category is not None:
                         category_key = f"{category_type}_{category_name}"
-                        frame.selections.selection_competition[category_key] = "lost_to_higher_priority"
+                        frame.selections.selection_competition[
+                            category_key
+                        ] = "lost_to_higher_priority"
             else:
                 available_candidates = scored_frames
 
             # Step 3: Select diverse frames
             if available_candidates:
-                selected_frames, rejected_diversity_frames = self._select_diverse_frames(
+                (
+                    selected_frames,
+                    rejected_diversity_frames,
+                ) = self._select_diverse_frames(
                     available_candidates, self.criteria.max_frames_per_category
                 )
             else:
@@ -827,7 +867,10 @@ class FrameSelector:
             # Step 4: Update competition tracking
             category_key = f"{category_type}_{category_name}"
             self._update_competition_tracking_for_category(
-                available_candidates, selected_frames, rejected_diversity_frames, category_key
+                available_candidates,
+                selected_frames,
+                rejected_diversity_frames,
+                category_key,
             )
 
             # Step 5: Create the CategorySelection object
@@ -835,7 +878,9 @@ class FrameSelector:
                 category_name, category_type, selected_frames, candidate_frames
             )
 
-            self.logger.info(f"Selected {len(selected_frames)} frames for {category_type} '{category_name}'")
+            self.logger.info(
+                f"Selected {len(selected_frames)} frames for {category_type} '{category_name}'"
+            )
 
         return selections
 
@@ -856,7 +901,9 @@ class FrameSelector:
         """
         # Create sets for quick lookup
         selected_frame_ids = {frame.frame_id for frame in selected_frames}
-        rejected_diversity_frame_ids = {frame.frame_id for frame in rejected_diversity_frames}
+        rejected_diversity_frame_ids = {
+            frame.frame_id for frame in rejected_diversity_frames
+        }
 
         # Process each scored frame
         for frame, score in scored_frames:
@@ -865,83 +912,89 @@ class FrameSelector:
                 frame.selections.selection_competition[category_key] = "selected"
                 frame.selections.primary_selection_category = category_key
                 frame.selections.final_selection_score = score
-                
+
                 # Set selection rank (1-based) within the selected group for this category
                 selection_rank = selected_frames.index(frame) + 1
                 frame.selections.selection_rank = selection_rank
-                
+
             elif frame.frame_id in rejected_diversity_frame_ids:
                 # Subtask 3.2: Process frames rejected for diversity
-                frame.selections.selection_competition[category_key] = "rejected_insufficient_diversity"
-                
+                frame.selections.selection_competition[
+                    category_key
+                ] = "rejected_insufficient_diversity"
+
                 # Set rejection reason only if not already set with a more specific reason
                 if frame.selections.rejection_reason is None:
                     frame.selections.rejection_reason = "insufficient_diversity"
-                    
+
             else:
                 # Subtask 3.3: Process frames that were not top-ranked
                 frame.selections.selection_competition[category_key] = "not_top_ranked"
-                
+
                 # Set rejection reason only if not already set with a more specific reason
                 if frame.selections.rejection_reason is None:
                     frame.selections.rejection_reason = "not_top_ranked"
 
     def _finalize_selection(self, context: SelectionContext) -> None:
         """Apply final rejection reasons to unselected frames.
-        
+
         Args:
             context: Selection context with all state and results
         """
         if context.progress_callback:
             context.progress_callback("Finalizing selection results...")
-            
+
         # Apply final rejection reasons for frames that were never selected
         for frame in context.usable_frames:
-            if (frame.selections.primary_selection_category is None 
-                and frame.selections.rejection_reason is None):
+            if (
+                frame.selections.primary_selection_category is None
+                and frame.selections.rejection_reason is None
+            ):
                 frame.selections.rejection_reason = "not_selected"
 
     def _count_unique_selected_frames(self, context: SelectionContext) -> int:
         """Count total unique frames that were selected across all categories.
-        
+
         Args:
             context: Selection context with selection results
-            
+
         Returns:
             Number of unique selected frames
         """
         selected_frame_ids = set()
-        
+
         # Count from pose selections
         for selection in context.pose_selections.values():
             for frame in selection.selected_frames:
                 selected_frame_ids.add(frame.frame_id)
-                
+
         # Count from head angle selections
         for selection in context.head_angle_selections.values():
             for frame in selection.selected_frames:
                 selected_frame_ids.add(frame.frame_id)
-                
+
         return len(selected_frame_ids)
 
     def _create_selection_summary(self, context: SelectionContext) -> SelectionSummary:
         """Create the final selection summary.
-        
+
         Args:
             context: Selection context with all results
-            
+
         Returns:
             Complete SelectionSummary object
         """
         total_selected = self._count_unique_selected_frames(context)
-        
+
         processing_notes = []
         if not context.usable_frames:
             processing_notes.append("No usable frames found for selection")
         elif total_selected == 0:
             processing_notes.append("No frames met selection criteria")
         else:
-            processing_notes.append(f"Successfully selected {total_selected} frames from {len(context.usable_frames)} candidates")
+            processing_notes.append(
+                f"Successfully selected {total_selected} frames from {len(context.usable_frames)} candidates"
+            )
 
         return SelectionSummary(
             total_candidates=len(context.usable_frames),

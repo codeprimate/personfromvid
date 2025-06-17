@@ -4,20 +4,20 @@ This module provides the main CLI entry point with argument parsing,
 configuration management, and progress display setup.
 """
 
-import sys
 import signal
+import sys
 from pathlib import Path
 from typing import Optional
+
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from .data.config import Config, load_config, LogLevel
-from .utils.logging import setup_logging, get_logger
+from .data.config import Config, LogLevel, load_config
 from .utils.exceptions import PersonFromVidError, format_exception_message
-from .utils.validation import validate_video_file, validate_system_requirements
-
+from .utils.logging import get_logger, setup_logging
+from .utils.validation import validate_system_requirements, validate_video_file
 
 # Global console for rich output
 console = Console()
@@ -33,7 +33,9 @@ def signal_handler(signum: int, frame) -> None:
 def get_version():
     """Get the current version for CLI help."""
     from . import __version__
+
     return __version__
+
 
 @click.command()
 @click.version_option(version=get_version(), prog_name="Person From Vid")
@@ -143,7 +145,6 @@ def get_version():
     is_flag=True,
     help="Force restart analysis by deleting existing state (preserves extracted frames)",
 )
-
 @click.option(
     "--no-structured-output",
     is_flag=True,
@@ -415,7 +416,9 @@ def main(
             if "processing_context" in locals() and not app_config.storage.keep_temp:
                 processing_context.temp_manager.cleanup_temp_files()
             elif "processing_context" in locals() and app_config.storage.keep_temp:
-                console.print("[green]Temporary files preserved due to --keep-temp flag.[/green]")
+                console.print(
+                    "[green]Temporary files preserved due to --keep-temp flag.[/green]"
+                )
         except:
             pass  # Don't fail cleanup on error
 
@@ -436,9 +439,6 @@ def main(
             pass  # Don't fail cleanup on error
 
         sys.exit(1)
-
-
-
 
 
 def show_banner() -> None:
@@ -527,11 +527,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
         config.storage.keep_temp = True
 
 
-def show_processing_plan(
-    video_path: Path, output_dir: Path, config: Config
-) -> None:
+def show_processing_plan(video_path: Path, output_dir: Path, config: Config) -> None:
     """Show the processing plan to the user."""
-    logger = get_logger("cli")
+    get_logger("cli")
 
     plan_text = Text("Processing Plan", style="bold green")
 
@@ -541,7 +539,7 @@ def show_processing_plan(
         f"Device: {config.models.device}",
         f"Batch size: {config.models.batch_size}",
         f"Confidence threshold: {config.models.confidence_threshold}",
-        f"Resume enabled: always (use --force to restart)",
+        "Resume enabled: always (use --force to restart)",
         f"Output format: {config.output.image.format.upper()}",
         f"Output quality: {config.output.image.jpeg.quality if config.output.image.format.lower() in ['jpg', 'jpeg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
         f"Face crops: {'enabled' if config.output.image.face_crop_enabled else 'disabled'}",

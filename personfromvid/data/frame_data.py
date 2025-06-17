@@ -7,15 +7,17 @@ throughout the processing pipeline.
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
+
 from .detection_results import (
-    FaceDetection,
-    PoseDetection,
-    HeadPoseResult,
-    QualityMetrics,
     CloseupDetection,
+    FaceDetection,
+    HeadPoseResult,
+    PoseDetection,
     ProcessingTimings,
+    QualityMetrics,
 )
 
 
@@ -72,7 +74,7 @@ class ImageProperties:
 @dataclass
 class SelectionInfo:
     """Information about frame selection for output."""
-    
+
     selected_for_poses: List[str] = field(default_factory=list)
     selected_for_head_angles: List[str] = field(default_factory=list)
     final_output: bool = False
@@ -424,12 +426,12 @@ class FrameData:
             FrameData object reconstructed from dictionary
         """
         from .detection_results import (
-            FaceDetection,
-            PoseDetection,
-            HeadPoseResult,
-            QualityMetrics,
             CloseupDetection,
+            FaceDetection,
+            HeadPoseResult,
+            PoseDetection,
             ProcessingTimings,
+            QualityMetrics,
         )
 
         # Reconstruct source info
@@ -531,16 +533,22 @@ class FrameData:
         selections_dict = frame_dict["selections"]  # Will raise KeyError if missing
         selections = SelectionInfo(
             selected_for_poses=selections_dict.get("selected_for_poses", []),
-            selected_for_head_angles=selections_dict.get("selected_for_head_angles", []),
+            selected_for_head_angles=selections_dict.get(
+                "selected_for_head_angles", []
+            ),
             final_output=selections_dict.get("final_output", False),
             output_files=selections_dict.get("output_files", []),
             crop_regions=selections_dict.get("crop_regions", {}),
             selection_rank=selections_dict.get("selection_rank"),
             quality_rank=selections_dict.get("quality_rank"),
             category_scores=selections_dict.get("category_scores", {}),
-            category_score_breakdowns=selections_dict.get("category_score_breakdowns", {}),
+            category_score_breakdowns=selections_dict.get(
+                "category_score_breakdowns", {}
+            ),
             category_ranks=selections_dict.get("category_ranks", {}),
-            primary_selection_category=selections_dict.get("primary_selection_category"),
+            primary_selection_category=selections_dict.get(
+                "primary_selection_category"
+            ),
             selection_competition=selections_dict.get("selection_competition", {}),
             final_selection_score=selections_dict.get("final_selection_score"),
             rejection_reason=selections_dict.get("rejection_reason"),
@@ -560,7 +568,7 @@ class FrameData:
             selections=selections,
             processing_timings=processing_timings,
         )
-        
+
         # Set debug_info separately since it's not a constructor parameter
         frame_data.debug_info = frame_dict.get("debug_info", {})
 

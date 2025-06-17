@@ -1,68 +1,92 @@
-# Code Quality Analysis
+# Code Quality Analysis (Updated)
 
-This document summarizes the results of running `black`, `flake8`, and `mypy` on the `personfromvid/` codebase.
+This document summarizes the results of running `black`, `ruff`, `mypy`, and `pytest` on the `personfromvid/` codebase after an initial automated fixing session.
 
 ## 1. Code Formatting (`black`)
 
-The `black` command ran successfully and produced no output, indicating that all files in the `personfromvid/` directory already conform to the `black` code style.
-
-**Conclusion**: Code formatting is consistent.
-
-## 2. Linting (`flake8`)
-
-The `flake8` check returned a large number of errors. The issues can be categorized as follows:
-
-*   **`E501` - Line too long**: This is the most frequent error, appearing hundreds of times. Many lines exceed the 79-character limit.
-*   **`F401` - Unused Import**: Numerous modules and objects are imported but never used.
-*   **`F841` - Local variable assigned but never used**: Variables are created but not referenced.
-*   **`E722` - Bare `except`**: Generic `except:` blocks are used, which can hide unexpected errors.
-*   **`F821` - Undefined name**: Variables or modules are used without being defined in the scope. This often points to missing imports or typos.
-*   **Other issues**: A smaller number of other errors were also present, including whitespace errors (`E203`), f-string issues (`F541`), and redefinition of unused imports (`F811`).
-
-### Sample `flake8` Output:
+The following command was used to format the codebase:
+```bash
+black personfromvid/
 ```
-personfromvid/analysis/frame_selector.py:8:1: F401 'logging' imported but unused
-personfromvid/analysis/quality_assessor.py:58:46: F821 undefined name 'FrameData'
-personfromvid/cli.py:401:9: E722 do not use bare 'except'
-personfromvid/core/pipeline.py:496:26: F541 f-string is missing placeholders
+The `black` command ran successfully, ensuring all files now conform to the `black` code style.
+
+**Conclusion**: Code formatting is now consistent.
+
+## 2. Linting (`ruff`)
+
+`Ruff` was used to both lint and automatically fix issues.
+
+**Initial Check & Fix Command**:
+```bash
+ruff check . --fix
+```
+This command automatically fixed **2,197** errors, primarily related to unused imports, import sorting, and other stylistic issues.
+
+**Current Status Command**:
+```bash
+ruff check .
+```
+After the automated fixes, **72 errors remain**. These primarily fall into categories that require manual intervention:
+
+*   **`F821` - Undefined name**: A variable or module is used before it is defined. This often points to a missing import or a typo. (e.g., `Undefined name 'FrameData'`).
+*   **`B904` - Raise without `from`**: An exception is raised inside an `except` block without chaining the original exception, which can hide the root cause of errors.
+*   **`E722` - Bare `except`**: A generic `except:` block is used, which can suppress unexpected errors and make debugging difficult.
+*   **`B028` - No explicit `stacklevel`**: `warnings.warn()` is called without an explicit `stacklevel`, which may cause the warning to report an incorrect location.
+
+### Sample `ruff` Output:
+```
+personfromvid/analysis/quality_assessor.py:65:47: F821 Undefined name `FrameData`
+personfromvid/cli.py:407:9: E722 Do not use bare `except`
+personfromvid/core/frame_extractor.py:204:17: B904 Within an `except` clause...
+personfromvid/data/detection_results.py:110:13: B028 No explicit `stacklevel`...
 ```
 
-**Conclusion**: The codebase has significant linting issues that should be addressed to improve code quality and prevent potential bugs. The sheer number of `E501` errors suggests that the line length convention should either be enforced or officially increased.
+**Conclusion**: `Ruff` dramatically improved the codebase's linting status. The remaining 72 errors are more complex and safety-critical, and should be addressed manually.
 
 ## 3. Type Checking (`mypy`)
 
-The `mypy` analysis revealed **396 errors in 35 files**, indicating widespread type safety issues. The major categories of errors include:
+`Mypy` was run after installing missing type stubs for third-party libraries.
 
-*   **Missing Type Annotations (`[no-untyped-def]`)**: A large number of functions are missing parameter or return type annotations.
-*   **Missing Library Stubs (`[import-untyped]`)**: `mypy` could not find type information for several installed packages, including `yaml`, `requests`, `tqdm`, `ffmpeg`, `PIL`, `ultralytics`, and `onnxruntime`. This prevents `mypy` from checking the usage of these libraries. It suggested running `mypy --install-types`.
-*   **Attribute Errors (`[attr-defined]`)**: A very common error was trying to access attributes on an object that might be `None` (e.g., `Item "None" of "Optional[PipelineState]" has no attribute "start_step"`). This points to a lack of `None` checks.
-*   **Type Incompatibility (`[assignment]`, `[arg-type]`, `[return-value]`)**: Many errors relate to assigning variables or passing function arguments of an incorrect type.
-*   **Undefined Names (`[name-defined]`)**: Similar to `flake8`'s findings, `mypy` found many instances of using undefined names.
-*   **Unreachable Code (`[unreachable]`)**: `mypy` detected code that can never be executed.
+**Install Stubs Command**:
+```bash
+mypy --install-types
+```
+
+**Current Status Command**:
+```bash
+mypy personfromvid/
+```
+
+The `mypy` analysis now reveals **474 errors in 36 files**. While still high, this is a reduction from the initial 479, and the installed stubs provide better insight into the remaining issues:
+
+*   **Missing Type Annotations (`[no-untyped-def]`)**: Many functions still lack parameter or return type annotations.
+*   **Attribute Errors on `Optional` Types (`[union-attr]`)**: This is a very common and high-risk error (e.g., `Item "None" of "Optional[PipelineState]" has no attribute "start_step"`). It indicates a lack of `None` checks before attribute access.
+*   **Undefined Names (`[name-defined]`)**: Similar to `ruff`'s findings, `mypy` reports many uses of undefined names.
+*   **Unreachable Code (`[unreachable]`)**: `mypy` detected a significant amount of code that can never be executed, often due to incorrect logic or error handling.
 
 ### Sample `mypy` Output:
 ```
-personfromvid/data/config.py:12: error: Library stubs not installed for "yaml"  [import-untyped]
-personfromvid/core/steps/quality_assessment.py:16: error: Item "None" of "Optional[PipelineState]" has no attribute "start_step"  [union-attr]
-personfromvid/analysis/quality_assessor.py:58: error: Name "FrameData" is not defined  [name-defined]
-personfromvid/data/detection_results.py:137: error: Incompatible types in assignment (expression has type "None", variable has type "List[str]")  [assignment]
+personfromvid/core/steps/quality_assessment.py:18: error: Item "None" of "Optional[PipelineState]" has no attribute "start_step"  [union-attr]
+personfromvid/analysis/quality_assessor.py:65: error: Name "FrameData" is not defined  [name-defined]
+personfromvid/data/detection_results.py:180: error: Incompatible types in assignment (expression has type "None", variable has type "List[str]")  [assignment]
+personfromvid/core/frame_extractor.py:109: error: Statement is unreachable  [unreachable]
 ```
 
-**Conclusion**: The codebase lacks strict type safety. The high number of errors, especially `[attr-defined]` on `Optional` types, indicates a high risk of runtime `AttributeError` exceptions. Adding type hints and fixing these issues would significantly improve the robustness and maintainability of the code.
+**Conclusion**: The codebase still has significant type safety issues. The prevalence of `[union-attr]` errors on `Optional` types is a major risk for runtime `AttributeError` exceptions and should be the highest priority to fix.
 
 ## 4. Test Coverage (`pytest`)
 
-Running `pytest` with the `pytest-cov` plugin shows a total test coverage of **60%**.
+The following command was used to run the test suite and generate a coverage report:
+```bash
+pytest --cov=personfromvid --cov-report=term-missing
+```
 
-*   **Execution**: All 423 tests passed successfully.
-*   **Coverage**: The overall coverage is moderate. While some core components show high coverage (e.g., `frame_extractor` at 99%), other critical areas have very low coverage, including:
-    *   `cli.py` (0%)
-    *   `utils/output_formatter.py` (0%)
-    *   Most files in `core/steps/` (11-22%)
-    *   `analysis/frame_selector.py` (22%)
-    *   Several data models and model wrappers.
+The test coverage remains at **61%**, with all **452 tests passing**.
 
-**Conclusion**: The test suite is a good starting point but needs significant expansion to cover untested code paths, especially in the CLI, output formatting, and pipeline steps. Increasing test coverage will be crucial for ensuring the reliability of new features and refactoring efforts. An HTML version of the full report is available in the `htmlcov/` directory.
+*   **Execution**: All tests passed, indicating that the automated fixes by `ruff` did not introduce any regressions.
+*   **Coverage**: The overall coverage is unchanged. Critical areas like `cli.py` (0%), `utils/output_formatter.py` (0%), and most files in `core/steps/` (10-22%) remain poorly tested.
+
+**Conclusion**: The test suite is stable but needs significant expansion to cover critical, untested code paths.
 
 ### Full Coverage Report:
 
@@ -70,63 +94,68 @@ Running `pytest` with the `pytest-cov` plugin shows a total test coverage of **6
 -------------------------------------------------------------------------------
 Name                                              Stmts   Miss  Cover   Missing
 -------------------------------------------------------------------------------
-personfromvid/__init__.py                             7      0   100%
+personfromvid/__init__.py                            23      5    78%   15-16, 26-30
 personfromvid/__main__.py                             3      3     0%   7-10
 personfromvid/analysis/__init__.py                    6      0   100%
-personfromvid/analysis/closeup_detector.py          182     18    90%   128-129, 198-199, 229-234, 269, 276, 293-294, 349, 384, 474-476, 481
-personfromvid/analysis/frame_selector.py            216    168    22%   71-88, 104-204, 215-231, 244-256, 268-273, 284-308, 328-374, 396-409, 423-437, 448-467, 478-510, 534-561, 575-595, 606, 625
-personfromvid/analysis/head_angle_classifier.py     101      0   100%
-personfromvid/analysis/pose_classifier.py           273     46    83%   102-104, 154-156, 196, 210-228, 273-279, 391, 399, 431, 438, 453-468, 481-513, 536, 574, 733, 751
-personfromvid/analysis/quality_assessor.py          110     20    82%   89, 164-166, 185-187, 203-205, 221-223, 256-264, 278-280
-personfromvid/cli.py                                241    241     0%   7-575
+personfromvid/analysis/closeup_detector.py          137     21    85%   123-124, 182-183, 213-218, 247, 282, 368, 374-376, 381-390
+personfromvid/analysis/frame_selector.py            327     46    86%   138, 142, 154, 171, 215, 247, 262-267, 288-289, 293-294, 306-309, 315, 336, 348, 400-402, 426, 441-447, 488, 569-570, 586-587, 600, 697, 700, 711, 715, 718, 730, 823, 826, 945, 953, 991, 993, 1018
+personfromvid/analysis/head_angle_classifier.py     109      7    94%   106-120
+personfromvid/analysis/pose_classifier.py           273     46    83%   103-105, 155-157, 196, 210-228, 273-279, 391, 399, 431, 438, 453-468, 481-513, 536, 574, 732, 750
+personfromvid/analysis/quality_assessor.py          112     20    82%   96, 174-176, 195-197, 213-215, 231-233, 266-274, 288-290
+personfromvid/cli.py                                233    233     0%   7-570
 personfromvid/core/__init__.py                        6      0   100%
-personfromvid/core/frame_extractor.py               178      2    99%   501-502
-personfromvid/core/pipeline.py                      278     44    84%   141, 145, 150, 153, 180-185, 204, 217-218, 225-240, 364-365, 385-387, 404, 420-434, 448, 452-454, 458-461, 482-483
-personfromvid/core/state_manager.py                 155     36    77%   24, 122-123, 131, 145-146, 163-164, 177-178, 189-190, 213-215, 234, 252, 267-268, 285-286, 293-306, 313-317, 332
+personfromvid/core/frame_extractor.py               281     44    84%   109, 116-119, 123, 131, 143, 155, 167, 180, 196-201, 214, 218, 226, 232, 236, 239, 259, 284, 294, 306, 331-332, 359, 400, 413, 490, 501-519, 535, 710-711
+personfromvid/core/pipeline.py                      274     43    84%   130, 134, 139, 142, 184, 197-198, 205-220, 297-300, 351-352, 372-374, 391, 407-421, 435, 439-441, 445-448, 469-470
+personfromvid/core/state_manager.py                 155     36    77%   23, 121-122, 130, 144-145, 162-163, 176-177, 188-189, 212-214, 233, 251, 266-267, 284-285, 292-305, 312-316, 331
 personfromvid/core/steps/__init__.py                 10      0   100%
 personfromvid/core/steps/base.py                     24      6    75%   7, 29, 33-34, 38, 43
-personfromvid/core/steps/closeup_detection.py        61     54    11%   14-127
-personfromvid/core/steps/face_detection.py           46     39    15%   14-95
-personfromvid/core/steps/frame_extraction.py         47     39    17%   15-104
-personfromvid/core/steps/frame_selection.py          74     63    15%   27-28, 32-112, 116-166, 172-206
+personfromvid/core/steps/closeup_detection.py        57     50    12%   14-120
+personfromvid/core/steps/face_detection.py          114    102    11%   15-109, 114-145, 151-183, 187-210, 216-243
+personfromvid/core/steps/frame_extraction.py         75     67    11%   16-189
+personfromvid/core/steps/frame_selection.py          76     65    14%   28-33, 37-122, 126-176, 182-216
 personfromvid/core/steps/initialization.py           32     25    22%   14-66
-personfromvid/core/steps/output_generation.py        52     44    15%   15-102
-personfromvid/core/steps/pose_analysis.py            67     59    12%   15-162
-personfromvid/core/steps/quality_assessment.py       74     65    12%   16-131
-personfromvid/core/temp_manager.py                  160     29    82%   40-42, 55, 120-121, 238-239, 260-267, 283-284, 290-291, 298-299, 306-309, 328-332, 349-350
-personfromvid/core/video_processor.py               135     29    79%   36, 85, 88, 96, 100-105, 108, 145-148, 151, 183-187, 236, 241, 248, 256, 268-269, 279-280, 288-289
+personfromvid/core/steps/output_generation.py        60     51    15%   17-108
+personfromvid/core/steps/pose_analysis.py            71     63    11%   15-179
+personfromvid/core/steps/quality_assessment.py       93     74    20%   18-150
+personfromvid/core/temp_manager.py                  158     29    82%   37-39, 52, 117-118, 235-236, 257-264, 280-281, 287-288, 295-296, 303-306, 325-329, 346-347
+personfromvid/core/video_processor.py               133     29    78%   34, 83, 86, 94, 98-103, 106, 143-146, 149, 181-185, 234, 239, 246, 254, 266-267, 277-278, 286-287
 personfromvid/data/__init__.py                        6      0   100%
-personfromvid/data/config.py                        207     46    78%   79-81, 266-273, 361, 367, 411-413, 419-421, 426, 461-476, 485-497, 506, 509, 522-527, 535-536, 548-550
-personfromvid/data/constants.py                      23     10    57%   31, 64-67, 82-85, 97
+personfromvid/data/config.py                        207     46    78%   78-80, 262-269, 377, 383, 428-430, 436-438, 443, 478-493, 502-514, 523, 526, 539-544, 552-553, 565-567
+personfromvid/data/constants.py                      23     10    57%   30, 63-66, 81-84, 96
 personfromvid/data/context.py                        38      1    97%   16
-personfromvid/data/detection_results.py             146     39    73%   23, 25, 45, 62, 64, 67, 71, 75-76, 81, 101, 105, 118, 123, 146, 148, 150, 153, 165, 170, 175, 180, 208, 217, 233-245, 249-258
-personfromvid/data/frame_data.py                    219     95    57%   34, 36, 38, 55, 57, 59, 64, 104, 141, 143, 164, 177, 184, 192-199, 203-206, 210-211, 216, 220, 224, 228, 233, 238-240, 244-246, 250-252, 266-270, 274, 278, 283-287, 291, 295-298, 302-305, 310, 314, 321, 325, 329, 334, 438-563
+personfromvid/data/detection_results.py             135     36    73%   22, 24, 44, 61, 63, 66, 70, 74-75, 80, 100, 104, 117, 122, 140, 142, 154, 159, 164, 191, 200, 216-228, 232-241
+personfromvid/data/frame_data.py                    224     78    65%   36, 38, 40, 57, 59, 61, 66, 107, 142, 144, 165, 177, 183, 191-198, 202-205, 209-210, 218, 222, 226, 231, 237, 243, 248-250, 279-283, 287, 298, 302, 308, 312, 316, 320, 428-575
 personfromvid/data/pipeline_state.py                241     59    76%   21-23, 42, 44, 46, 48, 50, 79, 81, 83, 89, 95, 171, 180, 188, 197, 203-210, 222, 235-241, 250, 261, 265, 269-275, 279-285, 293, 298, 302, 306, 310, 314, 318, 322, 403-410, 456-457, 478, 483
 personfromvid/models/__init__.py                      6      0   100%
-personfromvid/models/face_detector.py               347    184    47%   106-107, 126, 149, 170-179, 204-212, 240-248, 263-269, 289-305, 351-415, 455-460, 488-507, 521-560, 616, 655-733, 756-813
-personfromvid/models/head_pose_estimator.py         560    351    37%   131-138, 148, 174-210, 214-344, 348-368, 372-417, 421-495, 517, 519, 526, 562, 564, 571-576, 582-617, 628-634, 640-699, 705-713, 717-746, 758-804, 808-856, 861-878, 883-919, 925-940, 945-950, 974-977, 1111, 1149, 1153, 1182-1186, 1225-1247, 1258
-personfromvid/models/model_configs.py               105     13    88%   346, 355-374
-personfromvid/models/model_manager.py                98      3    97%   119, 138, 165
-personfromvid/models/model_utils.py                  66      4    94%   88-92
-personfromvid/models/pose_estimator.py              348    126    64%   136-137, 156, 176-182, 201, 235-238, 250-251, 280-283, 298-299, 309, 316-322, 340-344, 350-358, 480-533, 555, 628, 632, 640, 668, 716-719, 729-730, 761-865
+personfromvid/models/face_detector.py               368    203    45%   80, 116-117, 136, 159, 180-189, 214-222, 250-258, 273-279, 299-315, 361-425, 465-470, 498-517, 531-570, 626, 668-778, 801-859
+personfromvid/models/head_pose_estimator.py         586    367    37%   88, 141-148, 158, 184-220, 224-354, 358-378, 382-431, 435-509, 531, 533, 540, 576, 578, 585-590, 596-631, 642-648, 654-713, 719-727, 731-760, 772-818, 822-870, 875-892, 897-933, 939-954, 959-964, 988-991, 1128, 1149, 1166, 1172, 1176, 1205-1209, 1213-1224, 1228, 1246, 1255, 1287-1292, 1301-1308
+personfromvid/models/model_configs.py               104     13    88%   345, 354-373
+personfromvid/models/model_manager.py                97      3    97%   117, 136, 163
+personfromvid/models/model_utils.py                  66      4    94%   87-91
+personfromvid/models/pose_estimator.py              369    145    61%   104, 146-147, 166, 186-192, 211, 245-248, 260-261, 290-293, 308-309, 319, 326-332, 350-354, 360-368, 490-543, 565, 638, 642, 650, 678, 726-729, 739-740, 774-909
 personfromvid/output/__init__.py                      3      0   100%
-personfromvid/output/image_writer.py                106     14    87%   101-104, 116, 125-126, 214, 220-221, 226, 229, 235, 245
-personfromvid/output/naming_convention.py            67     29    57%   106-122, 134-137, 152-154, 172-185, 189-190
+personfromvid/output/image_writer.py                195     60    69%   54, 154-157, 172-258, 270, 279-280, 383, 389-390, 395, 398, 403, 409
+personfromvid/output/naming_convention.py            71     29    59%   119-135, 147-150, 165-167, 185-198, 202-203
 personfromvid/utils/__init__.py                       0      0   100%
 personfromvid/utils/exceptions.py                    91     15    84%   20-21, 257, 264-282
-personfromvid/utils/formatting.py                   201    113    44%   71, 80-85, 107-114, 120-135, 141-153, 157-178, 206-230, 234-235, 246-248, 256-264, 268-274, 320-342, 346-350, 354-357, 361, 365-366, 370-381, 399-406, 411-413, 418-424
-personfromvid/utils/logging.py                      140     64    54%   25-27, 31-65, 73, 82-83, 86-87, 130-131, 142, 149-166, 183-194, 198-200, 204-213, 244-248, 253-254, 259-260, 266, 271, 276, 281, 286, 294
-personfromvid/utils/output_formatter.py             246    246     0%   8-505
-personfromvid/utils/progress.py                     211      7    97%   171, 226, 230, 368, 410, 437, 443
-personfromvid/utils/validation.py                   156     25    84%   105, 208, 239-245, 251-265, 290, 303, 319, 321-323, 352-355
+personfromvid/utils/formatting.py                   198    113    43%   67, 76-81, 103-110, 116-131, 137-149, 153-174, 202-226, 230-231, 242-244, 252-260, 264-270, 316-338, 342-346, 350-353, 357, 361-362, 366-377, 395-402, 407-409, 414-420
+personfromvid/utils/logging.py                      139     64    54%   25-27, 31-65, 73, 82-83, 86-87, 130-131, 142, 149-166, 183-194, 198-200, 204-213, 244-248, 253-254, 259-260, 266, 271, 276, 281, 286, 294
+personfromvid/utils/output_formatter.py             242    242     0%   8-498
+personfromvid/utils/progress.py                     208      7    97%   168, 223, 227, 365, 407, 434, 440
+personfromvid/utils/validation.py                   156     25    84%   104, 207, 238-244, 250-264, 289, 302, 318, 320-322, 351-354
 -------------------------------------------------------------------------------
-TOTAL                                              6169   2474    60%
+TOTAL                                              6615   2585    61%
 ```
 
-## Overall Summary
+## Overall Summary & Next Steps
 
 *   **Formatting**: Excellent.
-*   **Linting**: Poor. Requires significant cleanup of unused code and adherence to style guidelines.
-*   **Type Safety**: Poor. The lack of type annotations and `None` safety checks is a major concern.
+*   **Linting**: Good. Automated tools fixed most issues. The remaining **72 `ruff` errors** are critical and require manual review.
+*   **Type Safety**: Poor. The **474 `mypy` errors** represent a major risk to code stability.
 
-The highest priority for improving code quality should be addressing the `mypy` and `flake8` errors, starting with the most critical ones like undefined names, attribute errors on `None`, and bare exceptions. 
+The highest priority for improving code quality remains the same:
+1.  **Fix `mypy` errors**: Start with the `[union-attr]` errors related to `Optional` types to prevent runtime crashes.
+2.  **Fix `ruff` errors**: Address the remaining undefined names and unsafe exception handling.
+3.  **Increase Test Coverage**: Write tests for the CLI, output formatting, and pipeline steps to ensure reliability.
+
+The highest priority for improving code quality should be addressing the `mypy` and `ruff` errors, starting with the most critical ones like undefined names, attribute errors on `None`, and bare exceptions. 

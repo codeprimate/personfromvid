@@ -5,31 +5,28 @@ pipeline with multi-step tracking, statistics panels, and graceful output.
 """
 
 import time
-from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime, timedelta
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from rich.console import Console
-from rich.progress import (
-    Progress,
-    TaskID,
-    BarColumn,
-    TextColumn,
-    TimeRemainingColumn,
-    TimeElapsedColumn,
-    MofNCompleteColumn,
-    SpinnerColumn,
-)
-from rich.panel import Panel
-from rich.table import Table
 from rich.layout import Layout
 from rich.live import Live
-from rich.text import Text
-from rich.columns import Columns
+from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
 
-from ..data import PipelineState, StepProgress, ProcessingResult
-from ..utils.logging import get_logger
+from ..data import PipelineState, ProcessingResult, StepProgress
 from ..data.constants import get_total_pipeline_steps
+from ..utils.logging import get_logger
 
 
 @dataclass
