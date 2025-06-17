@@ -127,10 +127,10 @@ class TestImageWriter:
         """Test saving a full frame image."""
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
+        mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
 
         # Update config to enable full frame output
-        processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = 'png'
         
@@ -156,7 +156,6 @@ class TestImageWriter:
         mock_pil_image.resize.return_value = mock_pil_image
 
         # Update config to enable face crop output
-        processing_context.config.output.image.full_frame_enabled = False
         processing_context.config.output.image.face_crop_enabled = True
         processing_context.config.output.image.format = 'jpeg'
         
@@ -164,25 +163,32 @@ class TestImageWriter:
         sample_frame_data.selections.primary_selection_category = "head_angle_front"
         sample_frame_data.selections.selection_rank = 1
         
+        # Clear pose categories to prevent full frame generation for this test
+        sample_frame_data.selections.selected_for_poses = []
+        
         writer = ImageWriter(context=processing_context)
 
         output_files = writer.save_frame_outputs(sample_frame_data)
         
+        # Expect only 1 file: face crop for head angle (no full frame since no pose)
         assert len(output_files) == 1
         mock_pil_image.save.assert_called_once()
         assert output_files[0].endswith('.jpg')
+        
+        # Verify it's a face crop file
+        assert 'face' in output_files[0]
 
     @patch('personfromvid.output.image_writer.Image.fromarray')
     def test_resize_full_frame(self, mock_fromarray, processing_context, sample_frame_data):
         """Test resizing full frame images."""
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
+        mock_fromarray.return_value = mock_pil_image
         mock_pil_image.convert.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
 
         # Configure resize to 1024px
         processing_context.config.output.image.resize = 1024
-        processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         
         # Set up enhanced selection data for pose category
@@ -213,7 +219,6 @@ class TestImageWriter:
         # Configure resize to 256px (smaller than default 512)
         processing_context.config.output.image.resize = 256
         processing_context.config.output.image.face_crop_enabled = True
-        processing_context.config.output.image.full_frame_enabled = False
         
         # Set up enhanced selection data for head angle category
         sample_frame_data.selections.primary_selection_category = "head_angle_front"
@@ -242,7 +247,6 @@ class TestImageWriter:
 
         # Configure resize to 4096px (larger than test image 1920x1080)
         processing_context.config.output.image.resize = 4096
-        processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         
         # Set up enhanced selection data for pose category
@@ -392,7 +396,6 @@ class TestImageWriter:
         # Enable pose cropping feature
         processing_context.config.output.image.enable_pose_cropping = True
         processing_context.config.output.image.pose_crop_padding = 0.2
-        processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = "jpeg"
         
@@ -441,7 +444,6 @@ class TestImageWriter:
 
         # Disable pose cropping feature (default)
         processing_context.config.output.image.enable_pose_cropping = False
-        processing_context.config.output.image.full_frame_enabled = True
         processing_context.config.output.image.face_crop_enabled = False
         processing_context.config.output.image.format = "jpeg"
         

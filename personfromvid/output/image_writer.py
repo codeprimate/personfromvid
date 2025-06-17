@@ -65,7 +65,7 @@ class ImageWriter:
 
             # Generate outputs for ALL pose categories the frame was selected for
             pose_categories = frame.selections.selected_for_poses
-            if self.config.full_frame_enabled and pose_categories:
+            if pose_categories:
                 for category in pose_categories:
                     filename = self.naming.get_full_frame_filename(
                         frame, category, rank, extension
@@ -165,7 +165,7 @@ class ImageWriter:
             source_image = self._load_frame_image(frame)
 
             # Save full frame images for pose categories (legacy)
-            if self.config.full_frame_enabled and pose_categories:
+            if pose_categories:
                 for category in pose_categories:
                     rank = frame.selections.selection_rank or 1
                     filename = self.naming.get_full_frame_filename(
@@ -379,7 +379,6 @@ class ImageWriter:
             "video_base_name": self.video_base_name,
             "format": self.config.format,
             "face_crop_enabled": self.config.face_crop_enabled,
-            "full_frame_enabled": self.config.full_frame_enabled,
             "face_crop_padding": self.config.face_crop_padding,
             "enable_pose_cropping": self.config.enable_pose_cropping,
             "pose_crop_padding": self.config.pose_crop_padding,

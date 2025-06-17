@@ -99,11 +99,6 @@ def get_version():
     help="Enable/disable generation of cropped face images",
 )
 @click.option(
-    "--output-full-frame-enabled/--no-output-full-frame-enabled",
-    default=None,
-    help="Enable/disable saving of full-frame images",
-)
-@click.option(
     "--output-face-crop-padding",
     type=click.FloatRange(0.0, 1.0),
     help="Padding around face bounding box for crops",
@@ -169,7 +164,6 @@ def main(
     output_format: Optional[str],
     output_jpeg_quality: Optional[int],
     output_face_crop_enabled: Optional[bool],
-    output_full_frame_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
     crop: bool,
     crop_padding: Optional[float],
@@ -503,9 +497,6 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["output_face_crop_enabled"] is not None:
         config.output.image.face_crop_enabled = cli_args["output_face_crop_enabled"]
 
-    if cli_args["output_full_frame_enabled"] is not None:
-        config.output.image.full_frame_enabled = cli_args["output_full_frame_enabled"]
-
     if cli_args["output_face_crop_padding"]:
         config.output.image.face_crop_padding = cli_args["output_face_crop_padding"]
 
@@ -554,7 +545,6 @@ def show_processing_plan(
         f"Output format: {config.output.image.format.upper()}",
         f"Output quality: {config.output.image.jpeg.quality if config.output.image.format.lower() in ['jpg', 'jpeg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
         f"Face crops: {'enabled' if config.output.image.face_crop_enabled else 'disabled'}",
-        f"Full frames: {'enabled' if config.output.image.full_frame_enabled else 'disabled'}",
     ]
 
     if config.frame_extraction.max_frames_per_video:

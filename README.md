@@ -139,15 +139,13 @@ personfromvid video.mp4 --no-structured-output
 ### Output Options
 | Option | Description | Default |
 | --- | --- | --- |
-| `--output-format` | Output image format (`jpeg` or `png`). | `jpeg` |
+| `--output-format` | Output image format (`jpeg` or `png`). | `png` |
 | `--output-jpeg-quality` | Quality for JPEG output (70-100). | `95` |
-| `--output-face-crop-enabled` | Enable generation of cropped face images. | `True` |
-| `--no-output-face-crop-enabled` | Disable generation of cropped face images. | `False` |
-| `--output-full-frame-enabled` | Enable saving of full-frame images. | `True` |
-| `--no-output-full-frame-enabled` | Disable saving of full-frame images. | `False` |
-| `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.2` |
-| `--output-png-optimize` | Enable PNG optimization. | `True` |
-| `--no-output-png-optimize` | Disable PNG optimization. | `False` |
+| `--output-face-crop-enabled` / `--no-output-face-crop-enabled` | Enable or disable generation of cropped face images. | `True` |
+| `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.3` |
+| `--crop` | Enable generation of cropped pose images. | `False` |
+| `--crop-padding` | Padding around pose bounding box for crops (0.0-1.0). | `0.1` |
+| `--output-png-optimize` / `--no-output-png-optimize` | Enable or disable PNG optimization. | `True` |
 | `--resize` | Maximum dimension for proportional resizing (256-4096 pixels). | `None` |
 | `--min-frames-per-category` | Minimum frames to output per pose/angle category (1-10). | `3` |
 | `--max-frames-per-category` | Maximum frames to output per pose/angle category (1-100). | `5` |
@@ -175,8 +173,9 @@ interview_face_profile-right_002.jpg
 ```
 
 - **`{video_base_name}_info.json`**: A detailed JSON file containing the configuration used, video metadata, and data for every selected frame.
-- **Full Frame Images**: Saved if `output.image.full_frame_enabled` is `true` (default). The filename captures the detected pose, head orientation, and shot type.
-- **Face Crop Images**: Saved if `output.image.face_crop_enabled` is `true` (default). These files contain only the cropped face for easier analysis. All images are saved in a single flat directory.
+- **Full Frame Images**: The filename captures the detected pose, head orientation, and shot type.
+- **Cropped Face Images**: Saved if `output.image.face_crop_enabled` is `true`. The filename includes head orientation details.
+- **Cropped Pose Images**: Saved if `output.image.enable_pose_cropping` is `true`. A `_crop` suffix is added to the original filename.
 
 ## Configuration
 
@@ -251,15 +250,14 @@ output:
   max_frames_per_category: 5
   preserve_metadata: true
   image:
-    format: "png" # 'jpeg' or 'png'
-    face_crop_enabled: true
-    full_frame_enabled: true
-    face_crop_padding: 0.2 # 20% padding around face
-    resize: null # Max dimension for resizing (null for no resizing)
+    format: "jpeg"
     jpeg:
-      quality: 95
+      quality: 98
     png:
       optimize: true
+    face_crop_enabled: true
+    face_crop_padding: 0.3
+    enable_pose_cropping: true
 
 # Storage and caching
 storage:
