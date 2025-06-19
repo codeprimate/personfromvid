@@ -24,7 +24,9 @@ class FrameExtractionStep(PipelineStep):
 
             # Initialize frame extractor
             frame_extractor = FrameExtractor(
-                str(self.pipeline.video_path), video_metadata
+                str(self.pipeline.video_path),
+                video_metadata,
+                self.pipeline.config.frame_extraction,
             )
 
             # Get frames output directory

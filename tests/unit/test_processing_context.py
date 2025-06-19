@@ -1,6 +1,7 @@
 """Unit tests for ProcessingContext."""
 
 import tempfile
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import patch
 
@@ -70,10 +71,10 @@ class TestProcessingContext:
     def test_processing_context_is_frozen(self, processing_context):
         """Test that ProcessingContext is immutable (frozen)."""
         context, _ = processing_context
-        with pytest.raises(Exception):  # Should raise FrozenInstanceError
-            context.video_path = Path('different/path')
+        with pytest.raises(FrozenInstanceError):
+            context.video_path = Path("different/path")
 
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             context.config = Config()
 
     def test_video_properties(self, processing_context, temp_video_file):

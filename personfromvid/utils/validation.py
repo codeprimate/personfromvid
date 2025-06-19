@@ -271,6 +271,8 @@ def validate_config_values(config_dict: Dict[str, Any]) -> List[str]:
 
 def _get_video_metadata_ffprobe(video_path: Path) -> Dict[str, Any]:
     """Get video metadata using ffprobe."""
+    import json
+
     try:
         cmd = [
             "ffprobe",
@@ -287,8 +289,6 @@ def _get_video_metadata_ffprobe(video_path: Path) -> Dict[str, Any]:
 
         if result.returncode != 0:
             raise VideoFileError(f"ffprobe failed: {result.stderr}")
-
-        import json
 
         metadata = json.loads(result.stdout)
 

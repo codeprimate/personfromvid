@@ -13,7 +13,13 @@ from personfromvid.core.frame_extractor import (
     FrameCandidate,
     FrameExtractor,
 )
-from personfromvid.data import FrameData, ImageProperties, SourceInfo, VideoMetadata
+from personfromvid.data import (
+    FrameData,
+    FrameExtractionConfig,
+    ImageProperties,
+    SourceInfo,
+    VideoMetadata,
+)
 from personfromvid.utils.exceptions import VideoProcessingError
 
 
@@ -39,9 +45,17 @@ def test_video_path():
 
 
 @pytest.fixture
-def frame_extractor(test_video_path, sample_video_metadata):
+def frame_extraction_config():
+    """Default frame extraction config for testing."""
+    return FrameExtractionConfig()
+
+
+@pytest.fixture
+def frame_extractor(test_video_path, sample_video_metadata, frame_extraction_config):
     """Create frame extractor instance for testing."""
-    return FrameExtractor(str(test_video_path), sample_video_metadata)
+    return FrameExtractor(
+        str(test_video_path), sample_video_metadata, frame_extraction_config
+    )
 
 
 @pytest.fixture
@@ -100,15 +114,22 @@ class TestFrameCandidate:
 class TestFrameExtractor:
     """Test FrameExtractor class."""
 
-    def test_init_with_valid_inputs(self, test_video_path, sample_video_metadata):
+    def test_init_with_valid_inputs(
+        self, test_video_path, sample_video_metadata, frame_extraction_config
+    ):
         """Test initialization with valid inputs."""
-        extractor = FrameExtractor(str(test_video_path), sample_video_metadata)
+        extractor = FrameExtractor(
+            str(test_video_path), sample_video_metadata, frame_extraction_config
+        )
 
         assert extractor.video_path == test_video_path
         assert extractor.video_metadata == sample_video_metadata
-        assert extractor.temporal_interval == 0.25
+        assert extractor.config == frame_extraction_config
+        assert (
+            extractor.temporal_interval
+            == frame_extraction_config.temporal_sampling_interval
+        )
         assert extractor.similarity_threshold == 0.95
-        assert extractor.max_frames_per_second == 8
         assert len(extractor.extracted_frames) == 0
         assert len(extractor.frame_hashes) == 0
 
@@ -197,14 +218,20 @@ class TestFrameExtractor:
 
         assert frame_extractor.stats['temporal_samples'] == expected_count
 
-    def test_generate_temporal_samples_exceeds_frames(self):
+    def test_generate_temporal_samples_exceeds_frames(self, frame_extraction_config):
         """Test temporal sampling when calculated frame exceeds total frames."""
         # Create metadata with fewer total frames
         short_metadata = VideoMetadata(
-            duration=1.0, fps=10.0, width=640, height=480,
-            codec='h264', total_frames=5, file_size_bytes=1000, format='mp4'
+            duration=1.0,
+            fps=10.0,
+            width=640,
+            height=480,
+            codec="h264",
+            total_frames=5,
+            file_size_bytes=1000,
+            format="mp4",
         )
-        extractor = FrameExtractor("test.mp4", short_metadata)
+        extractor = FrameExtractor("test.mp4", short_metadata, frame_extraction_config)
 
         candidates = extractor._generate_temporal_samples()
 
@@ -217,44 +244,58 @@ class TestFrameExtractor:
         """Test combining and deduplicating candidates."""
         i_frames = [
             FrameCandidate(1.0, 30, ExtractionMethod.I_FRAME, 1.0),
-            FrameCandidate(5.0, 150, ExtractionMethod.I_FRAME, 1.0)
+            FrameCandidate(5.0, 150, ExtractionMethod.I_FRAME, 1.0),
         ]
 
         temporal = [
             FrameCandidate(0.25, 7, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),
-            FrameCandidate(1.05, 31, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),  # Near duplicate
-            FrameCandidate(3.0, 90, ExtractionMethod.TEMPORAL_SAMPLING, 0.8)
+            FrameCandidate(1.0, 30, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),  # Duplicate
+            FrameCandidate(3.0, 90, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),
         ]
 
-        combined = frame_extractor._combine_and_deduplicate_candidates(i_frames, temporal)
+        combined = frame_extractor._combine_and_deduplicate_candidates(
+            i_frames, temporal
+        )
 
-        # Should remove near-duplicate at 1.05s (within 0.1s of 1.0s I-frame)
+        # Should remove exact duplicate frame number
         assert len(combined) == 4
 
         # Should be sorted by timestamp
         timestamps = [c.timestamp for c in combined]
         assert timestamps == sorted(timestamps)
 
-        # Should keep I-frame over temporal sample for near-duplicate
-        timestamp_1_candidate = next(c for c in combined if abs(c.timestamp - 1.0) < 0.1)
+        # Should keep the first candidate found with a given frame number
+        timestamp_1_candidate = next(
+            (c for c in combined if c.frame_number == 30), None
+        )
+        assert timestamp_1_candidate is not None
         assert timestamp_1_candidate.method == ExtractionMethod.I_FRAME
 
-    def test_combine_and_deduplicate_rate_limiting(self, frame_extractor):
-        """Test rate limiting in candidate combination."""
-        # Create many candidates to trigger rate limiting
+    def test_combine_and_deduplicate_candidates_max_frames(self, frame_extractor):
+        """Test that max_frames_per_video is respected."""
+        # Set max_frames limit in config
+        frame_extractor.config.max_frames_per_video = 2
+
         i_frames = [
-            FrameCandidate(float(i), i * 30, ExtractionMethod.I_FRAME, 1.0)
-            for i in range(100)  # 100 I-frames
+            FrameCandidate(1.0, 30, ExtractionMethod.I_FRAME, 1.0),
+            FrameCandidate(5.0, 150, ExtractionMethod.I_FRAME, 1.0),
         ]
 
-        combined = frame_extractor._combine_and_deduplicate_candidates(i_frames, [])
+        temporal = [
+            FrameCandidate(0.25, 7, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),
+            FrameCandidate(3.0, 90, ExtractionMethod.TEMPORAL_SAMPLING, 0.8),
+        ]
 
-        # Should be limited to max_frames_per_second * duration
-        max_expected = frame_extractor.max_frames_per_second * frame_extractor.video_metadata.duration
-        assert len(combined) <= max_expected
+        combined = frame_extractor._combine_and_deduplicate_candidates(
+            i_frames, temporal
+        )
 
-    @patch('cv2.VideoCapture')
-    def test_extract_frame_images_success(self, mock_cv2_capture, frame_extractor, tmp_path):
+        assert len(combined) == 2
+
+    @patch("cv2.VideoCapture")
+    def test_extract_frame_images_success(
+        self, mock_cv2_capture, frame_extractor, tmp_path
+    ):
         """Test successful frame image extraction."""
         # Mock video capture
         mock_cap = MagicMock()
@@ -648,22 +689,27 @@ class TestFrameExtractor:
         assert not frame1_path.exists()
         assert not frame2_path.exists()  # Was already missing
 
-    def test_combine_candidates_with_higher_confidence_temporal(self, frame_extractor):
-        """Test that higher confidence temporal sample replaces lower confidence I-frame."""
+    def test_combine_candidates_with_higher_confidence_temporal(
+        self, frame_extractor
+    ):
+        """Test that deduplication is based on first-seen, not confidence."""
         i_frames = [
             FrameCandidate(1.0, 30, ExtractionMethod.I_FRAME, 0.7)  # Lower confidence
         ]
 
         temporal = [
-            FrameCandidate(1.05, 31, ExtractionMethod.TEMPORAL_SAMPLING, 0.9)  # Higher confidence
+            FrameCandidate(
+                1.0, 30, ExtractionMethod.TEMPORAL_SAMPLING, 0.9
+            )  # Higher confidence
         ]
 
-        combined = frame_extractor._combine_and_deduplicate_candidates(i_frames, temporal)
+        combined = frame_extractor._combine_and_deduplicate_candidates(
+            i_frames, temporal
+        )
 
-        # Should keep temporal sample due to higher confidence
+        # Should keep the I-frame because it's seen first
         assert len(combined) == 1
-        assert combined[0].method == ExtractionMethod.TEMPORAL_SAMPLING
-        assert combined[0].confidence == 0.9
+        assert combined[0].method == ExtractionMethod.I_FRAME
 
     @patch('subprocess.run')
     def test_extract_i_frames_empty_frames_list(self, mock_subprocess, frame_extractor):
@@ -699,10 +745,12 @@ class TestFrameExtractor:
 
 
 class TestFrameExtractorWithRealVideo:
-    """Integration tests using the real test video fixture."""
+    """Test frame extraction with a real video file."""
 
     @pytest.mark.slow
-    def test_extract_frames_with_real_video(self, test_video_path, tmp_path):
+    def test_extract_frames_with_real_video(
+        self, test_video_path, tmp_path, frame_extraction_config
+    ):
         """Test frame extraction with actual video file."""
         if not test_video_path.exists():
             pytest.skip("Test video fixture not found")
@@ -713,26 +761,21 @@ class TestFrameExtractorWithRealVideo:
             fps=30.0,
             width=640,
             height=480,
-            codec='h264',
+            codec="h264",
             total_frames=30,
             file_size_bytes=test_video_path.stat().st_size,
-            format='mp4'
+            format="mp4",
         )
 
-        extractor = FrameExtractor(str(test_video_path), metadata)
+        extractor = FrameExtractor(
+            str(test_video_path), metadata, frame_extraction_config
+        )
 
-        try:
-            frames = extractor.extract_frames(tmp_path)
+        # Since this test is slow and depends on ffmpeg, we'll just do a basic check
+        # to ensure it runs without crashing and extracts some frames.
+        output_dir = tmp_path / "frames"
+        extracted = extractor.extract_frames(output_dir)
 
-            # Basic checks that extraction worked
-            assert len(frames) > 0
-            assert all(isinstance(f, FrameData) for f in frames)
-            assert all(f.file_path.exists() for f in frames)
-
-            # Check statistics make sense
-            stats = extractor.get_extraction_statistics()
-            assert stats['frames_extracted'] == len(frames)
-            assert stats['processing_time_seconds'] > 0
-
-        except Exception as e:
-            pytest.skip(f"Real video test failed (may be expected): {e}")
+        assert len(extracted) > 0
+        assert output_dir.exists()
+        assert len(list(output_dir.glob("*.png"))) > 0

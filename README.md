@@ -203,7 +203,6 @@ frame_extraction:
   enable_keyframe_detection: true
   enable_temporal_sampling: true
   max_frames_per_video: null # No limit
-  deduplication_enabled: true
 
 # Quality assessment thresholds
 quality:

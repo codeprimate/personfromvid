@@ -97,11 +97,8 @@ class FrameExtractionConfig(BaseModel):
     )
     max_frames_per_video: Optional[int] = Field(
         default=None,
-        ge=10,
+        ge=1,
         description="Maximum frames to extract per video (None for unlimited)",
-    )
-    deduplication_enabled: bool = Field(
-        default=True, description="Enable frame deduplication"
     )
 
 

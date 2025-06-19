@@ -15,7 +15,13 @@ from typing import Any, Dict, List, Optional, Set
 import cv2
 import numpy as np
 
-from ..data import FrameData, ImageProperties, SourceInfo, VideoMetadata
+from ..data import (
+    FrameData,
+    FrameExtractionConfig,
+    ImageProperties,
+    SourceInfo,
+    VideoMetadata,
+)
 from ..utils.exceptions import VideoProcessingError
 from ..utils.logging import get_logger
 
@@ -46,19 +52,28 @@ class FrameExtractor:
     3. Frame deduplication to avoid redundancy
     """
 
-    def __init__(self, video_path: str, video_metadata: VideoMetadata):
+    def __init__(
+        self,
+        video_path: str,
+        video_metadata: VideoMetadata,
+        config: FrameExtractionConfig,
+    ):
         """Initialize frame extractor.
 
         Args:
             video_path: Path to video file
             video_metadata: Video metadata from VideoProcessor
+            config: Frame extraction configuration
         """
         self.video_path = Path(video_path)
         self.video_metadata = video_metadata
+        self.config = config
         self.logger = get_logger("frame_extractor")
 
         # Extraction configuration
-        self.temporal_interval = 0.25  # Sample every 0.25 seconds
+        self.temporal_interval = (
+            self.config.temporal_sampling_interval
+        )  # Sample every X seconds
         self.similarity_threshold = 0.95  # For frame deduplication
         self.max_frames_per_second = 8  # Limit to prevent excessive extraction
 
@@ -385,74 +400,40 @@ class FrameExtractor:
         temporal: List[FrameCandidate],
         interruption_check: Optional[callable] = None,
     ) -> List[FrameCandidate]:
-        """Combine I-frame and temporal candidates, removing duplicates.
+        """Combine, deduplicate, and sort frame candidates."""
+        self.logger.info(
+            f"Combining {len(i_frames)} I-frames and {len(temporal)} temporal samples"
+        )
+        combined_candidates = i_frames + temporal
 
-        Args:
-            i_frames: I-frame candidates
-            temporal: Temporal sampling candidates
-            interruption_check: Optional callback to check for interruption
-
-        Returns:
-            Deduplicated list of frame candidates
-        """
-        # Check for interruption at start
+        # Check for interruption
         if interruption_check:
             interruption_check()
 
-        # Combine all candidates first
-        all_candidates = i_frames.copy() + temporal.copy()
-        duplicate_threshold = 0.5  # seconds
+        # Deduplicate based on frame number (timestamp can be slightly different)
+        unique_frames: Dict[int, FrameCandidate] = {}
+        for candidate in combined_candidates:
+            if candidate.frame_number not in unique_frames:
+                unique_frames[candidate.frame_number] = candidate
 
-        self.logger.debug(f"Deduplicating {len(all_candidates)} total candidates")
+        # Sort by timestamp to maintain chronological order
+        sorted_candidates = sorted(unique_frames.values(), key=lambda c: c.timestamp)
 
-        # Remove duplicates based on proximity and confidence
-        deduplicated = []
-        for candidate in all_candidates:
-            # Check for interruption during deduplication
-            if interruption_check and len(deduplicated) % 50 == 0:
-                interruption_check()
-
-            # Check if this candidate is too close to any already accepted candidate
-            is_duplicate = False
-            existing_to_replace = None
-
-            for j, existing_candidate in enumerate(deduplicated):
-                time_diff = abs(candidate.timestamp - existing_candidate.timestamp)
-                if time_diff < duplicate_threshold:
-                    is_duplicate = True
-                    # If this candidate has higher confidence, replace the existing one
-                    if candidate.confidence > existing_candidate.confidence:
-                        existing_to_replace = j
-                    break
-
-            if not is_duplicate:
-                deduplicated.append(candidate)
-            elif existing_to_replace is not None:
-                # Replace lower confidence candidate with higher confidence one
-                deduplicated[existing_to_replace] = candidate
-
-        all_candidates = deduplicated
-
-        # Sort by timestamp for consistent ordering
-        all_candidates.sort(key=lambda x: x.timestamp)
-
-        # Apply rate limiting: max_frames_per_second * duration
-        max_frames = int(self.max_frames_per_second * self.video_metadata.duration)
-        if len(all_candidates) > max_frames:
-            # Sort by confidence (descending) then by timestamp to prioritize best frames
-            all_candidates.sort(key=lambda x: (-x.confidence, x.timestamp))
-            all_candidates = all_candidates[:max_frames]
-            # Re-sort by timestamp for final ordering
-            all_candidates.sort(key=lambda x: x.timestamp)
-            self.logger.debug(
-                f"Applied rate limiting: reduced to {len(all_candidates)} frames (max: {max_frames})"
-            )
-
-        self.logger.debug(
-            f"Combined candidates: {len(all_candidates)} total ({len(i_frames)} I-frames + {len(all_candidates) - len(i_frames)} temporal)"
+        duplicates_removed = len(combined_candidates) - len(sorted_candidates)
+        self.stats["duplicates_removed"] = duplicates_removed
+        self.logger.info(
+            f"Removed {duplicates_removed} duplicates, {len(sorted_candidates)} unique candidates remain"
         )
 
-        return all_candidates
+        # Apply max_frames_per_video limit
+        if self.config.max_frames_per_video:
+            if len(sorted_candidates) > self.config.max_frames_per_video:
+                self.logger.info(
+                    f"Limiting candidates from {len(sorted_candidates)} to {self.config.max_frames_per_video}"
+                )
+                sorted_candidates = sorted_candidates[: self.config.max_frames_per_video]
+
+        return sorted_candidates
 
     def _extract_frame_images(
         self,

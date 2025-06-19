@@ -1,6 +1,7 @@
 """Unit tests for validation utilities."""
 
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -489,8 +490,10 @@ class TestPrivateFunctions:
         video_file = self.temp_dir / "test.mp4"
         video_file.write_text("fake video")
 
-        with patch('subprocess.run', side_effect=Exception("FFprobe not found")):
-            with pytest.raises(Exception):
+        with patch(
+            "subprocess.run", side_effect=subprocess.SubprocessError("FFprobe not found")
+        ):
+            with pytest.raises(VideoFileError):
                 _get_video_metadata_ffprobe(video_file)
 
     def test_check_executable_found(self):
