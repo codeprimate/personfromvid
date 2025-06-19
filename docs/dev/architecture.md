@@ -8,97 +8,145 @@ This document provides a detailed technical overview of the Person From Vid arch
 
 ```
 personfromvid/
+├── docs/                             # Documentation
+│   └── dev/                          # Development documentation
+│       ├── architecture.md           # This file - system architecture
+│       ├── code_quality.md           # Code quality guidelines
+│       └── publishing.md             # PyPI publishing guide
 ├── personfromvid/                    # Main package directory
 │   ├── __init__.py                   # Package initialization
 │   ├── __main__.py                   # Main executable entry point
 │   ├── cli.py                        # Command-line interface entry point
-│   ├── core/                         # Core processing modules
-│   │   ├── __init__.py
-│   │   ├── pipeline.py               # Main processing pipeline orchestrator
-│   │   ├── state_manager.py          # Pipeline state persistence and resumption
-│   │   ├── video_processor.py        # Video analysis and frame extraction
-│   │   ├── frame_extractor.py        # Keyframe extraction logic
-│   │   ├── temp_manager.py           # Temporary directory management
-│   │   └── steps/                    # Modular pipeline processing steps
-│   │       ├── __init__.py
-│   │       ├── base.py               # Base class for a pipeline step
-│   │       ├── initialization.py     # Pipeline initialization step
-│   │       ├── frame_extraction.py   # Frame extraction step
-│   │       ├── face_detection.py     # Face detection step
-│   │       ├── pose_analysis.py      # Pose analysis step
-│   │       ├── closeup_detection.py  # Close-up detection step
-│   │       ├── quality_assessment.py # Quality assessment step
-│   │       ├── frame_selection.py    # Frame selection step
-│   │       └── output_generation.py  # Output generation step
-│   ├── models/                       # AI model management
-│   │   ├── __init__.py
-│   │   ├── model_manager.py          # Model downloading and caching
-│   │   ├── model_utils.py            # Utilities for model operations
-│   │   ├── face_detector.py          # Face detection inference
-│   │   ├── pose_estimator.py         # Body pose estimation
-│   │   ├── head_pose_estimator.py    # Head orientation analysis
-│   │   └── model_configs.py          # Model configuration and metadata
 │   ├── analysis/                     # Image analysis modules
 │   │   ├── __init__.py
-│   │   ├── pose_classifier.py        # Body pose classification logic
-│   │   ├── head_angle_classifier.py  # Head angle classification
-│   │   ├── quality_assessor.py       # Image quality evaluation
 │   │   ├── closeup_detector.py       # Close-up shot identification
-│   │   └── frame_selector.py         # Best frame selection logic
+│   │   ├── frame_selector.py         # Best frame selection logic
+│   │   ├── head_angle_classifier.py  # Head angle classification
+│   │   ├── pose_classifier.py        # Body pose classification logic
+│   │   └── quality_assessor.py       # Image quality evaluation
+│   ├── core/                         # Core processing modules
+│   │   ├── steps/                    # Modular pipeline processing steps
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py               # Base class for a pipeline step
+│   │   │   ├── closeup_detection.py  # Close-up detection step
+│   │   │   ├── face_detection.py     # Face detection step
+│   │   │   ├── frame_extraction.py   # Frame extraction step
+│   │   │   ├── frame_selection.py    # Frame selection step
+│   │   │   ├── initialization.py     # Pipeline initialization step
+│   │   │   ├── output_generation.py  # Output generation step
+│   │   │   ├── pose_analysis.py      # Pose analysis step
+│   │   │   └── quality_assessment.py # Quality assessment step
+│   │   ├── __init__.py
+│   │   ├── frame_extractor.py        # Keyframe extraction logic
+│   │   ├── pipeline.py               # Main processing pipeline orchestrator
+│   │   ├── state_manager.py          # Pipeline state persistence and resumption
+│   │   ├── temp_manager.py           # Temporary directory management
+│   │   └── video_processor.py        # Video analysis and frame extraction
+│   ├── data/                         # Data models and structures
+│   │   ├── __init__.py
+│   │   ├── config.py                 # Configuration management
+│   │   ├── constants.py              # Project-wide constants
+│   │   ├── context.py                # Processing context data models
+│   │   ├── detection_results.py      # AI model output structures
+│   │   ├── frame_data.py             # Frame metadata structures
+│   │   └── pipeline_state.py         # Pipeline state data models
+│   ├── models/                       # AI model management
+│   │   ├── __init__.py
+│   │   ├── face_detector.py          # Face detection inference
+│   │   ├── head_pose_estimator.py    # Head orientation analysis
+│   │   ├── model_configs.py          # Model configuration and metadata
+│   │   ├── model_manager.py          # Model downloading and caching
+│   │   ├── model_utils.py            # Utilities for model operations
+│   │   └── pose_estimator.py         # Body pose estimation
 │   ├── output/                       # Output generation
 │   │   ├── __init__.py
 │   │   ├── image_writer.py           # JPEG encoding and file generation
 │   │   └── naming_convention.py      # File naming logic
-│   ├── utils/                        # Utility modules
-│   │   ├── __init__.py
-│   │   ├── progress.py               # Rich progress display management
-│   │   ├── logging.py                # Logging configuration
-│   │   ├── validation.py             # Input validation utilities
-│   │   ├── exceptions.py             # Custom exception classes
-│   │   ├── formatting.py             # Text and data formatting utilities
-│   │   └── output_formatter.py       # Formats console output
-│   └── data/                         # Data models and structures
+│   └── utils/                        # Utility modules
 │       ├── __init__.py
-│       ├── frame_data.py             # Frame metadata structures
-│       ├── detection_results.py      # AI model output structures
-│       ├── pipeline_state.py         # Pipeline state data models
-│       ├── config.py                 # Configuration management
-│       └── constants.py              # Project-wide constants
-├── tests/                            # Test suite
-│   ├── __init__.py
-│   ├── unit/                         # Unit tests
-│   ├── integration/                  # Integration tests
-│   └── fixtures/                     # Test data and mock files
-├── docs/                             # Documentation
-│   ├── specification.md              # Technical specification
-│   ├── architecture.md               # This file
-│   └── api_reference.md              # API documentation
+│       ├── exceptions.py             # Custom exception classes
+│       ├── formatting.py             # Text and data formatting utilities
+│       ├── logging.py                # Logging configuration
+│       ├── output_formatter.py       # Console output formatting
+│       ├── progress.py               # Rich progress display management
+│       └── validation.py             # Input validation utilities
 ├── scripts/                          # Development and utility scripts
+│   └── clean.py                      # Cleanup utility script
+├── tests/                            # Test suite
+│   ├── fixtures/                     # Test data and mock files
+│   │   └── test_video.mp4            # Sample video for testing
+│   ├── integration/                  # Integration tests
+│   │   ├── __init__.py
+│   │   └── test_model_integration.py # Model integration tests
+│   ├── unit/                         # Unit tests
+│   │   ├── __init__.py
+│   │   ├── test_closeup_detector.py  # Closeup detection tests
+│   │   ├── test_config.py            # Configuration tests
+│   │   ├── test_data_models.py       # Data model tests
+│   │   ├── test_face_detector.py     # Face detection tests
+│   │   ├── test_frame_extractor.py   # Frame extraction tests
+│   │   ├── test_frame_selector.py    # Frame selection tests
+│   │   ├── test_head_angle_classifier.py  # Head angle classification tests
+│   │   ├── test_head_pose_estimator.py    # Head pose estimation tests
+│   │   ├── test_model_management.py  # Model management tests
+│   │   ├── test_model_utils.py       # Model utility tests
+│   │   ├── test_output.py            # Output generation tests
+│   │   ├── test_pipeline.py          # Pipeline tests
+│   │   ├── test_pose_classifier.py   # Pose classification tests
+│   │   ├── test_pose_estimator.py    # Pose estimation tests
+│   │   ├── test_processing_context.py # Processing context tests
+│   │   ├── test_progress.py          # Progress display tests
+│   │   ├── test_quality_assessment_step.py  # Quality assessment step tests
+│   │   ├── test_quality_assessor.py  # Quality assessment tests
+│   │   ├── test_state_manager.py     # State management tests
+│   │   ├── test_temp_manager.py      # Temporary directory management tests
+│   │   ├── test_validation.py        # Validation tests
+│   │   └── test_video_processor.py   # Video processing tests
+│   ├── __init__.py
+│   └── models_tests_README.md        # Testing documentation for models
+├── LICENSE                           # Project license
+├── Makefile                          # Build and development commands
 ├── pyproject.toml                    # Package configuration and dependencies
-└── README.md                         # Project overview
+├── README.md                         # Project overview
+└── requirements.txt                  # Python dependencies
 ```
 
 ## Processing Pipeline Workflow
 
 The processing pipeline is orchestrated by the `ProcessingPipeline` class in `core/pipeline.py`. It is a modular, stateful, and resumable system built from a series of discrete processing steps. Each step is responsible for a specific phase of the analysis, and its state is saved upon completion, allowing the pipeline to be interrupted and resumed.
 
-### 1. Pipeline Initialization (`InitializationStep`)
+### Pipeline Orchestration and Setup
 
-The pipeline begins when a user runs the CLI command. This first step prepares the environment for processing.
+Before the first step (`InitializationStep`) is executed, the `ProcessingPipeline` performs several critical setup tasks:
 
 **Components Involved:**
 - `cli.py`: Parses command-line arguments and validates input.
 - `core/pipeline.py`: Orchestrates the entire processing workflow.
-- `core/state_manager.py`: Checks for existing processing state.
-- `core/temp_manager.py`: Creates or manages temporary directories.
-- `core/steps/initialization.py`: The step class that executes this phase.
+- `core/state_manager.py`: Checks for existing processing state (`..._info.json`).
+- `core/temp_manager.py`: Creates and manages the temporary working directory.
+- `data/context.py`: Creates a unified `ProcessingContext` that holds all shared data.
 
 **Workflow Steps:**
-1. **Input Validation**: Verify video file exists and is readable.
-2. **State Discovery**: Look for an existing state file (`{video_base}_info.json`).
-3. **Resume Decision**: Determine if processing should resume or start fresh.
-4. **Environment Setup**: Create temporary directories and initialize the `PipelineState`.
-5. **Video Metadata Extraction**: Get video properties like resolution, duration, and FPS.
+1. **Context Creation**: The `ProcessingContext` is built, consolidating paths, configuration, and managers.
+2. **Input Validation**: The pipeline's constructor verifies that the video file exists and is not empty.
+3. **State Discovery**: The `StateManager` looks for an existing state file. If `force_restart` is enabled, any existing state is deleted.
+4. **Resume Decision**: Based on the presence and validity of a state file, the pipeline decides whether to resume processing or start fresh.
+5. **Initial State Creation**: If starting a new session, an initial `PipelineState` object is created, which includes extracting core video metadata (e.g., resolution, duration, FPS) and calculating a video file hash for integrity checks.
+
+This setup ensures that the processing environment is ready and the pipeline knows its starting point before individual steps are run.
+
+### 1. Pipeline Initialization (`InitializationStep`)
+
+This is the first formal step in the pipeline. It performs final validation of the video content.
+
+**Components Involved:**
+- `core/steps/initialization.py`: The step class that executes this phase.
+- `core/video_processor.py`: Provides tools to validate video format and content.
+
+**Workflow Steps:**
+1. **Video Format Validation**: The `VideoProcessor` is used to validate the video container and codecs to ensure they are processable by FFmpeg.
+2. **Metadata Confirmation**: It confirms that basic video metadata has been read and stores a summary in the step's progress data.
+3. **Environment Check**: Confirms that the temporary workspace and pipeline are ready for the upcoming processing-intensive steps.
 
 ### 2. Frame Extraction (`FrameExtractionStep`)
 
@@ -115,16 +163,20 @@ This step extracts frames from the video for further analysis.
 
 ### 3. Face Detection (`FaceDetectionStep`)
 
-This step analyzes the extracted frames to find human faces.
+This step analyzes the extracted frames to find human faces and filters them to retain only forward-facing individuals.
 
-**Primary Component**: `core/steps/face_detection.py` (using `models/face_detector.py`)
+**Primary Components**:
+- `core/steps/face_detection.py`
+- `models/face_detector.py`
+- `models/head_pose_estimator.py`
 
 **Workflow Steps:**
-1. **Model Loading**: Download and cache the face detection model (e.g., SCRFD).
-2. **Batch Processing**: Process frames in batches for efficiency.
-3. **Face Inference**: Run the model to find face bounding boxes.
-4. **Confidence Filtering**: Discard detections below a confidence threshold.
-5. **State Update**: Record face locations and filter out frames with no faces.
+1. **Model Loading**: The face detection model (e.g., YOLOv8-Face) is loaded via the `ModelManager`.
+2. **Batch Processing**: Frames are processed in batches for efficient inference.
+3. **Face Inference**: The model is run on each frame to find face bounding boxes.
+4. **Confidence Filtering**: Detections below a confidence threshold are discarded.
+5. **Head Pose Filtering**: A head pose estimation model is used to analyze each detected face. Detections that are not sufficiently forward-facing (based on yaw, pitch, and roll) are discarded.
+6. **State Update**: The final, filtered face detections are recorded in each frame's `FrameData` object.
 
 ### 4. Pose and Head Angle Analysis (`PoseAnalysisStep`)
 
@@ -146,49 +198,63 @@ This step analyzes faces and bodies to determine pose and orientation.
 
 ### 5. Close-up Detection (`CloseupDetectionStep`)
 
-This step identifies frames that are close-ups of a person.
+This step analyzes the framing of each person to classify the shot type (e.g., close-up, medium shot).
 
 **Primary Component**: `core/steps/closeup_detection.py` (using `analysis/closeup_detector.py`)
 
 **Workflow Steps:**
-1. **Bounding Box Analysis**: Analyze the size of the face bounding box relative to the frame size.
-2. **Classification**: Tag frames as `closeup` or `not_closeup`.
-3. **State Update**: Store the close-up classification in the frame's metadata.
+1. **Multi-Factor Analysis**: For each detected person, it analyzes the face bounding box size relative to the frame area. If available, it also considers body pose landmarks (like shoulder width) for a more accurate classification.
+2. **Shot Type Classification**: Based on configurable thresholds, it classifies the shot into categories such as `extreme_closeup`, `closeup`, `medium_closeup`, `medium_shot`, or `wide_shot`.
+3. **State Update**: The detailed `CloseupDetection` result, including the shot type, is stored in the frame's metadata.
 
 ### 6. Quality Assessment (`QualityAssessmentStep`)
 
-This step evaluates the technical quality of each frame.
+This step evaluates the technical quality of each frame that contains a person.
 
 **Primary Component**: `core/steps/quality_assessment.py` (using `analysis/quality_assessor.py`)
 
 **Workflow Steps:**
-1. **Quality Metrics**: Calculate metrics for blur, brightness, and contrast.
-2. **Scoring Algorithm**: Combine metrics into a single quality score for each frame.
-3. **State Update**: Store the quality score in the frame's metadata.
+1. **Candidate Filtering**: The step first filters the list of all frames to only those that contain detected faces and poses, as only these are relevant for final output.
+2. **Quality Metrics**: For each candidate frame, it calculates metrics for sharpness (blur), edge definition, brightness, and contrast.
+3. **Scoring Algorithm**: These metrics are combined into a single, weighted `overall_quality` score.
+4. **Global Ranking**: After all frames are assessed, they are ranked globally based on their quality score. This rank is stored in the frame's metadata and is critical for the final selection step.
+5. **State Update**: The detailed `QualityMetrics` and the global `quality_rank` are stored in each frame's `FrameData` object.
 
 ### 7. Frame Selection (`FrameSelectionStep`)
 
-This step selects the best frames to use for the final output, based on all previously gathered data.
+This step selects the best and most diverse frames for the final output, based on all previously gathered data.
 
 **Primary Component**: `core/steps/frame_selection.py` (using `analysis/frame_selector.py`)
 
 **Workflow Steps:**
-1. **Category Grouping**: Group frames by criteria like pose and head angle.
-2. **Selection Logic**: Select the top N frames from each group based on the quality score.
-3. **Crop Planning**: Define crop regions for face-centric outputs.
-4. **State Update**: Mark the selected frames for output generation.
+1. **Dynamic Quotas**: The number of frames to select per category is dynamically adjusted based on the video's duration to ensure sufficient coverage for longer videos.
+2. **Category Grouping**: Usable frames (those with sufficient quality) are grouped by criteria like body pose (e.g., `standing`, `closeup`) and head angle (e.g., `front`, `profile_left`).
+3. **Advanced Scoring**: Within each category, frames are ranked using a weighted score that considers not only the global quality assessment but also other factors like the relative size of the face in the frame.
+4. **Diverse Selection**: The final selection algorithm iterates through the ranked frames in each category, picking the top-ranked ones while ensuring they are visually distinct from each other to maximize diversity.
+5. **State Update**: A list of all unique selected frame IDs is stored in the pipeline state, and the `FrameData` for each selected frame is updated to indicate which categories it was chosen for.
 
 ### 8. Output Generation (`OutputGenerationStep`)
 
-The final step generates the output images and metadata files.
+The final step generates the output images based on the selections from the previous step.
 
 **Primary Component**: `core/steps/output_generation.py` (using `output/image_writer.py` and `output/naming_convention.py`)
 
 **Workflow Steps:**
-1. **File Naming**: Generate filenames based on the project's naming convention.
-2. **Image Encoding**: Save full frames and face crops as high-quality JPEGs.
-3. **Metadata Finalization**: Create the final `info.json` file with all processing metadata.
-4. **Cleanup**: Remove the temporary directory.
+1. **File Naming**: A structured filename is generated for each output image, based on the source frame, the category it was selected for (e.g., `pose_standing`, `head_angle_front`), and its quality rank.
+2. **Image Generation**: For each selected frame, the step generates one or more output files:
+    - **Full Frames**: Saved for categories where the full context is important (e.g., `standing`).
+    - **Pose Crops**: If enabled, crops focusing on the person's body are generated.
+    - **Face Crops**: If enabled, tight crops of the face are generated for head angle categories.
+3. **Image Encoding**: All output images are saved as high-quality JPEGs (or other configured formats) in the final output directory.
+4. **State Update**: A list of all generated output file paths is added to the pipeline's processing statistics.
+
+### State Persistence and Cleanup
+
+Two important aspects of the pipeline are handled by the main `ProcessingPipeline` orchestrator rather than a specific step:
+
+1.  **Metadata Persistence**: The complete state of the pipeline is continuously saved to a `{video_base}_info.json` file inside the temporary working directory. The `StateManager` handles this process, and it is updated after every successfully completed step. This file serves as the single source of truth for the entire process, enabling resumability. There is no separate "final" metadata file; this state file contains all the collected information.
+
+2.  **Temporary Directory Cleanup**: The temporary directory, which contains all extracted frames and the state file, is managed by the `TempManager`. The `ProcessingPipeline` decides whether to delete this directory upon completion (or failure) based on the user's configuration (`--keep-temp` flag and other settings). This cleanup is not part of any single step but is a final action performed by the pipeline orchestrator.
 
 ## Major Domain Objects and Classes
 

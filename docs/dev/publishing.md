@@ -1,37 +1,55 @@
-# How to Publish to PyPI
+# Publishing to PyPI
 
-This guide outlines the simplified steps to publish the `personfromvid` package to the Python Package Index (PyPI) using a `Makefile`.
+This guide covers how to publish the `personfromvid` package to the Python Package Index (PyPI). The process is automated using a `Makefile` for simplicity and consistency.
 
-## Prerequisites
+## Overview
 
-### 1. Install Publishing Tools
+Publishing a new release involves three main steps:
+1. **Update the version** in `pyproject.toml`
+2. **Create a git tag** to mark the release
+3. **Run the publish command** to upload to PyPI
 
-You need `build` to create the package and `twine` to upload it. If you don't have them, install them:
+After initial setup, each release follows the same simple workflow.
+
+## Release Checklist
+
+- [ ] All code changes merged and tests passing
+- [ ] Update version number in `pyproject.toml`
+- [ ] Commit version change: `git commit -m "Bump version to X.X.X"`
+- [ ] Create and push git tag: `git tag vX.X.X && git push origin main && git push origin vX.X.X`
+- [ ] Run publish command: `make publish`
+- [ ] Verify package published at [https://pypi.org/project/personfromvid/](https://pypi.org/project/personfromvid/)
+
+## One-Time Setup
+
+These steps only need to be done once when setting up publishing for the first time.
+
+### 1. Install Dependencies
+
+Ensure all project dependencies are installed, including the publishing tools (`build` and `twine`):
 
 ```bash
-pip install build twine
+pip install -r requirements.txt
 ```
 
-### 2. Get a PyPI API Token
+### 2. Create PyPI Account and API Token
 
-You need an account on the official PyPI server to publish.
+You need an account on PyPI to publish packages.
 
-- **PyPI Website**: [https://pypi.org/account/register/](https://pypi.org/account/register/)
+1. **Create an account**: [https://pypi.org/account/register/](https://pypi.org/account/register/)
+2. **Generate an API token**:
+   - Log in to your PyPI account
+   - Navigate to "Account settings" → "API tokens"
+   - Create a new token (scope it to the `personfromvid` project if desired)
+   - **Important**: Copy the token immediately, as you cannot view it again
 
-After creating an account, generate an API token for authentication.
+## Release Process
 
-1.  Log in to your PyPI account.
-2.  Navigate to "Account settings" -> "API tokens".
-3.  Create a new token. It's good practice to scope it to the `personfromvid` project.
-4.  **Important**: Copy the token immediately, as you will not be able to view it again.
-
-## Publishing Steps
-
-The publishing process is automated with a `Makefile`.
+Follow these steps for each new release:
 
 ### Step 1: Update Version Number
 
-Before publishing a new release, you must increment the `version` number in `pyproject.toml`. PyPI does not allow overwriting existing versions.
+Increment the `version` number in `pyproject.toml`. PyPI does not allow overwriting existing versions.
 
 ```toml
 # pyproject.toml
@@ -41,41 +59,58 @@ version = "1.0.1" # Example: changed from 1.0.0
 # ...
 ```
 
-### Step 2: Publish the Package
+### Step 2: Create Git Tag
 
-Run the `publish` command from the root of the project.
+Commit the version change and create a git tag to mark the release:
+
+```bash
+git add pyproject.toml
+git commit -m "Bump version to 1.0.1"
+git tag v1.0.1
+git push origin main
+git push origin v1.0.1
+```
+
+**Note**: Replace `1.0.1` with your actual version number. Tags should follow the `v{version}` format.
+
+### Step 3: Publish to PyPI
+
+Run the automated publish command:
 
 ```bash
 make publish
 ```
 
-This single command will:
-1.  Clean any old build artifacts.
-2.  Build the source and wheel distributions.
-3.  Check the new distribution files.
-4.  Upload the package to PyPI.
+This command will:
+1. Clean any old build artifacts
+2. Build the source and wheel distributions
+3. Check the new distribution files
+4. Upload the package to PyPI
 
-### Authentication
+## Authentication Reference
 
-When you run `make publish`, `twine` will prompt you for your credentials.
--   **Username**: Enter `__token__`
--   **Password**: Paste your PyPI API token (including the `pypi-` prefix).
+### Interactive Authentication
 
-#### Optional: Using Environment Variables
+When you run `make publish`, `twine` will prompt for credentials:
+- **Username**: Enter `__token__`
+- **Password**: Paste your PyPI API token (including the `pypi-` prefix)
 
-For a non-interactive workflow, you can configure `twine` by setting environment variables in your shell.
+### Non-Interactive Authentication (Optional)
+
+For automated workflows, you can set environment variables:
 
 ```bash
 export TWINE_USERNAME=__token__
 export TWINE_PASSWORD="pypi-your-token-here"
 ```
 
-If these variables are set, `twine` will use them to authenticate automatically and will not prompt for your credentials.
+With these variables set, `twine` will authenticate automatically without prompting.
 
-## Future Updates
+## Quick Reference
 
-For all subsequent releases, the process is simple:
+For subsequent releases after initial setup:
 
-1.  Ensure all code changes are merged and tests are passing.
-2.  Increment the `version` in `pyproject.toml`.
-3.  Run `make publish`.
+1. Ensure all code changes are merged and tests are passing
+2. Increment the `version` in `pyproject.toml`
+3. Create a git tag for the new version
+4. Run `make publish`
