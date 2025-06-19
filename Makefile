@@ -5,17 +5,17 @@
 # ==============================================================================
 
 clean:
-	@echo "Cleaning build artifacts..."
+	@echo "🧹 Cleaning build artifacts..."
 	rm -rf dist/ build/ .eggs/ *.egg-info
 
 build:
-	@echo "Building package..."
+	@echo "🔨 Building package..."
 	python -m build
 
 check:
-	@echo "Checking distribution files..."
+	@echo "✅ Checking distribution files..."
 	twine check dist/*
 
 publish: clean build check
-	@echo "Publishing to PyPI..."
+	@echo "🚀 Publishing to PyPI..."
 	twine upload dist/* 
