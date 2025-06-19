@@ -25,8 +25,8 @@ console = Console()
 
 def signal_handler(signum: int, frame) -> None:
     """Handle interrupt signals gracefully."""
-    console.print("\n[yellow]Processing interrupted by user. Saving state...[/yellow]")
-    # This will be handled by the pipeline when implemented
+    console.print("\n[yellow]Processing interrupted by user.[/yellow]")
+    console.print("[green]Temporary files preserved for potential resume.[/green]")
     sys.exit(1)
 
 
@@ -216,229 +216,317 @@ def main(
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    try:
-        # Load configuration
-        app_config = load_config(config)
+    # Initialize variables for error handling
+    app_config = None
+    processing_context = None
 
-        # Apply CLI overrides
+    try:
+        # 1. Load configuration and apply overrides
+        app_config = load_config(config)
         apply_cli_overrides(app_config, locals())
 
-        # Determine if we'll use consolidated formatter
-        will_use_consolidated_formatter = (
-            app_config.logging.enable_structured_output and not no_structured_output
+        # 2. Set up logging and formatting
+        will_use_consolidated_formatter, logger = setup_logging_and_formatting(
+            app_config, no_structured_output, quiet
         )
 
-        # Completely disable structured logging if using consolidated formatter
-        if will_use_consolidated_formatter:
-            app_config.logging.enable_rich_console = False
-            app_config.logging.enable_structured_output = False
-            # Set logging to ERROR level to suppress all INFO/DEBUG messages
-            app_config.logging.level = LogLevel.ERROR
+        # 3. Validate inputs
+        video_validation = validate_inputs(video_path, app_config, quiet, no_structured_output)
 
-        # Set up logging
-        setup_logging(app_config.logging)
-        logger = get_logger("cli")
-
-        # Show banner unless quiet or using consolidated formatter
-        if not quiet and not will_use_consolidated_formatter:
-            show_banner()
-
-        # Validate system requirements (suppress detailed output if using consolidated formatter)
-        if not will_use_consolidated_formatter:
-            logger.info("Validating system requirements...")
-
-        system_issues = validate_system_requirements()
-
-        if system_issues:
-            if will_use_consolidated_formatter:
-                # Just check for fatal issues, don't log details
-                fatal_issues = [
-                    issue
-                    for issue in system_issues
-                    if "Missing required dependency" in issue
-                ]
-                if fatal_issues:
-                    console.print("[red]Error:[/red] Missing required dependencies")
-                    for issue in fatal_issues:
-                        console.print(f"  • {issue}")
-                    sys.exit(1)
-            else:
-                # Original detailed logging
-                logger.warning("System validation issues found:")
-                for issue in system_issues:
-                    logger.warning(f"  • {issue}")
-
-                # Fatal issues (missing dependencies)
-                fatal_issues = [
-                    issue
-                    for issue in system_issues
-                    if "Missing required dependency" in issue
-                ]
-                if fatal_issues:
-                    logger.error("Cannot proceed due to missing dependencies.")
-                    sys.exit(1)
-
-        # Validate video file
-        if not will_use_consolidated_formatter:
-            logger.info(f"Validating video file: {video_path}")
-
-        video_validation = validate_video_file(video_path)
-
-        if "error" not in video_validation["metadata"]:
-            metadata = video_validation["metadata"]
-            if not will_use_consolidated_formatter:
-                duration_str = f"{metadata['duration']:.1f}s"
-                resolution_str = f"{metadata['width']}x{metadata['height']}"
-                fps_str = f"{metadata['fps']:.1f} FPS"
-                logger.info(
-                    f"Video: {duration_str}, {resolution_str}, {fps_str}, {metadata['codec']}"
-                )
-        else:
-            error_msg = (
-                f"Video validation failed: {video_validation['metadata']['error']}"
-            )
-            if will_use_consolidated_formatter:
-                console.print(f"[red]Error:[/red] {error_msg}")
-            else:
-                logger.error(error_msg)
-            sys.exit(1)
-
-        # Set up output directory
+        # 4. Set up output directory and create directories
         if output_dir is None:
             output_dir = video_path.parent
-
-        # Create necessary directories
         app_config.create_directories()
 
-        # Show processing plan (unless using consolidated formatter)
+        # 5. Show processing plan (unless using consolidated formatter)
         if not will_use_consolidated_formatter:
             show_processing_plan(video_path, output_dir, app_config)
 
-        # Initialize and run pipeline
-        from .core.pipeline import ProcessingPipeline
-        from .data.context import ProcessingContext
-
-        # Create processing context with required components
-        if not will_use_consolidated_formatter:
-            logger.info("Initializing processing context...")
-
-        # Create ProcessingContext
-        processing_context = ProcessingContext(
-            video_path=video_path,
-            video_base_name=video_path.stem,
-            config=app_config,
-            output_directory=output_dir,
+        # 6. Run pipeline
+        result, processing_context = create_and_run_pipeline(
+            video_path, output_dir, app_config, video_validation,
+            will_use_consolidated_formatter, logger, verbose
         )
-
-        # Create consolidated formatter if structured output is enabled
-        consolidated_formatter = None
-        if will_use_consolidated_formatter:
-            from .utils.output_formatter import create_consolidated_formatter
-
-            consolidated_formatter = create_consolidated_formatter(
-                console=console, enable_debug=verbose or app_config.logging.verbose
-            )
-
-            # Start processing with consolidated output
-            config_info = {
-                "gpu_available": app_config.models.device == "gpu",
-                "video_metadata": (
-                    video_validation["metadata"]
-                    if "error" not in video_validation["metadata"]
-                    else None
-                ),
-                "file_size_mb": video_path.stat().st_size / (1024 * 1024),
-            }
-            consolidated_formatter.start_processing(str(video_path), config_info)
-        else:
-            logger.info("Initializing processing pipeline...")
-
-        try:
-            pipeline = ProcessingPipeline(
-                context=processing_context, formatter=consolidated_formatter
-            )
-
-            # Process with resume by default
-            # Check if resumable state exists
-            status = pipeline.get_status()
-            if status.can_resume:
-                logger.info("Resuming from previous processing state...")
-                result = pipeline.resume()
-            else:
-                logger.info("No resumable state found, starting new processing...")
-                result = pipeline.process()
-
-            # Show results
-            if result.success:
-                # Pipeline's consolidated formatter already handled success output
-                if not consolidated_formatter:
-                    logger.info("Processing completed successfully")
-            else:
-                error_msg = f"Processing failed: {result.error_message}"
-                if consolidated_formatter:
-                    consolidated_formatter.print_error(error_msg)
-                else:
-                    logger.error(f"❌ {error_msg}")
-                sys.exit(1)
-
-        except Exception as e:
-            logger.error(f"Pipeline processing failed: {e}")
-            if verbose:
-                console.print_exception()
-
-            # Cleanup temp files on failure if configured
-            if app_config.storage.cleanup_temp_on_failure:
-                logger.info("Cleaning up temporary files after failure...")
-                processing_context.temp_manager.cleanup_temp_files()
-
+        
+        # 7. Handle pipeline failure (success cleanup is handled by pipeline itself)
+        if not result.success:
+            handle_cleanup(processing_context, app_config, success=False)
+            console.print(f"[red]Error:[/red] Processing failed: {result.error_message}")
             sys.exit(1)
 
-    except PersonFromVidError as e:
-        error_msg = format_exception_message(e)
-        console.print(f"[red]Error:[/red] {error_msg}")
-
-        # Cleanup temp files if they were created and cleanup on failure is enabled
-        try:
-            if (
-                "processing_context" in locals()
-                and app_config.storage.cleanup_temp_on_failure
-            ):
-                processing_context.temp_manager.cleanup_temp_files()
-        except Exception:
-            pass  # Don't fail cleanup on error
-
+    except (PersonFromVidError, KeyboardInterrupt, Exception) as e:
+        handle_cli_error(e, processing_context, app_config, verbose)
         sys.exit(1)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Processing interrupted by user.[/yellow]")
 
-        # Cleanup temp files if they were created and keep_temp is not enabled
-        try:
-            if "processing_context" in locals() and not app_config.storage.keep_temp:
-                processing_context.temp_manager.cleanup_temp_files()
-            elif "processing_context" in locals() and app_config.storage.keep_temp:
-                console.print(
-                    "[green]Temporary files preserved due to --keep-temp flag.[/green]"
-                )
-        except Exception:
-            pass  # Don't fail cleanup on error
 
-        sys.exit(1)
+def create_and_run_pipeline(
+    video_path: Path, 
+    output_dir: Path, 
+    config: Config, 
+    video_validation: dict,
+    will_use_consolidated_formatter: bool,
+    logger,
+    verbose: bool
+):
+    """Create processing context and run pipeline.
+    
+    Returns:
+        tuple: (ProcessingResult, ProcessingContext) - Pipeline execution result and context
+    """
+    # Initialize and run pipeline
+    from .core.pipeline import ProcessingPipeline
+    from .data.context import ProcessingContext
+
+    # Create processing context with required components
+    if not will_use_consolidated_formatter:
+        logger.info("Initializing processing context...")
+
+    # Create ProcessingContext
+    processing_context = ProcessingContext(
+        video_path=video_path,
+        video_base_name=video_path.stem,
+        config=config,
+        output_directory=output_dir,
+    )
+
+    # Create consolidated formatter if structured output is enabled
+    consolidated_formatter = None
+    if will_use_consolidated_formatter:
+        from .utils.output_formatter import create_consolidated_formatter
+
+        consolidated_formatter = create_consolidated_formatter(
+            console=console, enable_debug=verbose or config.logging.verbose
+        )
+
+        # Start processing with consolidated output
+        config_info = {
+            "gpu_available": config.models.device == "gpu",
+            "video_metadata": (
+                video_validation["metadata"]
+                if "error" not in video_validation["metadata"]
+                else None
+            ),
+            "file_size_mb": video_path.stat().st_size / (1024 * 1024),
+        }
+        consolidated_formatter.start_processing(str(video_path), config_info)
+    else:
+        logger.info("Initializing processing pipeline...")
+
+    try:
+        pipeline = ProcessingPipeline(
+            context=processing_context, formatter=consolidated_formatter
+        )
+
+        # Process with resume by default
+        # Check if resumable state exists
+        status = pipeline.get_status()
+        if status.can_resume:
+            logger.info("Resuming from previous processing state...")
+            result = pipeline.resume()
+        else:
+            logger.info("No resumable state found, starting new processing...")
+            result = pipeline.process()
+
+        # Show results
+        if result.success:
+            # Pipeline's consolidated formatter already handled success output
+            if not consolidated_formatter:
+                logger.info("Processing completed successfully")
+        else:
+            error_msg = f"Processing failed: {result.error_message}"
+            if consolidated_formatter:
+                consolidated_formatter.print_error(error_msg)
+            else:
+                logger.error(f"❌ {error_msg}")
+            # Don't call sys.exit here - let main function handle cleanup
+            return result, processing_context
+            
+        return result, processing_context
+
     except Exception as e:
-        console.print(f"[red]Unexpected error:[/red] {str(e)}")
+        logger.error(f"Pipeline processing failed: {e}")
         if verbose:
             console.print_exception()
 
-        # Cleanup temp files if they were created and cleanup on failure is enabled
-        try:
-            if (
-                "processing_context" in locals()
-                and app_config.storage.cleanup_temp_on_failure
-            ):
-                processing_context.temp_manager.cleanup_temp_files()
-        except Exception:
-            pass  # Don't fail cleanup on error
+        # Re-raise the exception to let CLI handle cleanup
+        raise
 
+
+def handle_cli_error(
+    error: Exception,
+    processing_context: Optional[object] = None,
+    app_config: Optional[object] = None,
+    verbose: bool = False
+) -> None:
+    """Handle CLI-level errors with appropriate cleanup and messaging.
+    
+    Args:
+        error: The exception that occurred
+        processing_context: The processing context (if created)
+        app_config: Application configuration (if loaded)
+        verbose: Whether to show detailed error information
+    """
+    if isinstance(error, PersonFromVidError):
+        error_msg = format_exception_message(error)
+        console.print(f"[red]Error:[/red] {error_msg}")
+    elif isinstance(error, KeyboardInterrupt):
+        console.print("\n[yellow]Processing interrupted by user.[/yellow]")
+        console.print("[green]Temporary files preserved for potential resume.[/green]")
+    else:
+        console.print(f"[red]Unexpected error:[/red] {str(error)}")
+        if verbose:
+            console.print_exception()
+    
+    # Cleanup if processing context was created
+    if processing_context and app_config:
+        handle_cleanup(processing_context, app_config, success=False, error=error)
+
+
+def handle_cleanup(
+    processing_context: Optional[object] = None,
+    config: Optional[object] = None,
+    success: bool = False,
+    error: Optional[Exception] = None,
+    interrupted: bool = False
+) -> None:
+    """Handle cleanup operations for CLI-level failures only.
+    
+    Note: Pipeline handles its own success and internal failure cleanup.
+    This function only handles cleanup for CLI-level errors that occur
+    before or after pipeline execution.
+    
+    Args:
+        processing_context: The processing context with temp manager (if available)
+        config: Application configuration (if available)
+        success: Whether processing completed successfully (unused - pipeline handles success)
+        error: Exception that caused failure (if any)
+        interrupted: Whether processing was interrupted by user (unused - interrupts preserve files)
+    """
+    # Only perform cleanup if we have both context and config
+    if not processing_context or not config:
+        return
+        
+    try:
+        temp_manager = getattr(processing_context, 'temp_manager', None)
+        if not temp_manager:
+            return
+            
+        # Only cleanup on CLI-level errors, and only if configured to do so
+        if not success and not interrupted and config.storage.cleanup_temp_on_failure:
+            temp_manager.cleanup_temp_files()
+                
+    except Exception:
+        # Don't fail cleanup on error - just silently continue
+        pass
+
+
+def setup_logging_and_formatting(config: Config, no_structured_output: bool, quiet: bool) -> tuple:
+    """Set up logging and determine formatter.
+    
+    Returns:
+        tuple: (will_use_consolidated_formatter, consolidated_formatter)
+    """
+    # Determine if we'll use consolidated formatter
+    will_use_consolidated_formatter = (
+        config.logging.enable_structured_output and not no_structured_output
+    )
+
+    # Completely disable structured logging if using consolidated formatter
+    if will_use_consolidated_formatter:
+        config.logging.enable_rich_console = False
+        config.logging.enable_structured_output = False
+        # Set logging to ERROR level to suppress all INFO/DEBUG messages
+        config.logging.level = LogLevel.ERROR
+
+    # Set up logging
+    setup_logging(config.logging)
+    logger = get_logger("cli")
+
+    # Show banner unless quiet or using consolidated formatter
+    if not quiet and not will_use_consolidated_formatter:
+        show_banner()
+    
+    return will_use_consolidated_formatter, logger
+
+
+def validate_inputs(video_path: Path, config: Config, quiet: bool, no_structured_output: bool = False) -> dict:
+    """Handle all system and video validation.
+    
+    Returns:
+        dict: Video validation metadata
+        
+    Raises:
+        SystemExit: If validation fails
+    """
+    logger = get_logger("cli")
+    
+    # Determine if we'll use consolidated formatter for conditional output
+    # Note: This must match the logic from main function
+    will_use_consolidated_formatter = (
+        config.logging.enable_structured_output and not no_structured_output
+    )
+    
+    # Validate system requirements (suppress detailed output if using consolidated formatter)
+    if not will_use_consolidated_formatter:
+        logger.info("Validating system requirements...")
+
+    system_issues = validate_system_requirements()
+
+    if system_issues:
+        if will_use_consolidated_formatter:
+            # Just check for fatal issues, don't log details
+            fatal_issues = [
+                issue
+                for issue in system_issues
+                if "Missing required dependency" in issue
+            ]
+            if fatal_issues:
+                console.print("[red]Error:[/red] Missing required dependencies")
+                for issue in fatal_issues:
+                    console.print(f"  • {issue}")
+                sys.exit(1)
+        else:
+            # Original detailed logging
+            logger.warning("System validation issues found:")
+            for issue in system_issues:
+                logger.warning(f"  • {issue}")
+
+            # Fatal issues (missing dependencies)
+            fatal_issues = [
+                issue
+                for issue in system_issues
+                if "Missing required dependency" in issue
+            ]
+            if fatal_issues:
+                logger.error("Cannot proceed due to missing dependencies.")
+                sys.exit(1)
+
+    # Validate video file
+    if not will_use_consolidated_formatter:
+        logger.info(f"Validating video file: {video_path}")
+
+    video_validation = validate_video_file(video_path)
+
+    if "error" not in video_validation["metadata"]:
+        metadata = video_validation["metadata"]
+        if not will_use_consolidated_formatter:
+            duration_str = f"{metadata['duration']:.1f}s"
+            resolution_str = f"{metadata['width']}x{metadata['height']}"
+            fps_str = f"{metadata['fps']:.1f} FPS"
+            logger.info(
+                f"Video: {duration_str}, {resolution_str}, {fps_str}, {metadata['codec']}"
+            )
+    else:
+        error_msg = (
+            f"Video validation failed: {video_validation['metadata']['error']}"
+        )
+        if will_use_consolidated_formatter:
+            console.print(f"[red]Error:[/red] {error_msg}")
+        else:
+            logger.error(error_msg)
         sys.exit(1)
+    
+    return video_validation
 
 
 def show_banner() -> None:
@@ -454,8 +542,8 @@ def show_banner() -> None:
     console.print(panel)
 
 
-def apply_cli_overrides(config: Config, cli_args: dict) -> None:
-    """Apply CLI argument overrides to configuration."""
+def _apply_logging_overrides(config: Config, cli_args: dict) -> None:
+    """Apply logging-specific overrides."""
     # Logging overrides
     if cli_args["verbose"]:
         config.logging.verbose = True
@@ -469,6 +557,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["no_structured_output"]:
         config.logging.enable_structured_output = False
 
+
+def _apply_model_overrides(config: Config, cli_args: dict) -> None:
+    """Apply model-specific overrides."""
     # Model overrides
     if cli_args["device"]:
         config.models.device = cli_args["device"]
@@ -479,6 +570,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["confidence"]:
         config.models.confidence_threshold = cli_args["confidence"]
 
+
+def _apply_extraction_overrides(config: Config, cli_args: dict) -> None:
+    """Apply frame extraction overrides."""
     # Frame extraction overrides
     if cli_args["max_frames"]:
         config.frame_extraction.max_frames_per_video = cli_args["max_frames"]
@@ -487,6 +581,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["quality_threshold"]:
         config.frame_selection.min_quality_threshold = cli_args["quality_threshold"]
 
+
+def _apply_output_overrides(config: Config, cli_args: dict) -> None:
+    """Apply output-specific overrides."""
     # Output overrides
     if cli_args["output_format"]:
         config.output.image.format = cli_args["output_format"]
@@ -518,6 +615,9 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["max_frames_per_category"]:
         config.output.max_frames_per_category = cli_args["max_frames_per_category"]
 
+
+def _apply_processing_overrides(config: Config, cli_args: dict) -> None:
+    """Apply processing overrides."""
     # Processing overrides
     if cli_args["force"]:
         config.processing.force_restart = True
@@ -525,6 +625,15 @@ def apply_cli_overrides(config: Config, cli_args: dict) -> None:
     # Storage overrides
     if cli_args["keep_temp"]:
         config.storage.keep_temp = True
+
+
+def apply_cli_overrides(config: Config, cli_args: dict) -> None:
+    """Apply CLI argument overrides to configuration."""
+    _apply_logging_overrides(config, cli_args)
+    _apply_model_overrides(config, cli_args)
+    _apply_extraction_overrides(config, cli_args)
+    _apply_output_overrides(config, cli_args)
+    _apply_processing_overrides(config, cli_args)
 
 
 def show_processing_plan(video_path: Path, output_dir: Path, config: Config) -> None:
