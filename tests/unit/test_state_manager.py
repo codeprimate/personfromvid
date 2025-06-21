@@ -245,8 +245,8 @@ class TestStateManager:
             assert manager.can_resume() is True
 
             # Complete all steps to make pipeline fully completed
-            all_steps = ["initialization", "frame_extraction", "face_detection", "pose_analysis",
-                        "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
+            from personfromvid.data.constants import get_pipeline_step_names
+            all_steps = get_pipeline_step_names()
             for step in all_steps:
                 sample_pipeline_state.complete_step(step)
             manager.save_state(sample_pipeline_state)

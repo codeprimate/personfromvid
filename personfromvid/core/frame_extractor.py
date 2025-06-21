@@ -431,7 +431,9 @@ class FrameExtractor:
                 self.logger.info(
                     f"Limiting candidates from {len(sorted_candidates)} to {self.config.max_frames_per_video}"
                 )
-                sorted_candidates = sorted_candidates[: self.config.max_frames_per_video]
+                sorted_candidates = sorted_candidates[
+                    : self.config.max_frames_per_video
+                ]
 
         return sorted_candidates
 

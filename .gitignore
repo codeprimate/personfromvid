@@ -267,16 +267,6 @@ temporary/
 
 results/
 
-# Video files (don't commit large video files)
-*.mp4
-*.avi
-*.mov
-*.mkv
-*.wmv
-*.flv
-*.webm
-*.m4v
-
 # Image files (processed output images)
 extracted_frames/
 face_crops/
@@ -303,3 +293,4 @@ pipeline_state.json
 *.bak
 *.backup
 *~ 
+.cursor/

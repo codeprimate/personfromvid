@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from personfromvid.data import Config, ProcessingContext
-from personfromvid.data.detection_results import FaceDetection
+from personfromvid.data.detection_results import CloseupDetection, FaceDetection
 from personfromvid.data.frame_data import (
     FrameData,
     ImageProperties,
@@ -86,6 +86,14 @@ def sample_frame_data(tmp_path):
                 landmarks=[(520, 320), (680, 320), (600, 380), (540, 450), (660, 450)]
             )
         ],
+        closeup_detections=[
+            CloseupDetection(
+                is_closeup=True,
+                shot_type="medium_closeup",
+                confidence=0.9,
+                face_area_ratio=0.3
+            )
+        ],
         selections=SelectionInfo(
             selected_for_poses=["standing"],
             selected_for_head_angles=["front"],
@@ -104,13 +112,13 @@ class TestNamingConvention:
         """Test full frame filename generation."""
         naming = NamingConvention(context=processing_context)
         filename = naming.get_full_frame_filename(sample_frame_data, "standing", 1, "png")
-        assert filename == "test_video_standing_001.png"
+        assert filename == "test_video_standing_medium_closeup_001.png"
 
     def test_face_crop_filename(self, processing_context, sample_frame_data):
         """Test face crop filename generation."""
         naming = NamingConvention(context=processing_context)
         filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "jpg")
-        assert filename == "test_video_face_front_001.jpg"
+        assert filename == "test_video_face_front_001.jpg"  # Simplified: no shot type
 
     def test_crop_suffixed_filename(self, processing_context):
         """Test crop suffix filename generation."""
@@ -120,6 +128,93 @@ class TestNamingConvention:
         assert naming.get_crop_suffixed_filename("video_pose_001.jpg") == "video_pose_001_crop.jpg"
         assert naming.get_crop_suffixed_filename("test.png") == "test_crop.png"
         assert naming.get_crop_suffixed_filename("complex_name_with_underscores.jpeg") == "complex_name_with_underscores_crop.jpeg"
+
+    def test_full_frame_filename_with_person_id(self, processing_context, sample_frame_data):
+        """Test full frame filename generation with person_id."""
+        naming = NamingConvention(context=processing_context)
+
+        # Test person-based naming
+        filename = naming.get_full_frame_filename(sample_frame_data, "standing", 1, "png", person_id=0)
+        assert filename == "test_video_person_0_standing_medium_closeup_001.png"
+
+        filename = naming.get_full_frame_filename(sample_frame_data, "sitting", 2, "jpg", person_id=1)
+        assert filename == "test_video_person_1_sitting_medium_closeup_002.jpg"
+
+        # Test with larger person_id
+        filename = naming.get_full_frame_filename(sample_frame_data, "walking", 3, "png", person_id=10)
+        assert filename == "test_video_person_10_walking_medium_closeup_003.png"
+
+    def test_face_crop_filename_with_person_id(self, processing_context, sample_frame_data):
+        """Test face crop filename generation with person_id."""
+        naming = NamingConvention(context=processing_context)
+
+        # Test person-based naming
+        filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "png", person_id=0)
+        assert filename == "test_video_person_0_face_front_001.png"  # Simplified: no shot type
+
+        filename = naming.get_face_crop_filename(sample_frame_data, "profile_left", 2, "jpg", person_id=2)
+        assert filename == "test_video_person_2_face_profile_left_002.jpg"  # Simplified: no shot type
+
+        # Test variations
+        filename = naming.get_face_crop_filename(sample_frame_data, "profile_right", 5, "png", person_id=15)
+        assert filename == "test_video_person_15_face_profile_right_005.png"  # Simplified: no shot type
+
+    def test_person_id_none_maintains_backward_compatibility(self, processing_context, sample_frame_data):
+        """Test that person_id=None maintains existing behavior."""
+        # Create separate instances to avoid collision counter conflicts
+        naming1 = NamingConvention(context=processing_context)
+        naming2 = NamingConvention(context=processing_context)
+
+        # Full frame - explicit None vs default
+        filename_none = naming1.get_full_frame_filename(sample_frame_data, "standing", 1, "png", person_id=None)
+        filename_default = naming2.get_full_frame_filename(sample_frame_data, "standing", 1, "png")
+        assert filename_none == filename_default == "test_video_standing_medium_closeup_001.png"
+
+        # Face crop - explicit None vs default (simplified: no shot type)
+        naming3 = NamingConvention(context=processing_context)
+        naming4 = NamingConvention(context=processing_context)
+        filename_none = naming3.get_face_crop_filename(sample_frame_data, "front", 1, "png", person_id=None)
+        filename_default = naming4.get_face_crop_filename(sample_frame_data, "front", 1, "png")
+        assert filename_none == filename_default == "test_video_face_front_001.png"  # Simplified: no shot type
+
+    def test_validate_filename_with_person_id(self, processing_context):
+        """Test filename validation with person_id patterns."""
+        naming = NamingConvention(context=processing_context)
+
+        # Valid person-based filenames
+        assert naming.validate_filename("test_video_person_0_standing_001.png")
+        assert naming.validate_filename("test_video_person_5_face_front_001.jpg")
+        assert naming.validate_filename("test_video_person_10_sitting_pose_002.png")
+
+        # Invalid person-based filenames (invalid person_id)
+        assert not naming.validate_filename("test_video_person_abc_standing_001.png")
+        assert not naming.validate_filename("test_video_person__standing_001.png")
+        assert not naming.validate_filename("test_video_person_1.5_standing_001.png")
+
+        # Traditional filenames should still validate
+        assert naming.validate_filename("test_video_standing_001.png")
+        assert naming.validate_filename("test_video_face_front_001.jpg")
+
+    def test_person_id_collision_prevention(self, processing_context, sample_frame_data):
+        """Test that person-based and frame-based outputs have distinct names."""
+        naming = NamingConvention(context=processing_context)
+
+        # Generate traditional and person-based filenames
+        frame_filename = naming.get_full_frame_filename(sample_frame_data, "standing", 1, "png")
+        person_filename = naming.get_full_frame_filename(sample_frame_data, "standing", 1, "png", person_id=0)
+
+        # They should be different
+        assert frame_filename != person_filename
+        assert frame_filename == "test_video_standing_medium_closeup_001.png"
+        assert person_filename == "test_video_person_0_standing_medium_closeup_001.png"
+
+        # Same for face crops (simplified: no shot type)
+        frame_face_filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "png")
+        person_face_filename = naming.get_face_crop_filename(sample_frame_data, "front", 1, "png", person_id=0)
+
+        assert frame_face_filename != person_face_filename
+        assert frame_face_filename == "test_video_face_front_001.png"  # Simplified: no shot type
+        assert person_face_filename == "test_video_person_0_face_front_001.png"  # Simplified: no shot type
 
 
 class TestImageWriter:
@@ -470,3 +565,539 @@ class TestImageWriter:
             # No files should have _crop suffix
             crop_files = [f for f in output_files if '_crop.jpg' in f]
             assert len(crop_files) == 0
+
+
+class TestOutputGenerationStep:
+    """Tests for OutputGenerationStep with dual input support."""
+
+    @pytest.fixture
+    def mock_pipeline(self):
+        """Create a mock pipeline for testing."""
+        pipeline = Mock()
+        pipeline.context = Mock()
+        pipeline.context.output_directory = Path("/test/output")
+        return pipeline
+
+    @pytest.fixture
+    def mock_state(self):
+        """Create a mock state manager for testing."""
+        state = Mock()
+        state.frames = []
+        state.processing_stats = {}  # Use real dict for item assignment
+        return state
+
+    @pytest.fixture
+    def mock_formatter(self):
+        """Create a mock formatter for testing."""
+        formatter = Mock()
+        formatter.create_progress_bar.return_value.__enter__ = Mock(return_value=None)
+        formatter.create_progress_bar.return_value.__exit__ = Mock(return_value=None)
+        return formatter
+
+    @pytest.fixture
+    def output_step(self, mock_pipeline, mock_state, mock_formatter):
+        """Create OutputGenerationStep instance for testing."""
+        from personfromvid.core.steps.output_generation import OutputGenerationStep
+
+        # Setup mock pipeline with required attributes
+        mock_pipeline.state = mock_state
+        mock_pipeline.formatter = mock_formatter
+        mock_pipeline.logger = Mock()
+        mock_pipeline.config = Mock()
+        mock_pipeline._interrupted = False
+        mock_pipeline._step_start_time = 0.0
+
+        step = OutputGenerationStep(mock_pipeline)
+        step._check_interrupted = Mock()  # Override to prevent interruption checks in tests
+        return step
+
+    @pytest.fixture
+    def sample_person_selection(self, sample_frame_data):
+        """Create sample PersonSelection for testing."""
+        from personfromvid.analysis.person_selector import PersonSelection
+        from personfromvid.data.person import BodyUnknown, Person, PersonQuality
+
+        person = Person(
+            person_id=0,
+            face=sample_frame_data.face_detections[0],
+            body=BodyUnknown(),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.8, body_quality=0.0)
+        )
+
+        return PersonSelection(
+            frame_data=sample_frame_data,
+            person_id=0,
+            person=person,
+            selection_score=0.85,
+            category="quality"
+        )
+
+    def test_detect_input_type_person_selection(self, output_step, sample_person_selection):
+        """Test input type detection with PersonSelection data."""
+        # Mock person selection step progress
+        person_progress = Mock()
+        person_progress.get_data.return_value = [sample_person_selection]
+        output_step.state.get_step_progress.side_effect = lambda step: person_progress if step == "person_selection" else None
+
+        input_data, input_type = output_step._detect_input_type()
+
+        assert input_type == "person_selection"
+        assert len(input_data) == 1
+        assert input_data[0] == sample_person_selection
+
+    def test_detect_input_type_frame_selection(self, output_step):
+        """Test input type detection with frame selection data."""
+        # Mock frame selection step progress
+        frame_progress = Mock()
+        frame_progress.get_data.return_value = ["frame_001", "frame_002"]
+        output_step.state.get_step_progress.side_effect = lambda step: frame_progress if step == "frame_selection" else None
+
+        input_data, input_type = output_step._detect_input_type()
+
+        assert input_type == "frame_selection"
+        assert len(input_data) == 2
+        assert input_data == ["frame_001", "frame_002"]
+
+    def test_detect_input_type_no_data(self, output_step):
+        """Test input type detection with no data."""
+        output_step.state.get_step_progress.return_value = None
+
+        input_data, input_type = output_step._detect_input_type()
+
+        assert input_type == "none"
+        assert len(input_data) == 0
+
+    def test_detect_input_type_priority_person_over_frame(self, output_step, sample_person_selection):
+        """Test that PersonSelection data takes priority over frame data."""
+        # Mock both person and frame selection step progress
+        person_progress = Mock()
+        person_progress.get_data.return_value = [sample_person_selection]
+        frame_progress = Mock()
+        frame_progress.get_data.return_value = ["frame_001"]
+
+        def mock_get_step_progress(step):
+            if step == "person_selection":
+                return person_progress
+            elif step == "frame_selection":
+                return frame_progress
+            return None
+
+        output_step.state.get_step_progress.side_effect = mock_get_step_progress
+
+        input_data, input_type = output_step._detect_input_type()
+
+        # PersonSelection should take priority
+        assert input_type == "person_selection"
+        assert len(input_data) == 1
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_process_person_selections(self, mock_image_writer_class, output_step, sample_person_selection):
+        """Test processing PersonSelection objects."""
+        # Setup mocks
+        mock_image_writer = Mock()
+        mock_image_writer.save_person_outputs.return_value = ["/test/output/person_0_file.jpg"]
+        mock_image_writer_class.return_value = mock_image_writer
+
+        step_progress = Mock()
+        output_step.state.get_step_progress.return_value = step_progress
+
+        # Test processing
+        output_step._process_person_selections([sample_person_selection])
+
+        # Verify calls
+        step_progress.start.assert_called_once_with(1)
+        mock_image_writer.save_person_outputs.assert_called_once_with(sample_person_selection)
+        assert output_step.state.processing_stats["total_output_files"] == 1
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_process_frame_selections(self, mock_image_writer_class, output_step, sample_frame_data):
+        """Test processing frame IDs (backwards compatibility)."""
+        # Setup mocks
+        mock_image_writer = Mock()
+        mock_image_writer.save_frame_outputs.return_value = ["/test/output/frame_file.jpg"]
+        mock_image_writer_class.return_value = mock_image_writer
+
+        step_progress = Mock()
+        output_step.state.get_step_progress.return_value = step_progress
+        output_step.state.frames = [sample_frame_data]
+
+        # Test processing
+        output_step._process_frame_selections([sample_frame_data.frame_id])
+
+        # Verify calls
+        step_progress.start.assert_called_once_with(1)
+        mock_image_writer.save_frame_outputs.assert_called_once_with(sample_frame_data)
+        assert output_step.state.processing_stats["total_output_files"] == 1
+
+    def test_handle_no_input_data(self, output_step):
+        """Test handling case with no input data."""
+        step_progress = Mock()
+        output_step.state.get_step_progress.return_value = step_progress
+
+        output_step._handle_no_input_data()
+
+        step_progress.start.assert_called_once_with(0)
+        output_step.formatter.print_warning.assert_called_once()
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_generate_output_for_person_selection(self, mock_image_writer_class, output_step, sample_person_selection):
+        """Test generating output for a single PersonSelection."""
+        mock_image_writer = Mock()
+        mock_image_writer.save_person_outputs.return_value = ["/test/output/person_file.jpg"]
+
+        output_files = output_step._generate_output_for_person_selection(sample_person_selection, mock_image_writer)
+
+        assert len(output_files) == 1
+        assert output_files[0] == "/test/output/person_file.jpg"
+        mock_image_writer.save_person_outputs.assert_called_once_with(sample_person_selection)
+
+    def test_finalize_output_generation(self, output_step):
+        """Test output generation finalization."""
+        output_files = ["/test/file1.jpg", "/test/file2.jpg"]
+        output_dir = "/test/output"
+
+        step_progress = Mock()
+        output_step.state.get_step_progress.return_value = step_progress
+
+        output_step._finalize_output_generation(output_files, output_dir, "person-based")
+
+        assert output_step.state.processing_stats["output_files"] == output_files
+        assert output_step.state.processing_stats["total_output_files"] == 2
+        step_progress.set_data.assert_called_once()
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_execute_with_person_selection_input(self, mock_image_writer_class, output_step, sample_person_selection):
+        """Test execute method with PersonSelection input."""
+        # Setup mocks
+        mock_image_writer = Mock()
+        mock_image_writer.save_person_outputs.return_value = ["/test/output/person_file.jpg"]
+        mock_image_writer_class.return_value = mock_image_writer
+
+        person_progress = Mock()
+        person_progress.get_data.return_value = [sample_person_selection]
+        step_progress = Mock()
+
+        def mock_get_step_progress(step):
+            if step == "person_selection":
+                return person_progress
+            elif step == "output_generation":
+                return step_progress
+            return None
+
+        output_step.state.get_step_progress.side_effect = mock_get_step_progress
+
+        # Execute
+        output_step.execute()
+
+        # Verify
+        output_step.state.start_step.assert_called_once_with("output_generation")
+        step_progress.start.assert_called_once_with(1)
+        mock_image_writer.save_person_outputs.assert_called_once()
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_execute_with_frame_selection_input(self, mock_image_writer_class, output_step, sample_frame_data):
+        """Test execute method with frame selection input (backwards compatibility)."""
+        # Setup mocks
+        mock_image_writer = Mock()
+        mock_image_writer.save_frame_outputs.return_value = ["/test/output/frame_file.jpg"]
+        mock_image_writer_class.return_value = mock_image_writer
+
+        frame_progress = Mock()
+        frame_progress.get_data.return_value = [sample_frame_data.frame_id]
+        step_progress = Mock()
+
+        def mock_get_step_progress(step):
+            if step == "frame_selection":
+                return frame_progress
+            elif step == "output_generation":
+                return step_progress
+            return None
+
+        output_step.state.get_step_progress.side_effect = mock_get_step_progress
+        output_step.state.frames = [sample_frame_data]
+
+        # Execute
+        output_step.execute()
+
+        # Verify
+        output_step.state.start_step.assert_called_once_with("output_generation")
+        step_progress.start.assert_called_once_with(1)
+        mock_image_writer.save_frame_outputs.assert_called_once()
+
+    def test_execute_with_no_input_data(self, output_step):
+        """Test execute method with no input data."""
+        output_step.state.get_step_progress.return_value = None
+        step_progress = Mock()
+        output_step.state.get_step_progress.side_effect = lambda step: step_progress if step == "output_generation" else None
+
+        output_step.execute()
+
+        output_step.state.start_step.assert_called_once_with("output_generation")
+        step_progress.start.assert_called_once_with(0)
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_execute_error_handling(self, mock_image_writer_class, output_step, sample_person_selection):
+        """Test execute method error handling."""
+        # Force an exception during execution
+        mock_image_writer_class.side_effect = Exception("Test error")
+
+        person_progress = Mock()
+        person_progress.get_data.return_value = [sample_person_selection]  # Use real PersonSelection
+        output_step.state.get_step_progress.side_effect = lambda step: person_progress if step == "person_selection" else Mock()
+
+        with pytest.raises(Exception, match="Test error"):
+            output_step.execute()
+
+        output_step.logger.error.assert_called_once()
+        output_step.state.fail_step.assert_called_once_with("output_generation", "Test error")
+
+    @patch('personfromvid.core.steps.output_generation.ImageWriter')
+    def test_person_selection_processing_error_recovery(self, mock_image_writer_class, output_step, sample_person_selection):
+        """Test error recovery during PersonSelection processing."""
+        # Setup: First PersonSelection fails, second succeeds
+        mock_image_writer = Mock()
+        mock_image_writer.save_person_outputs.side_effect = [Exception("Processing error"), ["/test/output/success.jpg"]]
+        mock_image_writer_class.return_value = mock_image_writer
+
+        step_progress = Mock()
+        output_step.state.get_step_progress.return_value = step_progress
+
+        # Create two PersonSelection objects
+        person_selections = [sample_person_selection, sample_person_selection]
+
+        # Execute
+        output_step._process_person_selections(person_selections)
+
+        # Verify: Warning logged for first failure, processing continued for second
+        assert output_step.logger.warning.call_count == 1  # One warning for one failure
+        assert mock_image_writer.save_person_outputs.call_count == 2
+        assert output_step.state.processing_stats["total_output_files"] == 1  # Only successful output counted
+
+
+class TestImageWriterPersonSelection:
+    """Tests for ImageWriter save_person_outputs method."""
+
+    @pytest.fixture
+    def sample_person_selection(self, sample_frame_data):
+        """Create a sample PersonSelection for testing."""
+        from personfromvid.analysis.person_selector import PersonSelection
+        from personfromvid.data.detection_results import (
+            FaceDetection,
+            HeadPoseResult,
+            PoseDetection,
+        )
+        from personfromvid.data.person import Person, PersonQuality
+
+        # Create a person with both face and body detections
+        person = Person(
+            person_id=0,
+            face=FaceDetection(
+                bbox=(500, 300, 700, 500),
+                confidence=0.92,
+                landmarks=[(520, 320), (680, 320), (600, 380), (540, 450), (660, 450)]
+            ),
+            body=PoseDetection(
+                bbox=(450, 250, 750, 800),
+                keypoints={"nose": (600, 400, 0.9)},  # Fixed keypoints format
+                confidence=0.85,
+                pose_classifications=[("standing", 0.9), ("sitting", 0.1)]
+            ),
+            head_pose=HeadPoseResult(
+                yaw=10.0,
+                pitch=5.0,
+                roll=2.0,
+                confidence=0.88,
+                face_id=0,
+                direction="front"
+            ),
+            quality=PersonQuality(face_quality=0.92, body_quality=0.85)
+        )
+
+        return PersonSelection(
+            frame_data=sample_frame_data,
+            person_id=0,
+            person=person,
+            selection_score=0.89,
+            category="minimum"
+        )
+
+    @pytest.fixture
+    def sample_person_selection_face_only(self, sample_frame_data):
+        """Create a PersonSelection with face only (no body)."""
+        from personfromvid.analysis.person_selector import PersonSelection
+        from personfromvid.data.detection_results import FaceDetection, HeadPoseResult
+        from personfromvid.data.person import BodyUnknown, Person, PersonQuality
+
+        person = Person(
+            person_id=1,
+            face=FaceDetection(
+                bbox=(500, 300, 700, 500),
+                confidence=0.88,
+                landmarks=[(520, 320), (680, 320), (600, 380), (540, 450), (660, 450)]
+            ),
+            body=BodyUnknown(),
+            head_pose=HeadPoseResult(
+                yaw=15.0,
+                pitch=-5.0,
+                roll=1.0,
+                confidence=0.85,
+                face_id=0,
+                direction="front"
+            ),
+            quality=PersonQuality(face_quality=0.88, body_quality=0.0)
+        )
+
+        return PersonSelection(
+            frame_data=sample_frame_data,
+            person_id=1,
+            person=person,
+            selection_score=0.88,
+            category="minimum"
+        )
+
+    @pytest.fixture
+    def sample_person_selection_body_only(self, sample_frame_data):
+        """Create a PersonSelection with body only (no face)."""
+        from personfromvid.analysis.person_selector import PersonSelection
+        from personfromvid.data.detection_results import PoseDetection
+        from personfromvid.data.person import FaceUnknown, Person, PersonQuality
+
+        person = Person(
+            person_id=2,
+            face=FaceUnknown(),
+            body=PoseDetection(
+                bbox=(450, 250, 750, 800),
+                keypoints={"hip": (600, 400, 0.8)},  # Fixed keypoints format
+                confidence=0.80,
+                pose_classifications=[("walking", 0.8), ("standing", 0.2)]
+            ),
+            head_pose=None,  # No head pose for body-only person
+            quality=PersonQuality(face_quality=0.0, body_quality=0.80)
+        )
+
+        return PersonSelection(
+            frame_data=sample_frame_data,
+            person_id=2,
+            person=person,
+            selection_score=0.80,
+            category="additional"
+        )
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_save_person_outputs_with_face_and_body(self, mock_fromarray, processing_context, sample_person_selection):
+        """Test saving person outputs with both face and body detections."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+        mock_pil_image.resize.return_value = mock_pil_image
+
+        # Enable both face crop and pose cropping
+        processing_context.config.output.image.face_crop_enabled = True
+        processing_context.config.output.image.enable_pose_cropping = True
+        processing_context.config.output.image.format = 'png'
+
+        writer = ImageWriter(context=processing_context)
+        output_files = writer.save_person_outputs(sample_person_selection)
+
+        # Should generate both face crop and body crop
+        assert len(output_files) == 2
+        mock_pil_image.save.assert_called()
+
+        # Verify person_id is in filenames and check structure
+        from pathlib import Path
+        face_file = [f for f in output_files if '_face_' in Path(f).name][0]
+        body_file = [f for f in output_files if 'crop' in Path(f).name][0]  # Body files have _crop suffix
+
+        assert 'person_0' in face_file
+        assert 'person_0' in body_file
+        assert '_face_' in face_file
+        assert 'crop' in body_file
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_save_person_outputs_face_only(self, mock_fromarray, processing_context, sample_person_selection_face_only):
+        """Test saving person outputs with face detection only."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+        mock_pil_image.resize.return_value = mock_pil_image
+
+        processing_context.config.output.image.face_crop_enabled = True
+        processing_context.config.output.image.enable_pose_cropping = False
+        processing_context.config.output.image.format = 'jpg'
+
+        writer = ImageWriter(context=processing_context)
+        output_files = writer.save_person_outputs(sample_person_selection_face_only)
+
+        # Should generate face crop + full frame (since pose cropping disabled)
+        assert len(output_files) == 2
+
+        # Verify person_id is in filenames and check structure
+        from pathlib import Path
+        face_files = [f for f in output_files if '_face_' in Path(f).name]
+        full_frame_files = [f for f in output_files if '_face_' not in Path(f).name and 'crop' not in Path(f).name]
+
+        assert len(face_files) == 1
+        assert len(full_frame_files) == 1
+        assert 'person_1' in face_files[0]
+        assert 'person_1' in full_frame_files[0]
+        # Face-only person should have "unknown" pose in full frame filename
+        assert 'unknown' in full_frame_files[0]
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_save_person_outputs_body_only(self, mock_fromarray, processing_context, sample_person_selection_body_only):
+        """Test saving person outputs with body detection only."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+
+        processing_context.config.output.image.face_crop_enabled = False
+        processing_context.config.output.image.enable_pose_cropping = True
+        processing_context.config.output.image.format = 'png'
+
+        writer = ImageWriter(context=processing_context)
+        output_files = writer.save_person_outputs(sample_person_selection_body_only)
+
+        # Should generate only body crop
+        assert len(output_files) == 1
+        assert 'person_2' in output_files[0]
+        assert 'walking' in output_files[0]  # Uses the primary pose classification
+        assert 'crop' in output_files[0]
+
+    @patch('personfromvid.output.image_writer.Image.fromarray')
+    def test_save_person_outputs_full_frame_fallback(self, mock_fromarray, processing_context, sample_person_selection):
+        """Test full frame output when pose cropping is disabled."""
+        mock_pil_image = Mock()
+        mock_fromarray.return_value = mock_pil_image
+        mock_pil_image.convert.return_value = mock_pil_image
+
+        # Disable pose cropping, enable face crop
+        processing_context.config.output.image.face_crop_enabled = True
+        processing_context.config.output.image.enable_pose_cropping = False
+
+        writer = ImageWriter(context=processing_context)
+        output_files = writer.save_person_outputs(sample_person_selection)
+
+        # Should generate face crop + full frame
+        assert len(output_files) == 2
+
+        from pathlib import Path
+        face_files = [f for f in output_files if '_face_' in Path(f).name]
+        full_frame_files = [f for f in output_files if '_face_' not in Path(f).name and 'crop' not in Path(f).name]
+
+        assert len(face_files) == 1
+        assert len(full_frame_files) == 1
+        assert 'person_0' in face_files[0]
+        assert 'person_0' in full_frame_files[0]
+
+    def test_save_person_outputs_error_handling(self, processing_context, sample_person_selection):
+        """Test error handling in save_person_outputs."""
+        from personfromvid.utils.exceptions import ImageWriteError
+
+        # Create ImageWriter but don't set up proper image data
+        sample_person_selection.frame_data._image = None  # This will cause an error
+
+        writer = ImageWriter(context=processing_context)
+
+        with pytest.raises(ImageWriteError):
+            writer.save_person_outputs(sample_person_selection)

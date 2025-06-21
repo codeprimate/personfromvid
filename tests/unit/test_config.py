@@ -10,7 +10,9 @@ from personfromvid.data.config import (
     DeviceType,
     LogLevel,
     OutputImageConfig,
+    PersonSelectionCriteria,
     get_default_config,
+    FrameSelectionConfig,
 )
 
 
@@ -130,6 +132,210 @@ def test_system_requirements_validation():
 
     # Should return a list (may be empty if system is properly configured)
     assert isinstance(issues, list)
+
+
+def test_person_selection_criteria_defaults():
+    """Test PersonSelectionCriteria default values."""
+    criteria = PersonSelectionCriteria()
+
+    # Core parameters
+    assert criteria.min_instances_per_person == 3
+    assert criteria.max_instances_per_person == 10
+    assert criteria.min_quality_threshold == 0.3
+
+    # Category parameters
+    assert criteria.enable_pose_categories is False
+    assert criteria.enable_head_angle_categories is True
+    assert criteria.min_poses_per_person == 3
+    assert criteria.min_head_angles_per_person == 3
+
+    # Temporal parameters
+    assert criteria.temporal_diversity_threshold == 2.0
+
+    # Global parameters
+    assert criteria.max_total_selections == 100
+
+
+def test_person_selection_criteria_validation():
+    """Test PersonSelectionCriteria validation rules."""
+    from pydantic import ValidationError
+
+    # Test valid configuration
+    valid_criteria = PersonSelectionCriteria(
+        min_instances_per_person=5,
+        max_instances_per_person=15,
+        min_quality_threshold=0.5
+    )
+    assert valid_criteria.min_instances_per_person == 5
+    assert valid_criteria.max_instances_per_person == 15
+
+    # Test max < min validation
+    with pytest.raises(ValidationError, match="max_instances_per_person.*must be >= min_instances_per_person"):
+        PersonSelectionCriteria(
+            min_instances_per_person=10,
+            max_instances_per_person=5
+        )
+
+
+def test_person_selection_criteria_boundary_values():
+    """Test PersonSelectionCriteria boundary value validation."""
+    from pydantic import ValidationError
+
+    # Test minimum boundary values
+    min_criteria = PersonSelectionCriteria(
+        min_instances_per_person=1,
+        max_instances_per_person=1,
+        min_quality_threshold=0.0,
+        temporal_diversity_threshold=0.0,
+        max_total_selections=10
+    )
+    assert min_criteria.min_instances_per_person == 1
+    assert min_criteria.max_total_selections == 10
+
+    # Test maximum boundary values
+    max_criteria = PersonSelectionCriteria(
+        min_instances_per_person=20,
+        max_instances_per_person=50,
+        min_quality_threshold=1.0,
+        temporal_diversity_threshold=30.0,
+        max_total_selections=1000
+    )
+    assert max_criteria.max_instances_per_person == 50
+    assert max_criteria.max_total_selections == 1000
+
+    # Test below minimum values
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(min_instances_per_person=0)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(min_quality_threshold=-0.1)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(temporal_diversity_threshold=-1.0)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(max_total_selections=5)
+
+    # Test above maximum values
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(min_instances_per_person=25)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(max_instances_per_person=60)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(min_quality_threshold=1.5)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(temporal_diversity_threshold=35.0)
+
+    with pytest.raises(ValidationError):
+        PersonSelectionCriteria(max_total_selections=1500)
+
+
+def test_person_selection_criteria_serialization():
+    """Test PersonSelectionCriteria serialization and deserialization."""
+    import json
+
+    # Create criteria with non-default values
+    original = PersonSelectionCriteria(
+        min_instances_per_person=5,
+        max_instances_per_person=15,
+        min_quality_threshold=0.4,
+        enable_pose_categories=False,
+        temporal_diversity_threshold=3.0,
+        max_total_selections=200
+    )
+
+    # Test model_dump (Pydantic v2)
+    data = original.model_dump()
+    assert isinstance(data, dict)
+    assert data["min_instances_per_person"] == 5
+    assert data["max_instances_per_person"] == 15
+    assert data["enable_pose_categories"] is False
+
+    # Test JSON serialization
+    json_str = json.dumps(data)
+    assert isinstance(json_str, str)
+
+    # Test deserialization
+    restored_data = json.loads(json_str)
+    restored = PersonSelectionCriteria(**restored_data)
+
+    # Verify all fields match
+    assert restored.min_instances_per_person == original.min_instances_per_person
+    assert restored.max_instances_per_person == original.max_instances_per_person
+    assert restored.min_quality_threshold == original.min_quality_threshold
+    assert restored.enable_pose_categories == original.enable_pose_categories
+    assert restored.temporal_diversity_threshold == original.temporal_diversity_threshold
+    assert restored.max_total_selections == original.max_total_selections
+
+
+def test_config_person_selection_integration():
+    """Test PersonSelectionCriteria integration with main Config class."""
+    config = Config()
+
+    # Test that person_selection field exists and has correct type
+    assert hasattr(config, 'person_selection')
+    assert isinstance(config.person_selection, PersonSelectionCriteria)
+
+    # Test default values through Config
+    assert config.person_selection.min_instances_per_person == 3
+    assert config.person_selection.max_instances_per_person == 10
+
+    # Test Config serialization includes person_selection
+    config_data = config.model_dump()
+    assert "person_selection" in config_data
+    assert isinstance(config_data["person_selection"], dict)
+    assert config_data["person_selection"]["min_instances_per_person"] == 3
+
+
+def test_config_person_selection_custom_values():
+    """Test Config with custom PersonSelectionCriteria values."""
+    custom_criteria = PersonSelectionCriteria(
+        min_instances_per_person=7,
+        max_instances_per_person=20,
+        min_quality_threshold=0.5
+    )
+
+    config = Config(person_selection=custom_criteria)
+
+    assert config.person_selection.min_instances_per_person == 7
+    assert config.person_selection.max_instances_per_person == 20
+    assert config.person_selection.min_quality_threshold == 0.5
+
+
+def test_frame_selection_config_defaults():
+    """Test FrameSelectionConfig default values."""
+    config = FrameSelectionConfig()
+    
+    assert config.min_quality_threshold == 0.2
+    assert config.face_size_weight == 0.3
+    assert config.quality_weight == 0.7
+    assert config.diversity_threshold == 0.8
+    assert config.temporal_diversity_threshold == 3.0
+
+
+def test_frame_selection_config_validation():
+    """Test FrameSelectionConfig validation."""
+    from pydantic import ValidationError
+    
+    # Test valid configuration
+    valid_config = FrameSelectionConfig(
+        min_quality_threshold=0.5,
+        face_size_weight=0.4,
+        quality_weight=0.6,
+        diversity_threshold=0.9,
+        temporal_diversity_threshold=5.0
+    )
+    assert valid_config.temporal_diversity_threshold == 5.0
+    
+    # Test invalid temporal_diversity_threshold values
+    with pytest.raises(ValidationError):
+        FrameSelectionConfig(temporal_diversity_threshold=-1.0)  # Below minimum
+    
+    with pytest.raises(ValidationError):
+        FrameSelectionConfig(temporal_diversity_threshold=35.0)  # Above maximum
 
 
 if __name__ == "__main__":

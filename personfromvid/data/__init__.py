@@ -24,6 +24,7 @@ from .config import (
     get_default_config,
     load_config,
 )
+from .constants import QualityMethod
 from .context import ProcessingContext
 from .detection_results import (
     FaceDetection,
@@ -38,6 +39,12 @@ from .frame_data import (
     ProcessingStepInfo,
     SelectionInfo,
     SourceInfo,
+)
+from .person import (
+    BodyUnknown,
+    FaceUnknown,
+    Person,
+    PersonQuality,
 )
 from .pipeline_state import (
     PipelineState,
@@ -67,12 +74,19 @@ __all__ = [
     "DeviceType",
     "get_default_config",
     "load_config",
+    # Constants
+    "QualityMethod",
     # Detection results
     "FaceDetection",
     "PoseDetection",
     "HeadPoseResult",
     "QualityMetrics",
     "ProcessingTimings",
+    # Person model
+    "Person",
+    "PersonQuality",
+    "FaceUnknown",
+    "BodyUnknown",
     # Frame data
     "FrameData",
     "SourceInfo",

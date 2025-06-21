@@ -72,7 +72,7 @@ class HeadAngleClassifier:
         >>> classifier.set_angle_thresholds(yaw=25.0, pitch=25.0)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize head angle classifier with default thresholds."""
         self.yaw_threshold = DEFAULT_YAW_THRESHOLD
         self.pitch_threshold = DEFAULT_PITCH_THRESHOLD

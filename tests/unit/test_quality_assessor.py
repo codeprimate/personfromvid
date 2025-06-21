@@ -263,3 +263,83 @@ class TestQualityAssessor:
             assert quality.overall_quality == 0.0
             assert not quality.usable
             assert "assessment_failed" in quality.quality_issues
+
+    def test_assess_quality_of_bbox_valid_region(self):
+        """Test bbox quality assessment on a valid region."""
+        # Create a test image with a sharp region
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        # Add a sharp region in the bbox area
+        image[100:200, 100:200] = 255  # White square
+        image[150:250, 150:250] = 128  # Gray square overlapping
+
+        # Define a bbox covering the sharp region
+        bbox = (100, 100, 250, 250)
+
+        quality_score, quality_metrics = self.assessor.assess_quality_of_bbox(image, bbox)
+
+        assert isinstance(quality_score, float)
+        assert 0.0 <= quality_score <= 1.0
+        assert isinstance(quality_metrics, QualityMetrics)
+        assert quality_metrics.laplacian_variance > 0
+        assert quality_metrics.overall_quality == quality_score
+
+    def test_assess_quality_of_bbox_empty_region(self):
+        """Test bbox quality assessment on an empty region."""
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        # Define a bbox with invalid coordinates (empty region)
+        bbox = (100, 100, 100, 100)  # Zero-area bbox
+
+        quality_score, quality_metrics = self.assessor.assess_quality_of_bbox(image, bbox)
+
+        # Should handle empty region gracefully - creates 1x1 black pixel with low quality
+        assert quality_score == 0.0
+        assert quality_metrics.overall_quality == 0.0
+        assert not quality_metrics.usable
+        # Black pixel has natural quality issues rather than assessment_failed
+        assert any(issue in quality_metrics.quality_issues for issue in ["blurry", "dark", "low_contrast"])
+
+    def test_assess_quality_of_bbox_out_of_bounds(self):
+        """Test bbox quality assessment with out-of-bounds coordinates."""
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        # Define a bbox that extends beyond image boundaries
+        bbox = (500, 400, 800, 600)  # Partially outside image
+
+        quality_score, quality_metrics = self.assessor.assess_quality_of_bbox(image, bbox)
+
+        # Should handle out-of-bounds gracefully by clipping
+        assert isinstance(quality_score, float)
+        assert 0.0 <= quality_score <= 1.0
+        assert isinstance(quality_metrics, QualityMetrics)
+
+    def test_assess_quality_of_bbox_small_region(self):
+        """Test bbox quality assessment on a very small region."""
+        # Create a detailed test image
+        image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+
+        # Define a small bbox
+        bbox = (100, 100, 110, 110)  # 10x10 pixel region
+
+        quality_score, quality_metrics = self.assessor.assess_quality_of_bbox(image, bbox)
+
+        assert isinstance(quality_score, float)
+        assert 0.0 <= quality_score <= 1.0
+        assert isinstance(quality_metrics, QualityMetrics)
+
+    def test_assess_quality_of_bbox_comparison_with_full_frame(self):
+        """Test that bbox assessment uses the same quality metrics as full frame."""
+        # Create a uniform image
+        image = np.full((200, 200, 3), 128, dtype=np.uint8)
+
+        # Assess full image
+        full_frame_metrics = self.assessor._assess_quality(image)
+
+        # Assess same region as bbox (entire image)
+        bbox = (0, 0, 200, 200)
+        bbox_score, bbox_metrics = self.assessor.assess_quality_of_bbox(image, bbox)
+
+        # Should produce identical results
+        assert abs(bbox_score - full_frame_metrics.overall_quality) < 0.001
+        assert abs(bbox_metrics.laplacian_variance - full_frame_metrics.laplacian_variance) < 0.001
+        assert abs(bbox_metrics.brightness_score - full_frame_metrics.brightness_score) < 0.001

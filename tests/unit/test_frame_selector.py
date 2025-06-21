@@ -104,7 +104,8 @@ class TestFrameSelectorScoringAndRanking:
             min_quality_threshold=0.5,
             face_size_weight=0.3,
             quality_weight=0.6,
-            diversity_threshold=0.8
+            diversity_threshold=0.8,
+            temporal_diversity_threshold=2.0
         )
         self.selector = FrameSelector(self.criteria)
 
@@ -299,7 +300,8 @@ class TestFrameSelectorIntegration:
             min_quality_threshold=0.5,
             face_size_weight=0.3,
             quality_weight=0.6,
-            diversity_threshold=0.8
+            diversity_threshold=0.8,
+            temporal_diversity_threshold=2.0
         )
         self.selector = FrameSelector(self.criteria)
 

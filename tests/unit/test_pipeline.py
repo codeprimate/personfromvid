@@ -165,7 +165,7 @@ class TestProcessingPipeline:
         assert status.current_step == "face_detection"
         assert status.total_steps == get_total_pipeline_steps()
         assert status.completed_steps == 2
-        assert status.overall_progress == pytest.approx(25.0, rel=1e-2)
+        assert status.overall_progress == pytest.approx(20.0, rel=1e-2)  # 2/10 = 20%
         assert status.step_progress == {"face_detection": 50.0}
         assert status.is_completed is False
         assert status.is_running is True
@@ -442,23 +442,23 @@ class TestProcessingPipeline:
             assert "initialization" in step_names
 
     def test_step_placeholders(self, processing_context):
-        """Test step class instantiation."""
+        """Test step placeholder initialization without affecting execution."""
         pipeline = ProcessingPipeline(context=processing_context)
-        pipeline.state = Mock()
 
-        # Test that steps can be initialized without errors
+        # Mock all step classes at the import level in pipeline module
         with patch('personfromvid.core.pipeline.InitializationStep') as mock_init, \
              patch('personfromvid.core.pipeline.FrameExtractionStep') as mock_frame, \
              patch('personfromvid.core.pipeline.FaceDetectionStep') as mock_face, \
              patch('personfromvid.core.pipeline.PoseAnalysisStep') as mock_pose, \
+             patch('personfromvid.core.pipeline.PersonBuildingStep') as mock_person_building, \
              patch('personfromvid.core.pipeline.CloseupDetectionStep') as mock_closeup, \
              patch('personfromvid.core.pipeline.QualityAssessmentStep') as mock_quality, \
-             patch('personfromvid.core.pipeline.FrameSelectionStep') as mock_selection, \
+             patch('personfromvid.core.pipeline.PersonSelectionStep') as mock_selection, \
              patch('personfromvid.core.pipeline.OutputGenerationStep') as mock_output:
 
-            # Mock each step class to return a mock instance
+            # Set up mock step returns
             for mock_step_class in [mock_init, mock_frame, mock_face, mock_pose,
-                                  mock_closeup, mock_quality, mock_selection, mock_output]:
+                                  mock_person_building, mock_closeup, mock_quality, mock_selection, mock_output]:
                 mock_step = Mock()
                 mock_step.step_name = "test_step"
                 mock_step_class.return_value = mock_step
@@ -470,6 +470,7 @@ class TestProcessingPipeline:
             mock_frame.assert_called_once_with(pipeline)
             mock_face.assert_called_once_with(pipeline)
             mock_pose.assert_called_once_with(pipeline)
+            mock_person_building.assert_called_once_with(pipeline)
             mock_closeup.assert_called_once_with(pipeline)
             mock_quality.assert_called_once_with(pipeline)
             mock_selection.assert_called_once_with(pipeline)
@@ -504,9 +505,10 @@ class TestProcessingPipeline:
              patch('personfromvid.core.pipeline.FrameExtractionStep') as mock_frame, \
              patch('personfromvid.core.pipeline.FaceDetectionStep') as mock_face, \
              patch('personfromvid.core.pipeline.PoseAnalysisStep') as mock_pose, \
+             patch('personfromvid.core.pipeline.PersonBuildingStep') as mock_person_building, \
              patch('personfromvid.core.pipeline.CloseupDetectionStep') as mock_closeup, \
              patch('personfromvid.core.pipeline.QualityAssessmentStep') as mock_quality, \
-             patch('personfromvid.core.pipeline.FrameSelectionStep') as mock_selection, \
+             patch('personfromvid.core.pipeline.PersonSelectionStep') as mock_selection, \
              patch('personfromvid.core.pipeline.OutputGenerationStep') as mock_output, \
              patch.object(pipeline, '_save_current_state'), \
              patch.object(pipeline, '_create_success_result') as mock_result:
@@ -514,10 +516,10 @@ class TestProcessingPipeline:
             # Set up mock step instances
             mock_steps = []
             step_names = ["initialization", "frame_extraction", "face_detection", "pose_analysis",
-                         "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
+                         "person_building", "closeup_detection", "quality_assessment", "person_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
+                                                 mock_person_building, mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()
@@ -561,9 +563,10 @@ class TestProcessingPipeline:
              patch('personfromvid.core.pipeline.FrameExtractionStep') as mock_frame, \
              patch('personfromvid.core.pipeline.FaceDetectionStep') as mock_face, \
              patch('personfromvid.core.pipeline.PoseAnalysisStep') as mock_pose, \
+             patch('personfromvid.core.pipeline.PersonBuildingStep') as mock_person_building, \
              patch('personfromvid.core.pipeline.CloseupDetectionStep') as mock_closeup, \
              patch('personfromvid.core.pipeline.QualityAssessmentStep') as mock_quality, \
-             patch('personfromvid.core.pipeline.FrameSelectionStep') as mock_selection, \
+             patch('personfromvid.core.pipeline.PersonSelectionStep') as mock_selection, \
              patch('personfromvid.core.pipeline.OutputGenerationStep') as mock_output, \
              patch.object(pipeline, '_save_current_state'), \
              patch.object(pipeline, '_create_success_result') as mock_result:
@@ -571,10 +574,10 @@ class TestProcessingPipeline:
             # Set up mock step instances
             mock_steps = []
             step_names = ["initialization", "frame_extraction", "face_detection", "pose_analysis",
-                         "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
+                         "person_building", "closeup_detection", "quality_assessment", "person_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
+                                                 mock_person_building, mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()
@@ -591,10 +594,11 @@ class TestProcessingPipeline:
             mock_steps[1].execute.assert_not_called()  # frame_extraction
             mock_steps[2].execute.assert_called_once()  # face_detection
             mock_steps[3].execute.assert_called_once()  # pose_analysis
-            mock_steps[4].execute.assert_called_once()  # closeup_detection
-            mock_steps[5].execute.assert_called_once()  # quality_assessment
-            mock_steps[6].execute.assert_called_once()  # frame_selection
-            mock_steps[7].execute.assert_called_once()  # output_generation
+            mock_steps[4].execute.assert_called_once()  # person_building
+            mock_steps[5].execute.assert_called_once()  # closeup_detection
+            mock_steps[6].execute.assert_called_once()  # quality_assessment
+            mock_steps[7].execute.assert_called_once()  # person_selection
+            mock_steps[8].execute.assert_called_once()  # output_generation
 
             assert result.success is True
 
@@ -628,9 +632,10 @@ class TestProcessingPipeline:
              patch('personfromvid.core.pipeline.FrameExtractionStep') as mock_frame, \
              patch('personfromvid.core.pipeline.FaceDetectionStep') as mock_face, \
              patch('personfromvid.core.pipeline.PoseAnalysisStep') as mock_pose, \
+             patch('personfromvid.core.pipeline.PersonBuildingStep') as mock_person_building, \
              patch('personfromvid.core.pipeline.CloseupDetectionStep') as mock_closeup, \
              patch('personfromvid.core.pipeline.QualityAssessmentStep') as mock_quality, \
-             patch('personfromvid.core.pipeline.FrameSelectionStep') as mock_selection, \
+             patch('personfromvid.core.pipeline.PersonSelectionStep') as mock_selection, \
              patch('personfromvid.core.pipeline.OutputGenerationStep') as mock_output, \
              patch.object(pipeline, '_save_current_state'), \
              patch.object(pipeline, '_create_success_result') as mock_result:
@@ -638,10 +643,10 @@ class TestProcessingPipeline:
             # Set up mock step instances
             mock_steps = []
             step_names = ["initialization", "frame_extraction", "face_detection", "pose_analysis",
-                         "closeup_detection", "quality_assessment", "frame_selection", "output_generation"]
+                         "person_building", "closeup_detection", "quality_assessment", "person_selection", "output_generation"]
 
             for mock_step_class, step_name in zip([mock_init, mock_frame, mock_face, mock_pose,
-                                                 mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
+                                                 mock_person_building, mock_closeup, mock_quality, mock_selection, mock_output], step_names, strict=False):
                 mock_step = Mock()
                 mock_step.step_name = step_name
                 mock_step.execute = Mock()

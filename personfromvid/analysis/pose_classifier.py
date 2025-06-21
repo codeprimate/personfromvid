@@ -6,13 +6,15 @@ body poses into standing, sitting, squatting, and closeup categories.
 
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from ..data.detection_results import PoseDetection
 from ..data.frame_data import FrameData
 from ..utils.exceptions import PoseClassificationError
+from personfromvid.data.config import PoseClassificationConfig
+from personfromvid.utils.logging import get_logger
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,7 @@ class PoseClassifier:
         >>> classifier.set_angle_thresholds(standing_min=165.0, sitting_max=115.0)
     """
 
-    def __init__(self):
+    def __init__(self, pose_config: Optional[PoseClassificationConfig] = None) -> None:
         """Initialize pose classifier with default thresholds."""
         self.standing_hip_knee_min = STANDING_HIP_KNEE_MIN
         self.sitting_hip_knee_min = SITTING_HIP_KNEE_MIN

@@ -239,12 +239,12 @@ class TempManager:
 
     # Context manager support
 
-    def __enter__(self):
+    def __enter__(self) -> "TempManager":
         """Enter context manager."""
         self.create_temp_structure()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         """Exit context manager and cleanup."""
         self.cleanup_temp_files()
         return False  # Don't suppress exceptions
@@ -347,3 +347,5 @@ class TempManager:
             pass
 
         return count
+
+

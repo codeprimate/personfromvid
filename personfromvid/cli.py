@@ -116,6 +116,11 @@ def get_version():
     help="Padding around pose bounding box for crops",
 )
 @click.option(
+    "--full-frames",
+    is_flag=True,
+    help="Output full frames in addition to crops when --crop is enabled",
+)
+@click.option(
     "--output-png-optimize/--no-output-png-optimize",
     default=None,
     help="Enable/disable PNG optimization",
@@ -168,6 +173,7 @@ def main(
     output_face_crop_padding: Optional[float],
     crop: bool,
     crop_padding: Optional[float],
+    full_frames: bool,
     output_png_optimize: Optional[bool],
     resize: Optional[int],
     min_frames_per_category: Optional[int],
@@ -231,7 +237,9 @@ def main(
         )
 
         # 3. Validate inputs
-        video_validation = validate_inputs(video_path, app_config, quiet, no_structured_output)
+        video_validation = validate_inputs(
+            video_path, app_config, quiet, no_structured_output
+        )
 
         # 4. Set up output directory and create directories
         if output_dir is None:
@@ -244,14 +252,21 @@ def main(
 
         # 6. Run pipeline
         result, processing_context = create_and_run_pipeline(
-            video_path, output_dir, app_config, video_validation,
-            will_use_consolidated_formatter, logger, verbose
+            video_path,
+            output_dir,
+            app_config,
+            video_validation,
+            will_use_consolidated_formatter,
+            logger,
+            verbose,
         )
-        
+
         # 7. Handle pipeline failure (success cleanup is handled by pipeline itself)
         if not result.success:
             handle_cleanup(processing_context, app_config, success=False)
-            console.print(f"[red]Error:[/red] Processing failed: {result.error_message}")
+            console.print(
+                f"[red]Error:[/red] Processing failed: {result.error_message}"
+            )
             sys.exit(1)
 
     except (PersonFromVidError, KeyboardInterrupt, Exception) as e:
@@ -260,16 +275,16 @@ def main(
 
 
 def create_and_run_pipeline(
-    video_path: Path, 
-    output_dir: Path, 
-    config: Config, 
+    video_path: Path,
+    output_dir: Path,
+    config: Config,
     video_validation: dict,
     will_use_consolidated_formatter: bool,
     logger,
-    verbose: bool
+    verbose: bool,
 ):
     """Create processing context and run pipeline.
-    
+
     Returns:
         tuple: (ProcessingResult, ProcessingContext) - Pipeline execution result and context
     """
@@ -340,7 +355,7 @@ def create_and_run_pipeline(
                 logger.error(f"❌ {error_msg}")
             # Don't call sys.exit here - let main function handle cleanup
             return result, processing_context
-            
+
         return result, processing_context
 
     except Exception as e:
@@ -356,10 +371,10 @@ def handle_cli_error(
     error: Exception,
     processing_context: Optional[object] = None,
     app_config: Optional[object] = None,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> None:
     """Handle CLI-level errors with appropriate cleanup and messaging.
-    
+
     Args:
         error: The exception that occurred
         processing_context: The processing context (if created)
@@ -376,7 +391,7 @@ def handle_cli_error(
         console.print(f"[red]Unexpected error:[/red] {str(error)}")
         if verbose:
             console.print_exception()
-    
+
     # Cleanup if processing context was created
     if processing_context and app_config:
         handle_cleanup(processing_context, app_config, success=False, error=error)
@@ -387,14 +402,14 @@ def handle_cleanup(
     config: Optional[object] = None,
     success: bool = False,
     error: Optional[Exception] = None,
-    interrupted: bool = False
+    interrupted: bool = False,
 ) -> None:
     """Handle cleanup operations for CLI-level failures only.
-    
+
     Note: Pipeline handles its own success and internal failure cleanup.
     This function only handles cleanup for CLI-level errors that occur
     before or after pipeline execution.
-    
+
     Args:
         processing_context: The processing context with temp manager (if available)
         config: Application configuration (if available)
@@ -405,24 +420,26 @@ def handle_cleanup(
     # Only perform cleanup if we have both context and config
     if not processing_context or not config:
         return
-        
+
     try:
-        temp_manager = getattr(processing_context, 'temp_manager', None)
+        temp_manager = getattr(processing_context, "temp_manager", None)
         if not temp_manager:
             return
-            
+
         # Only cleanup on CLI-level errors, and only if configured to do so
         if not success and not interrupted and config.storage.cleanup_temp_on_failure:
             temp_manager.cleanup_temp_files()
-                
+
     except Exception:
         # Don't fail cleanup on error - just silently continue
         pass
 
 
-def setup_logging_and_formatting(config: Config, no_structured_output: bool, quiet: bool) -> tuple:
+def setup_logging_and_formatting(
+    config: Config, no_structured_output: bool, quiet: bool
+) -> tuple:
     """Set up logging and determine formatter.
-    
+
     Returns:
         tuple: (will_use_consolidated_formatter, consolidated_formatter)
     """
@@ -445,27 +462,29 @@ def setup_logging_and_formatting(config: Config, no_structured_output: bool, qui
     # Show banner unless quiet or using consolidated formatter
     if not quiet and not will_use_consolidated_formatter:
         show_banner()
-    
+
     return will_use_consolidated_formatter, logger
 
 
-def validate_inputs(video_path: Path, config: Config, quiet: bool, no_structured_output: bool = False) -> dict:
+def validate_inputs(
+    video_path: Path, config: Config, quiet: bool, no_structured_output: bool = False
+) -> dict:
     """Handle all system and video validation.
-    
+
     Returns:
         dict: Video validation metadata
-        
+
     Raises:
         SystemExit: If validation fails
     """
     logger = get_logger("cli")
-    
+
     # Determine if we'll use consolidated formatter for conditional output
     # Note: This must match the logic from main function
     will_use_consolidated_formatter = (
         config.logging.enable_structured_output and not no_structured_output
     )
-    
+
     # Validate system requirements (suppress detailed output if using consolidated formatter)
     if not will_use_consolidated_formatter:
         logger.info("Validating system requirements...")
@@ -517,15 +536,13 @@ def validate_inputs(video_path: Path, config: Config, quiet: bool, no_structured
                 f"Video: {duration_str}, {resolution_str}, {fps_str}, {metadata['codec']}"
             )
     else:
-        error_msg = (
-            f"Video validation failed: {video_validation['metadata']['error']}"
-        )
+        error_msg = f"Video validation failed: {video_validation['metadata']['error']}"
         if will_use_consolidated_formatter:
             console.print(f"[red]Error:[/red] {error_msg}")
         else:
             logger.error(error_msg)
         sys.exit(1)
-    
+
     return video_validation
 
 
@@ -602,6 +619,9 @@ def _apply_output_overrides(config: Config, cli_args: dict) -> None:
 
     if cli_args["crop_padding"]:
         config.output.image.pose_crop_padding = cli_args["crop_padding"]
+
+    if cli_args["full_frames"]:
+        config.output.image.full_frames = True
 
     if cli_args["output_png_optimize"] is not None:
         config.output.image.png.optimize = cli_args["output_png_optimize"]

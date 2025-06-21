@@ -4,7 +4,20 @@ This module centralizes important constants used throughout the pipeline,
 including the definition of processing steps and their order.
 """
 
+from enum import Enum
 from typing import List, Tuple
+
+
+class QualityMethod(Enum):
+    """Quality assessment method tracking for transparency and debugging."""
+
+    DIRECT = "direct"  # Full frame quality analysis
+    INFERRED = "inferred"  # Quality inferred from person bbox assessments
+
+    def __str__(self) -> str:
+        """Return string representation of the quality method."""
+        return self.value
+
 
 # Pipeline step definitions
 PIPELINE_STEPS = {
@@ -12,9 +25,11 @@ PIPELINE_STEPS = {
     "frame_extraction": "Extract frames from video",
     "face_detection": "Detect faces in frames",
     "pose_analysis": "Analyze body poses and head angles",
+    "person_building": "Build person objects from detections",
     "closeup_detection": "Detect closeup shots and shot types",
     "quality_assessment": "Assess frame quality",
     "frame_selection": "Select best frames",
+    "person_selection": "Select best person instances",
     "output_generation": "Generate output files (images, JSON, etc.)",
 }
 
@@ -23,6 +38,7 @@ TOTAL_PIPELINE_STEPS = len(PIPELINE_STEPS)
 
 # State data keys
 ALL_SELECTED_FRAMES_KEY = "all_selected_frames"
+ALL_SELECTED_PERSONS_KEY = "all_selected_persons"
 
 
 def get_pipeline_steps() -> List[Tuple[str, str]]:

@@ -5,13 +5,19 @@ with configurable thresholds for easy adjustment.
 """
 
 import time
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Tuple
 
 import cv2
 import numpy as np
 
+from personfromvid.utils.logging import get_logger
+
+# Default quality assessment thresholds
+DEFAULT_BLUR_THRESHOLD = 100.0
+DEFAULT_BRIGHTNESS_RANGE = (50.0, 200.0)
+DEFAULT_FACE_SIZE_THRESHOLD = 0.02
+
 from ..data.detection_results import QualityMetrics
-from ..utils.logging import get_logger
 
 if TYPE_CHECKING:
     from ..data.frame_data import FrameData
@@ -55,7 +61,12 @@ logger = get_logger("quality_assessor")
 class QualityAssessor:
     """Evaluates image quality using essential metrics for frame selection."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        blur_threshold: float = DEFAULT_BLUR_THRESHOLD,
+        brightness_range: Tuple[float, float] = DEFAULT_BRIGHTNESS_RANGE,
+        face_size_threshold: float = DEFAULT_FACE_SIZE_THRESHOLD,
+    ) -> None:
         """Initialize quality assessor."""
         self.logger = get_logger("quality_assessor")
 
@@ -171,7 +182,7 @@ class QualityAssessor:
             Laplacian variance value
         """
         try:
-            laplacian = cv2.Laplacian(gray_image, cv2.CV_64F)
+            laplacian = cv2.Laplacian(gray_image, cv2.CV_64F)  # type: ignore
             variance = laplacian.var()
             return float(variance)
         except Exception as e:
@@ -190,8 +201,8 @@ class QualityAssessor:
             Sobel variance value
         """
         try:
-            sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)
-            sobel_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)
+            sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)  # type: ignore
+            sobel_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)  # type: ignore
             sobel_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
             variance = sobel_magnitude.var()
             return float(variance)
@@ -318,6 +329,66 @@ class QualityAssessor:
             issues.append("low_contrast")
 
         return issues
+
+    def assess_quality_of_bbox(self, image: np.ndarray, bbox: tuple) -> tuple:
+        """Assess quality of a specific bounding box region within an image.
+
+        Extracts the region defined by the bounding box and applies the same
+        quality assessment metrics used for full frame analysis.
+
+        Args:
+            image: Full image as numpy array (BGR or RGB)
+            bbox: Bounding box as (x1, y1, x2, y2) tuple defining the region
+
+        Returns:
+            Tuple of (face_quality_score, quality_metrics) where:
+            - face_quality_score: Overall quality score (0.0 to 1.0) for this region
+            - quality_metrics: Full QualityMetrics object for detailed analysis
+        """
+        try:
+            # Extract bounding box region
+            x1, y1, x2, y2 = bbox
+
+            # Ensure coordinates are within image bounds
+            height, width = image.shape[:2]
+            x1 = max(0, min(x1, width - 1))
+            y1 = max(0, min(y1, height - 1))
+            x2 = max(x1 + 1, min(x2, width))
+            y2 = max(y1 + 1, min(y2, height))
+
+            # Extract region
+            region = image[y1:y2, x1:x2]
+
+            # Ensure region is not empty
+            if region.size == 0:
+                self.logger.warning(f"Empty bbox region: {bbox}")
+                return 0.0, self._get_default_quality_metrics()
+
+            # Apply same quality assessment as full frame
+            quality_metrics = self._assess_quality(region)
+
+            self.logger.debug(
+                f"Bbox quality assessment: region_size={region.shape}, "
+                f"overall_quality={quality_metrics.overall_quality:.3f}"
+            )
+
+            return quality_metrics.overall_quality, quality_metrics
+
+        except Exception as e:
+            self.logger.error(f"Bbox quality assessment failed: {e}")
+            return 0.0, self._get_default_quality_metrics()
+
+    def _get_default_quality_metrics(self) -> QualityMetrics:
+        """Return default quality metrics for error cases."""
+        return QualityMetrics(
+            laplacian_variance=0.0,
+            sobel_variance=0.0,
+            brightness_score=0.0,
+            contrast_score=0.0,
+            overall_quality=0.0,
+            quality_issues=["assessment_failed"],
+            usable=False,
+        )
 
 
 def create_quality_assessor() -> QualityAssessor:

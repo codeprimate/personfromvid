@@ -71,6 +71,24 @@ class ModelConfig(BaseModel):
         le=1.0,
         description="Minimum confidence threshold for detections",
     )
+    
+    # Face completeness validation settings
+    require_complete_faces: bool = Field(
+        default=True,
+        description="Reject face detections that appear cut off at frame edges (particularly missing chins)"
+    )
+    face_edge_threshold: int = Field(
+        default=10,
+        ge=0,
+        le=50,
+        description="Minimum pixels from frame edge for complete face detection"
+    )
+    chin_margin_pixels: int = Field(
+        default=15,
+        ge=5,
+        le=50,
+        description="Required margin below estimated chin position for complete face validation"
+    )
 
     @field_serializer("device")
     def serialize_device(self, value) -> str:
@@ -251,6 +269,12 @@ class FrameSelectionConfig(BaseModel):
         le=1.0,
         description="Minimum diversity score to avoid selecting similar frames",
     )
+    temporal_diversity_threshold: float = Field(
+        default=3.0,
+        ge=0.0,
+        le=30.0,
+        description="Minimum seconds between selected frames to ensure temporal diversity",
+    )
 
     @field_validator("face_size_weight", "quality_weight")
     @classmethod
@@ -263,6 +287,85 @@ class FrameSelectionConfig(BaseModel):
                 raise ValueError(
                     f"face_size_weight ({face_size_weight}) + quality_weight ({v}) must not exceed 1.0"
                 )
+        return v
+
+
+class PersonSelectionCriteria(BaseModel):
+    """Configuration for person-based selection."""
+
+    # Enable person-based selection (defaults to True for enhanced multi-person support)
+    enabled: bool = Field(
+        default=True,
+        description="Enable person-based selection instead of frame-based selection",
+    )
+
+    # Core per-person parameters (scale naturally with detected person count)
+    min_instances_per_person: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Minimum instances to select per person_id",
+    )
+    max_instances_per_person: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum instances to select per person_id",
+    )
+    min_quality_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum person.quality.overall_quality for selection",
+    )
+
+    # Category-based selection within person groups
+    enable_pose_categories: bool = Field(
+        default=False,
+        description="Enable pose category diversity within person groups",
+    )
+    enable_head_angle_categories: bool = Field(
+        default=True,
+        description="Enable head angle category diversity within person groups",
+    )
+    min_poses_per_person: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Minimum different poses per person (if available)",
+    )
+    min_head_angles_per_person: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Minimum different head angles per person (if available)",
+    )
+
+    # Temporal diversity (now applied to ALL selections for better diversity)
+    temporal_diversity_threshold: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=30.0,
+        description="Minimum seconds between selected instances of same person_id (applied to ALL selections for temporal diversity)",
+    )
+
+    # Global resource limit (no global minimum - scales naturally with person count)
+    max_total_selections: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Overall limit on total selections across all persons",
+    )
+
+    @field_validator("max_instances_per_person")
+    @classmethod
+    def validate_max_greater_than_min(cls, v, info):
+        """Ensure max_instances_per_person >= min_instances_per_person."""
+        min_instances = info.data.get("min_instances_per_person", 3)
+        if v < min_instances:
+            raise ValueError(
+                f"max_instances_per_person ({v}) must be >= min_instances_per_person ({min_instances})"
+            )
         return v
 
 
@@ -299,6 +402,9 @@ class OutputImageConfig(BaseModel):
     )
     enable_pose_cropping: bool = Field(
         False, description="Enable generation of cropped pose images."
+    )
+    full_frames: bool = Field(
+        False, description="Output full frames in addition to crops when pose cropping is enabled."
     )
     pose_crop_padding: float = Field(
         0.1, ge=0.0, le=1.0, description="Padding around pose bounding box."
@@ -457,6 +563,9 @@ class Config(BaseModel):
         default_factory=CloseupDetectionConfig
     )
     frame_selection: FrameSelectionConfig = Field(default_factory=FrameSelectionConfig)
+    person_selection: PersonSelectionCriteria = Field(
+        default_factory=PersonSelectionCriteria
+    )
     output: OutputConfig = Field(default_factory=OutputConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)

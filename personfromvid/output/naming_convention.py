@@ -6,7 +6,7 @@ descriptive filenames for output images based on frame metadata.
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from ..data.context import ProcessingContext
 from ..data.frame_data import FrameData
@@ -29,7 +29,14 @@ class NamingConvention:
         self._sequence_counters: Dict[str, int] = defaultdict(int)
 
     def get_full_frame_filename(
-        self, frame: FrameData, category: str, rank: int, extension: str = "png"
+        self,
+        frame: FrameData,
+        category: str,
+        rank: int,
+        extension: str = "png",
+        person_id: Optional[int] = None,
+        head_direction: Optional[str] = None,
+        shot_type: Optional[str] = None,
     ) -> str:
         """Generate filename for full frame image.
 
@@ -38,22 +45,39 @@ class NamingConvention:
             category: Pose category (e.g., "standing", "sitting")
             rank: Rank within category (1, 2, 3)
             extension: File extension without dot
+            person_id: Optional person ID for person-based selection output
+            head_direction: Optional head direction override (for person-specific data)
+            shot_type: Optional shot type override (for person-specific data)
 
         Returns:
             Filename string
         """
-        # Get head direction from frame
-        head_direction = self._get_head_direction(frame)
-        shot_type = self._get_shot_type(frame)
+        # Get head direction and shot type (use provided values or extract from frame)
+        if head_direction is None:
+            head_direction = self._get_head_direction(frame)
+        if shot_type is None:
+            shot_type = self._get_shot_type(frame)
 
-        # Build base filename: video_pose_head-direction_shot-type_rank.ext
-        base_parts = [
-            self.video_base_name,
-            category,
-            head_direction,
-            shot_type,
-            f"{rank:03d}",
-        ]
+        # Build base filename with optional person_id support
+        if person_id is not None:
+            # Person-based naming: video_person_{person_id}_pose_head-direction_shot-type_rank.ext
+            base_parts = [
+                self.video_base_name,
+                f"person_{person_id}",
+                category,
+                head_direction,
+                shot_type,
+                f"{rank:03d}",
+            ]
+        else:
+            # Traditional frame-based naming: video_pose_head-direction_shot-type_rank.ext
+            base_parts = [
+                self.video_base_name,
+                category,
+                head_direction,
+                shot_type,
+                f"{rank:03d}",
+            ]
 
         base_filename = "_".join(part for part in base_parts if part) + f".{extension}"
 
@@ -61,7 +85,13 @@ class NamingConvention:
         return self._ensure_unique_filename(base_filename)
 
     def get_face_crop_filename(
-        self, frame: FrameData, head_angle: str, rank: int, extension: str = "png"
+        self,
+        frame: FrameData,
+        head_angle: str,
+        rank: int,
+        extension: str = "png",
+        person_id: Optional[int] = None,
+        shot_type: Optional[str] = None,
     ) -> str:
         """Generate filename for face crop image.
 
@@ -70,12 +100,47 @@ class NamingConvention:
             head_angle: Head angle category (e.g., "front", "profile_left")
             rank: Rank within category (1, 2, 3)
             extension: File extension without dot
+            person_id: Optional person ID for person-based selection output
+            shot_type: Optional shot type override (for person-specific data)
 
         Returns:
             Filename string
         """
-        # Build base filename: video_face_head-angle_rank.ext
-        base_parts = [self.video_base_name, "face", head_angle, f"{rank:03d}"]
+        # Get shot type (use provided value or extract from frame) - but only if explicitly requested
+        if shot_type is None:
+            # Don't automatically extract shot type - keep filenames simple
+            shot_type = ""
+        elif shot_type == "":
+            # Empty string means don't include shot type
+            pass
+        else:
+            # Use the provided shot type
+            pass
+
+        # Build base filename with optional person_id support
+        if person_id is not None:
+            # Person-based naming: video_person_{person_id}_face_head-angle[_shot-type]_rank.ext
+            base_parts = [
+                self.video_base_name,
+                f"person_{person_id}",
+                "face",
+                head_angle,
+            ]
+            # Only add shot type if it's not empty
+            if shot_type:
+                base_parts.append(shot_type)
+            base_parts.append(f"{rank:03d}")
+        else:
+            # Traditional frame-based naming: video_face_head-angle[_shot-type]_rank.ext
+            base_parts = [
+                self.video_base_name,
+                "face",
+                head_angle,
+            ]
+            # Only add shot type if it's not empty
+            if shot_type:
+                base_parts.append(shot_type)
+            base_parts.append(f"{rank:03d}")
 
         base_filename = "_".join(base_parts) + f".{extension}"
 
@@ -131,6 +196,26 @@ class NamingConvention:
         # Check that it starts with video base name
         if not filename.startswith(self.video_base_name):
             return False
+
+        # Additional validation for person-based filenames
+        if "_person_" in filename:
+            # Validate person_id pattern: video_person_{digit}_...
+            parts = filename.split("_")
+            if len(parts) >= 3:
+                # Find person part
+                person_part_idx = None
+                for i, part in enumerate(parts):
+                    if part == "person" and i + 1 < len(parts):
+                        person_part_idx = i + 1
+                        break
+
+                if person_part_idx is not None:
+                    person_id_part = parts[person_part_idx]
+                    # Check if person_id is a valid integer
+                    try:
+                        int(person_id_part)
+                    except ValueError:
+                        return False
 
         return True
 

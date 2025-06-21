@@ -7,9 +7,12 @@ throughout the processing pipeline.
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .person import Person
 
 from .detection_results import (
     CloseupDetection,
@@ -125,6 +128,7 @@ class FrameData:
     head_poses: List[HeadPoseResult] = field(default_factory=list)
     quality_metrics: Optional[QualityMetrics] = None
     closeup_detections: List[CloseupDetection] = field(default_factory=list)
+    persons: List["Person"] = field(default_factory=list)
 
     # Selection and output information
     selections: SelectionInfo = field(default_factory=SelectionInfo)
@@ -142,6 +146,15 @@ class FrameData:
             raise ValueError("frame_id cannot be empty")
         if not self.file_path:
             raise ValueError("file_path cannot be empty")
+
+    @property
+    def timestamp(self) -> float:
+        """Get the video timestamp for this frame.
+
+        Returns:
+            Video timestamp in seconds
+        """
+        return self.source_info.video_timestamp
 
     @property
     def image(self) -> Optional[np.ndarray]:
@@ -248,6 +261,10 @@ class FrameData:
         if not self.closeup_detections:
             return None
         return max(self.closeup_detections, key=lambda c: c.confidence)
+
+    def get_persons(self) -> List["Person"]:
+        """Get list of persons detected in the frame."""
+        return self.persons
 
     def get_pose_classifications(self) -> List[str]:
         """Get all unique pose classifications."""
@@ -388,6 +405,7 @@ class FrameData:
                 }
                 for closeup in self.closeup_detections
             ],
+            "persons": [person.to_dict() for person in self.persons],
             "selections": {
                 "selected_for_poses": self.selections.selected_for_poses,
                 "selected_for_head_angles": self.selections.selected_for_head_angles,
@@ -433,6 +451,7 @@ class FrameData:
             ProcessingTimings,
             QualityMetrics,
         )
+        from .person import Person
 
         # Reconstruct source info
         source_info_dict = frame_dict.get("source_info", {})
@@ -518,6 +537,21 @@ class FrameData:
             )
             closeup_detections.append(closeup_detection)
 
+        # Reconstruct persons
+        persons = []
+        for person_dict in frame_dict.get("persons", []):
+            try:
+                person = Person.from_dict(person_dict)
+                persons.append(person)
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Failed to reconstruct Person from dict: {e}. Skipping corrupted person data."
+                )
+                continue
+
         # Reconstruct processing timings
         timings_dict = frame_dict.get("processing_timings", {})
         processing_timings = ProcessingTimings(
@@ -565,6 +599,7 @@ class FrameData:
             head_poses=head_poses,
             quality_metrics=quality_metrics,
             closeup_detections=closeup_detections,
+            persons=persons,
             selections=selections,
             processing_timings=processing_timings,
         )

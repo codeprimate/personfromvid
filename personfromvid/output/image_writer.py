@@ -5,7 +5,7 @@ processing and file I/O operations for generating the final output images.
 """
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import cv2
 import numpy as np
@@ -17,6 +17,10 @@ from ..data.frame_data import FrameData
 from ..utils.exceptions import ImageWriteError
 from ..utils.logging import get_logger
 from .naming_convention import NamingConvention
+
+if TYPE_CHECKING:
+    from ..analysis.person_selector import PersonSelection
+    from ..data.person import Person
 
 
 class ImageWriter:
@@ -65,8 +69,8 @@ class ImageWriter:
             # Generate outputs for ALL pose categories the frame was selected for
             pose_categories = frame.selections.selected_for_poses
             if pose_categories:
-                # Only generate full frames if pose cropping is disabled
-                if not self.config.enable_pose_cropping:
+                # Generate full frames if pose cropping is disabled OR if full_frames is enabled
+                if not self.config.enable_pose_cropping or self.config.full_frames:
                     for category in pose_categories:
                         filename = self.naming.get_full_frame_filename(
                             frame, category, rank, extension
@@ -79,7 +83,7 @@ class ImageWriter:
                         output_files.append(str(output_path))
                         self.logger.debug(f"Saved full frame: {filename}")
 
-                # Generate pose crop if enabled (replaces full frames when enabled)
+                # Generate pose crop if enabled (replaces full frames unless full_frames is enabled)
                 if self.config.enable_pose_cropping and frame.pose_detections:
                     best_pose = frame.get_best_pose()
                     if best_pose:
@@ -135,8 +139,9 @@ class ImageWriter:
                         else head_angle_categories[0]
                     )
 
+                    # Generate face crop with simplified naming (no shot type combinations)
                     filename = self.naming.get_face_crop_filename(
-                        frame, face_category, rank, extension
+                        frame, face_category, rank, extension, shot_type=None
                     )
                     output_path = self.naming.get_full_output_path(filename)
 
@@ -155,6 +160,219 @@ class ImageWriter:
             error_msg = f"Failed to save outputs for frame {frame.frame_id}: {e}"
             self.logger.error(error_msg)
             raise ImageWriteError(error_msg) from e
+
+    def save_person_outputs(self, person_selection: "PersonSelection") -> List[str]:
+        """Save all output images for a PersonSelection object.
+
+        Args:
+            person_selection: PersonSelection object containing frame, person, and metadata
+
+        Returns:
+            List of output file paths that were created
+        """
+
+        frame = person_selection.frame_data
+        person = person_selection.person
+        person_id = person_selection.person_id
+
+        output_files = []
+
+        # Determine the correct file extension
+        file_format = self.config.format.lower()
+        extension = "jpg" if file_format == "jpeg" else file_format
+
+        # Generate rank based on selection score (higher score = lower rank number)
+        rank = 1  # For now, use rank 1 - could be enhanced later for multiple selections per person
+
+        try:
+            # Load the source image
+            source_image = self._load_frame_image(frame)
+
+            # Import sentinel classes for proper type checking
+            from ..data.person import BodyUnknown, FaceUnknown
+
+            # Generate person-specific outputs based on person detection types
+
+            # Get the primary pose classification for this person
+            primary_pose = self._get_primary_pose_classification(person)
+
+            # Get the head direction for face crops
+            head_direction = self._get_head_direction(person)
+
+            # Get shot type from frame closeup detections
+            shot_type = self._get_shot_type_from_frame(frame)
+
+            # Person face crop (if person has face detection)
+            if (
+                not isinstance(person.face, FaceUnknown)
+                and self.config.face_crop_enabled
+            ):
+                face_crop = self._crop_face(source_image, person.face)
+
+                # Use head direction as category for person-based face crops (simplified - no shot type)
+                filename = self.naming.get_face_crop_filename(
+                    frame,
+                    head_direction,
+                    rank,
+                    extension,
+                    person_id=person_id,
+                    shot_type=None,  # Removed shot type to avoid combinations
+                )
+                output_path = self.naming.get_full_output_path(filename)
+
+                self._save_image(face_crop, output_path)
+                output_files.append(str(output_path))
+                self.logger.debug(
+                    f"Saved person {person_id} face crop ({head_direction}): {filename}"
+                )
+
+            # Person body crop (if person has body detection and pose cropping enabled)
+            if (
+                not isinstance(person.body, BodyUnknown)
+                and self.config.enable_pose_cropping
+            ):
+                body_crop = self._crop_region(
+                    source_image, person.body.bbox, self.config.pose_crop_padding
+                )
+
+                # Use pose classification as category for person-based body crops with head direction and shot type
+                base_filename = self.naming.get_full_frame_filename(
+                    frame,
+                    primary_pose,
+                    rank,
+                    extension,
+                    person_id=person_id,
+                    head_direction=head_direction,
+                    shot_type=shot_type,
+                )
+                crop_filename = self.naming.get_crop_suffixed_filename(base_filename)
+                crop_output_path = self.naming.get_full_output_path(crop_filename)
+
+                self._save_image(body_crop, crop_output_path)
+                output_files.append(str(crop_output_path))
+                self.logger.debug(
+                    f"Saved person {person_id} body crop ({primary_pose}, {head_direction}, {shot_type}): {crop_filename}"
+                )
+
+            # Full frame with person annotation (if pose cropping disabled OR full_frames enabled)
+            if not self.config.enable_pose_cropping or self.config.full_frames:
+                # Apply resize if configured
+                resized_image = self._apply_resize(source_image)
+
+                # Use pose classification as category for person-based full frames with head direction and shot type
+                filename = self.naming.get_full_frame_filename(
+                    frame,
+                    primary_pose,
+                    rank,
+                    extension,
+                    person_id=person_id,
+                    head_direction=head_direction,
+                    shot_type=shot_type,
+                )
+                output_path = self.naming.get_full_output_path(filename)
+
+                self._save_image(resized_image, output_path)
+                output_files.append(str(output_path))
+                self.logger.debug(
+                    f"Saved person {person_id} full frame ({primary_pose}, {head_direction}, {shot_type}): {filename}"
+                )
+
+            return output_files
+
+        except Exception as e:
+            error_msg = f"Failed to save outputs for person {person_id} in frame {frame.frame_id}: {e}"
+            self.logger.error(error_msg)
+            raise ImageWriteError(error_msg) from e
+
+    def _get_primary_pose_classification(self, person: "Person") -> str:
+        """Get the primary pose classification for a person.
+
+        Args:
+            person: Person object with body detection
+
+        Returns:
+            Primary pose classification (highest confidence) or "unknown"
+        """
+        from ..data.person import BodyUnknown
+
+        if isinstance(person.body, BodyUnknown) or not person.body.pose_classifications:
+            return "unknown"
+
+        # Get pose classification with highest confidence
+        primary_pose, confidence = max(
+            person.body.pose_classifications, key=lambda x: x[1]
+        )
+
+        self.logger.debug(
+            f"Primary pose for person {person.person_id}: {primary_pose} (confidence: {confidence:.3f})"
+        )
+        return primary_pose
+
+    def _get_head_direction(self, person: "Person") -> str:
+        """Get the head direction for a person.
+
+        Args:
+            person: Person object with head pose information
+
+        Returns:
+            Head direction formatted for filename or "unknown"
+        """
+        if person.head_pose and person.head_pose.direction:
+            direction = person.head_pose.direction
+            # Format for filename (lowercase with dashes)
+            formatted_direction = direction.replace(" ", "-").lower()
+            self.logger.debug(
+                f"Head direction for person {person.person_id}: {direction} -> {formatted_direction}"
+            )
+            return formatted_direction
+
+        # Fallback: try to infer from yaw angle if head_pose exists
+        if person.head_pose:
+            yaw = person.head_pose.yaw
+            if abs(yaw) <= 30:
+                direction = "front"
+            elif yaw > 30:
+                direction = "profile-right"
+            elif yaw < -30:
+                direction = "profile-left"
+            else:
+                direction = "unknown"
+
+            self.logger.debug(
+                f"Inferred head direction for person {person.person_id} from yaw {yaw:.1f}°: {direction}"
+            )
+            return direction
+
+        self.logger.debug(
+            f"No head pose information for person {person.person_id}, using 'unknown'"
+        )
+        return "unknown"
+
+    def _get_shot_type_from_frame(self, frame: "FrameData") -> str:
+        """Get the shot type from frame closeup detections.
+
+        Args:
+            frame: FrameData with closeup detections
+
+        Returns:
+            Shot type formatted for filename or "unknown"
+        """
+        if not frame.closeup_detections:
+            return "unknown"
+
+        # Get closeup detection with highest confidence
+        best_closeup = max(frame.closeup_detections, key=lambda c: c.confidence)
+        shot_type = best_closeup.shot_type
+
+        # Format for filename (lowercase with dashes)
+        formatted_shot_type = (
+            shot_type.replace(" ", "-").lower() if shot_type else "unknown"
+        )
+
+        self.logger.debug(
+            f"Frame {frame.frame_id} shot type: {shot_type} -> {formatted_shot_type} (confidence: {best_closeup.confidence:.3f})"
+        )
+        return formatted_shot_type
 
     def _save_frame_outputs_legacy(self, frame: FrameData) -> List[str]:
         """Legacy save method for backward compatibility with old selection data.
@@ -181,8 +399,8 @@ class ImageWriter:
             # Load the source image
             source_image = self._load_frame_image(frame)
 
-            # Save full frame images for pose categories (legacy) - only if pose cropping disabled
-            if pose_categories and not self.config.enable_pose_cropping:
+            # Save full frame images for pose categories (legacy) - if pose cropping disabled OR full_frames enabled
+            if pose_categories and (not self.config.enable_pose_cropping or self.config.full_frames):
                 for category in pose_categories:
                     rank = frame.selections.selection_rank or 1
                     filename = self.naming.get_full_frame_filename(
@@ -206,19 +424,20 @@ class ImageWriter:
                 if best_face:
                     face_crop = self._crop_face(source_image, best_face)
 
-                    for category in head_angle_categories:
-                        rank = frame.selections.selection_rank or 1
-                        filename = self.naming.get_face_crop_filename(
-                            frame, category, rank, extension
-                        )
-                        output_path = self.naming.get_full_output_path(filename)
+                    # Generate face crop for the primary head angle category only (simplified)
+                    primary_category = head_angle_categories[0]  # Use first/primary category
+                    rank = frame.selections.selection_rank or 1
+                    filename = self.naming.get_face_crop_filename(
+                        frame, primary_category, rank, extension, shot_type=None
+                    )
+                    output_path = self.naming.get_full_output_path(filename)
 
-                        # Face crops already handle resize logic in _crop_face, so save directly
-                        self._save_image(face_crop, output_path)
-                        output_files.append(str(output_path))
-                        self.logger.debug(f"Saved face crop (legacy): {filename}")
+                    # Face crops already handle resize logic in _crop_face, so save directly
+                    self._save_image(face_crop, output_path)
+                    output_files.append(str(output_path))
+                    self.logger.debug(f"Saved face crop (legacy): {filename}")
 
-            # Generate pose crop if enabled (replaces full frames when enabled) - legacy
+            # Generate pose crop if enabled (replaces full frames unless full_frames is enabled) - legacy
             if (
                 self.config.enable_pose_cropping
                 and pose_categories

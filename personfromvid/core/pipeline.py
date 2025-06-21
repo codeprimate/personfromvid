@@ -33,6 +33,8 @@ from .steps import (
     FrameSelectionStep,
     InitializationStep,
     OutputGenerationStep,
+    PersonBuildingStep,
+    PersonSelectionStep,
     PipelineStep,
     PoseAnalysisStep,
     QualityAssessmentStep,
@@ -311,15 +313,25 @@ class ProcessingPipeline:
             self._create_initial_state()
 
     def _initialize_steps(self) -> None:
-        """Initialize the pipeline step handlers."""
+        """Initialize the pipeline step handlers with conditional selection."""
+
+        # Conditional selection step based on configuration
+        # PersonSelectionStep if enabled, otherwise FrameSelectionStep (backwards compatibility)
+        selection_step = (
+            PersonSelectionStep
+            if self.config.person_selection.enabled
+            else FrameSelectionStep
+        )
+
         step_classes = [
             InitializationStep,
             FrameExtractionStep,
             FaceDetectionStep,
             PoseAnalysisStep,
+            PersonBuildingStep,
             CloseupDetectionStep,
             QualityAssessmentStep,
-            FrameSelectionStep,
+            selection_step,  # Conditional selection approach
             OutputGenerationStep,
         ]
         self._steps = [step_class(self) for step_class in step_classes]

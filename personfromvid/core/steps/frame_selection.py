@@ -40,7 +40,7 @@ class FrameSelectionStep(PipelineStep):
             candidate_frames = [
                 f
                 for f in self.state.frames
-                if f.has_faces() and f.has_poses() and f.quality_metrics is not None
+                if (f.has_faces() or f.has_poses()) and f.quality_metrics is not None
             ]
 
             if not candidate_frames:
@@ -77,6 +77,7 @@ class FrameSelectionStep(PipelineStep):
                 face_size_weight=self.config.frame_selection.face_size_weight,
                 quality_weight=self.config.frame_selection.quality_weight,
                 diversity_threshold=self.config.frame_selection.diversity_threshold,
+                temporal_diversity_threshold=self.config.frame_selection.temporal_diversity_threshold,
             )
             frame_selector = create_frame_selector(criteria)
             self.state.get_step_progress(self.step_name).start(total_candidates)

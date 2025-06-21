@@ -23,6 +23,7 @@ class SelectionCriteria:
     face_size_weight: float
     quality_weight: float
     diversity_threshold: float
+    temporal_diversity_threshold: float
 
 
 @dataclass
@@ -378,8 +379,8 @@ class FrameSelector:
             selected_timestamp = selected_frame.source_info.video_timestamp
             time_diff = abs(candidate_timestamp - selected_timestamp)
 
-            # If frames are within 2 seconds of each other, consider them too similar
-            if time_diff < 2.0:
+            # Use configurable temporal diversity threshold
+            if time_diff < self.criteria.temporal_diversity_threshold:
                 return False
 
         return True
@@ -1007,7 +1008,7 @@ class FrameSelector:
 
 
 def create_frame_selector(criteria: SelectionCriteria) -> FrameSelector:
-    """Factory function to create FrameSelector instance.
+    """Create a FrameSelector with the specified criteria.
 
     Args:
         criteria: Selection criteria

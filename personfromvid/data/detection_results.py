@@ -5,7 +5,9 @@ pose estimation, and head pose estimation models.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from .constants import QualityMethod
 
 
 @dataclass
@@ -78,6 +80,11 @@ class PoseDetection:
     def valid_keypoints(self) -> Dict[str, Tuple[float, float, float]]:
         """Get keypoints with confidence > 0.5."""
         return {name: kp for name, kp in self.keypoints.items() if kp[2] > 0.5}
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        """Get center point of body bounding box."""
+        return ((self.bbox[0] + self.bbox[2]) / 2, (self.bbox[1] + self.bbox[3]) / 2)
 
 
 @dataclass
@@ -178,6 +185,7 @@ class QualityMetrics:
     brightness_score: float
     contrast_score: float
     overall_quality: float
+    method: QualityMethod = QualityMethod.DIRECT
     quality_issues: List[str] = None
     usable: bool = True
 
@@ -199,6 +207,41 @@ class QualityMetrics:
     def has_issues(self) -> bool:
         """Check if image has quality issues."""
         return len(self.quality_issues) > 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "laplacian_variance": self.laplacian_variance,
+            "sobel_variance": self.sobel_variance,
+            "brightness_score": self.brightness_score,
+            "contrast_score": self.contrast_score,
+            "overall_quality": self.overall_quality,
+            "method": self.method.value,
+            "quality_issues": self.quality_issues,
+            "usable": self.usable,
+        }
+
+    @classmethod
+    def from_dict(cls, quality_dict: Dict[str, Any]) -> "QualityMetrics":
+        """Create QualityMetrics from dictionary with backward compatibility."""
+        # Handle method field with backward compatibility
+        method_value = quality_dict.get("method", "direct")
+        try:
+            method = QualityMethod(method_value)
+        except ValueError:
+            # Default to DIRECT for unknown method values
+            method = QualityMethod.DIRECT
+
+        return cls(
+            laplacian_variance=quality_dict.get("laplacian_variance", 0.0),
+            sobel_variance=quality_dict.get("sobel_variance", 0.0),
+            brightness_score=quality_dict.get("brightness_score", 0.0),
+            contrast_score=quality_dict.get("contrast_score", 0.0),
+            overall_quality=quality_dict.get("overall_quality", 0.0),
+            method=method,
+            quality_issues=quality_dict.get("quality_issues", []),
+            usable=quality_dict.get("usable", True),
+        )
 
 
 @dataclass

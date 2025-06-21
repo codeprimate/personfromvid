@@ -98,6 +98,9 @@ personfromvid video.mp4 \
 # Resize output images to a maximum of 1024 pixels
 personfromvid video.mp4 --resize 1024
 
+# Enable pose cropping with full frames also output
+personfromvid video.mp4 --crop --full-frames
+
 # Force restart processing (clears previous state)
 personfromvid video.mp4 --force
 
@@ -145,6 +148,7 @@ personfromvid video.mp4 --no-structured-output
 | `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.3` |
 | `--crop` | Enable generation of cropped pose images. | `False` |
 | `--crop-padding` | Padding around pose bounding box for crops (0.0-1.0). | `0.1` |
+| `--full-frames` | Output full frames in addition to crops when `--crop` is enabled. | `False` |
 | `--output-png-optimize` / `--no-output-png-optimize` | Enable or disable PNG optimization. | `True` |
 | `--resize` | Maximum dimension for proportional resizing (256-4096 pixels). | `None` |
 | `--min-frames-per-category` | Minimum frames to output per pose/angle category (1-10). | `3` |
@@ -242,6 +246,7 @@ frame_selection:
   face_size_weight: 0.3
   quality_weight: 0.7
   diversity_threshold: 0.8
+  temporal_diversity_threshold: 3.0  # Minimum seconds between selected frames
 
 # Output settings
 output:
@@ -257,6 +262,7 @@ output:
     face_crop_enabled: true
     face_crop_padding: 0.3
     enable_pose_cropping: true
+    full_frames: false  # Output full frames in addition to crops when enable_pose_cropping is true
 
 # Storage and caching
 storage:
@@ -283,6 +289,14 @@ logging:
   enable_rich_console: true
   enable_structured_output: true
   verbose: false
+
+# Person-based selection criteria (enhanced for multi-person support)
+person_selection:
+  enabled: true  # Use person-based selection (recommended for multi-person videos)
+  min_instances_per_person: 3
+  max_instances_per_person: 10
+  min_quality_threshold: 0.3
+  temporal_diversity_threshold: 3.0  # Minimum seconds between ALL selected instances (applies to both minimum and additional selections for better temporal diversity)
 ```
 
 Use with:
@@ -397,120 +411,3 @@ The cache directory is automatically determined based on your operating system:
 - **Linux**: `~/.cache/personfromvid/`
 - **macOS**: `~/Library/Caches/personfromvid/`
 - **Windows**: `C:\Users\{username}\AppData\Local\codeprimate\personfromvid\Cache\`
-
-### Cache Structure
-
-```
-personfromvid/                  # Base cache directory
-├── models/                     # AI model files
-│   ├── yolov8s-face/          # Face detection model
-│   ├── yolov8s-pose/          # Pose estimation model
-│   └── sixdrepnet/            # Head pose model
-└── temp/                      # Temporary processing files
-    └── temp_{video_name}/     # Per-video temporary directory
-        └── frames/            # Extracted frames during processing
-```
-
-### Temporary Files
-
-During video processing, temporary files (extracted frames, intermediate data) are stored in the cache directory under `temp/temp_{video_name}/`. These files are:
-
-- **Automatically cleaned up** after successful processing (configurable)
-- **Kept for debugging** if processing fails or if `--keep-temp` is used
-- **Isolated per video** to allow concurrent processing of multiple videos
-
-### Cache Management
-
-```bash
-# Keep temporary files after processing (for debugging)
-personfromvid video.mp4 --keep-temp
-
-# Force cleanup of existing temp files before starting
-personfromvid video.mp4 --force
-
-# Configure cache location via config file
-personfromvid video.mp4 --config custom_config.yaml
-```
-
-You can manually clean the cache directory to free up disk space, or configure automatic cleanup in your configuration file.
-
-## AI Models
-
-Person From Vid uses the following default AI models, which are automatically downloaded and cached on first use in the cache directory described above.
-
-- **Face Detection**: `yolov8s-face` - A YOLOv8 model trained for face detection.
-- **Pose Estimation**: `yolov8s-pose` - A YOLOv8 model for human pose estimation.
-- **Head Pose**: `sixdrepnet` - A model for 6DoF head pose estimation.
-
-Alternative models can be configured.
-
-## Performance Tips
-
-1. **Use a GPU**: The single most effective way to speed up processing is to use an NVIDIA GPU with `--device gpu`.
-2. **Adjust Batch Size**: Increase `--batch-size` to improve GPU utilization. Start with 4 or 8, then try 16 if you have sufficient GPU memory. Default is 1 for maximum compatibility.
-3. **Limit Frame Extraction**: Use `--max-frames` on very long videos to get results faster.
-4. **Use Structured Output**: The default structured output (`--no-structured-output` to disable) provides better progress tracking and user experience.
-
-## Troubleshooting
-
-### Common Issues
-
-**FFmpeg not found:**
-```bash
-# Check if FFmpeg is installed
-ffmpeg -version
-# Install if missing (see Prerequisites section)
-```
-
-**CUDA/GPU issues:**
-```bash
-# Check GPU availability
-python -c "import torch; print(torch.cuda.is_available())"
-# Fall back to CPU processing
-personfromvid video.mp4 --device cpu
-```
-
-**Memory issues:**
-```bash
-# Reduce batch size
-personfromvid video.mp4 --batch-size 1
-```
-
-**Permission errors:**
-```bash
-# Check output directory permissions
-ls -la /path/to/output/directory
-```
-
-**Processing seems stuck or interrupted:**
-```bash
-# Force restart from the beginning (clears saved state)
-personfromvid video.mp4 --force
-
-# Keep temporary files for debugging
-personfromvid video.mp4 --keep-temp
-```
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## License
-
-This project is licensed under the GPL-3.0-or-later - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-- 📖 [Documentation](https://github.com/codeprimate/personfromvid/docs)
-- 🐛 [Issue Tracker](https://github.com/codeprimate/personfromvid/issues)
-- 💬 [Discussions](https://github.com/codeprimate/personfromvid/discussions)
-
----
-
-**Person From Vid** - Extracting moments, categorizing poses, powered by AI. 

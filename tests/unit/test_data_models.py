@@ -166,15 +166,38 @@ class TestPoseDetection:
             assert pose.pose_classifications == classification_list
 
     def test_empty_keypoints(self):
-        """Test pose detection with no keypoints."""
+        """Test pose detection with empty keypoints."""
         pose = PoseDetection(
-            bbox=(400, 150, 600, 700),
-            confidence=0.5,
+            bbox=(50, 50, 150, 150),
+            confidence=0.7,
             keypoints={}
         )
 
-        assert len(pose.keypoints) == 0
-        assert not pose.pose_classifications
+        assert pose.keypoints == {}
+        assert pose.valid_keypoints == {}
+        assert not pose.has_keypoint("nose")
+
+    def test_center_calculation(self):
+        """Test pose detection center point calculation."""
+        pose = PoseDetection(
+            bbox=(100, 100, 200, 200),
+            confidence=0.8,
+            keypoints={"nose": (150, 150, 0.9)}
+        )
+
+        # Test center calculation
+        center = pose.center
+        assert center == (150.0, 150.0)
+
+        # Test with asymmetric bbox
+        pose_asymmetric = PoseDetection(
+            bbox=(0, 50, 300, 150),
+            confidence=0.8,
+            keypoints={"nose": (150, 100, 0.9)}
+        )
+
+        center_asymmetric = pose_asymmetric.center
+        assert center_asymmetric == (150.0, 100.0)
 
 
 class TestHeadPoseResult:
@@ -334,6 +357,195 @@ class TestQualityMetrics:
 
         assert 0.0 <= metrics.overall_quality <= 1.0
         assert 0.0 <= metrics.contrast_score <= 1.0
+
+    def test_quality_method_default(self):
+        """Test default quality method is DIRECT."""
+        from personfromvid.data.constants import QualityMethod
+
+        metrics = QualityMetrics(
+            laplacian_variance=500.0,
+            sobel_variance=400.0,
+            brightness_score=85.0,
+            contrast_score=0.6,
+            overall_quality=0.65
+        )
+
+        assert metrics.method == QualityMethod.DIRECT
+
+    def test_quality_method_inferred(self):
+        """Test quality method can be set to INFERRED."""
+        from personfromvid.data.constants import QualityMethod
+
+        metrics = QualityMetrics(
+            laplacian_variance=600.0,
+            sobel_variance=500.0,
+            brightness_score=90.0,
+            contrast_score=0.7,
+            overall_quality=0.75,
+            method=QualityMethod.INFERRED
+        )
+
+        assert metrics.method == QualityMethod.INFERRED
+
+    def test_quality_metrics_serialization(self):
+        """Test QualityMetrics to_dict() includes method field."""
+        from personfromvid.data.constants import QualityMethod
+
+        metrics = QualityMetrics(
+            laplacian_variance=800.0,
+            sobel_variance=600.0,
+            brightness_score=95.0,
+            contrast_score=0.8,
+            overall_quality=0.85,
+            method=QualityMethod.INFERRED,
+            quality_issues=["slight_blur"],
+            usable=True
+        )
+
+        result = metrics.to_dict()
+
+        assert result["method"] == "inferred"
+        assert result["laplacian_variance"] == 800.0
+        assert result["sobel_variance"] == 600.0
+        assert result["brightness_score"] == 95.0
+        assert result["contrast_score"] == 0.8
+        assert result["overall_quality"] == 0.85
+        assert result["quality_issues"] == ["slight_blur"]
+        assert result["usable"] is True
+
+    def test_quality_metrics_deserialization(self):
+        """Test QualityMetrics from_dict() with method field."""
+        from personfromvid.data.constants import QualityMethod
+
+        quality_dict = {
+            "laplacian_variance": 700.0,
+            "sobel_variance": 550.0,
+            "brightness_score": 88.0,
+            "contrast_score": 0.75,
+            "overall_quality": 0.82,
+            "method": "inferred",
+            "quality_issues": ["minor_noise"],
+            "usable": True
+        }
+
+        metrics = QualityMetrics.from_dict(quality_dict)
+
+        assert metrics.method == QualityMethod.INFERRED
+        assert metrics.laplacian_variance == 700.0
+        assert metrics.sobel_variance == 550.0
+        assert metrics.brightness_score == 88.0
+        assert metrics.contrast_score == 0.75
+        assert metrics.overall_quality == 0.82
+        assert metrics.quality_issues == ["minor_noise"]
+        assert metrics.usable is True
+
+    def test_quality_metrics_backward_compatibility(self):
+        """Test QualityMetrics from_dict() backward compatibility without method field."""
+        from personfromvid.data.constants import QualityMethod
+
+        # Old format without method field
+        quality_dict = {
+            "laplacian_variance": 600.0,
+            "sobel_variance": 450.0,
+            "brightness_score": 80.0,
+            "contrast_score": 0.65,
+            "overall_quality": 0.78,
+            "quality_issues": [],
+            "usable": True
+        }
+
+        metrics = QualityMetrics.from_dict(quality_dict)
+
+        # Should default to DIRECT for backward compatibility
+        assert metrics.method == QualityMethod.DIRECT
+        assert metrics.laplacian_variance == 600.0
+        assert metrics.overall_quality == 0.78
+
+    def test_quality_metrics_round_trip_serialization(self):
+        """Test QualityMetrics round-trip serialization preserves all data."""
+        from personfromvid.data.constants import QualityMethod
+
+        original = QualityMetrics(
+            laplacian_variance=950.0,
+            sobel_variance=750.0,
+            brightness_score=100.0,
+            contrast_score=0.9,
+            overall_quality=0.92,
+            method=QualityMethod.INFERRED,
+            quality_issues=["high_contrast"],
+            usable=True
+        )
+
+        # Serialize and deserialize
+        serialized = original.to_dict()
+        deserialized = QualityMetrics.from_dict(serialized)
+
+        # All fields should match
+        assert deserialized.method == original.method
+        assert deserialized.laplacian_variance == original.laplacian_variance
+        assert deserialized.sobel_variance == original.sobel_variance
+        assert deserialized.brightness_score == original.brightness_score
+        assert deserialized.contrast_score == original.contrast_score
+        assert deserialized.overall_quality == original.overall_quality
+        assert deserialized.quality_issues == original.quality_issues
+        assert deserialized.usable == original.usable
+
+    def test_invalid_quality_method_handling(self):
+        """Test handling of invalid quality method values in deserialization."""
+        from personfromvid.data.constants import QualityMethod
+
+        # Invalid method value
+        quality_dict = {
+            "laplacian_variance": 500.0,
+            "sobel_variance": 400.0,
+            "brightness_score": 75.0,
+            "contrast_score": 0.6,
+            "overall_quality": 0.7,
+            "method": "invalid_method",  # Invalid method
+            "quality_issues": [],
+            "usable": True
+        }
+
+        metrics = QualityMetrics.from_dict(quality_dict)
+
+        # Should default to DIRECT for invalid method values
+        assert metrics.method == QualityMethod.DIRECT
+
+
+class TestQualityMethod:
+    """Tests for QualityMethod enum."""
+
+    def test_quality_method_values(self):
+        """Test QualityMethod enum has expected values."""
+        from personfromvid.data.constants import QualityMethod
+
+        assert QualityMethod.DIRECT.value == "direct"
+        assert QualityMethod.INFERRED.value == "inferred"
+
+    def test_quality_method_string_representation(self):
+        """Test QualityMethod string representation."""
+        from personfromvid.data.constants import QualityMethod
+
+        assert str(QualityMethod.DIRECT) == "direct"
+        assert str(QualityMethod.INFERRED) == "inferred"
+
+    def test_quality_method_enum_construction(self):
+        """Test QualityMethod enum construction from values."""
+        from personfromvid.data.constants import QualityMethod
+
+        direct = QualityMethod("direct")
+        inferred = QualityMethod("inferred")
+
+        assert direct == QualityMethod.DIRECT
+        assert inferred == QualityMethod.INFERRED
+
+    def test_quality_method_import_availability(self):
+        """Test QualityMethod is available from data package."""
+        from personfromvid.data import QualityMethod
+
+        # Should be importable from main data package
+        assert QualityMethod.DIRECT.value == "direct"
+        assert QualityMethod.INFERRED.value == "inferred"
 
 
 class TestSourceInfo:
@@ -702,3 +914,390 @@ class TestFrameData:
         assert "standing" in classifications
         assert "sitting" in classifications
         assert "closeup" in classifications
+
+    def test_persons_field_default(self):
+        """Test persons field has correct default behavior."""
+        frame = FrameData(
+            frame_id="persons_default_test",
+            file_path=self.frame_file,
+            source_info=SourceInfo(1.0, "test", 30, 30.0),
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+        )
+
+        # Test default empty list
+        assert hasattr(frame, "persons")
+        assert isinstance(frame.persons, list)
+        assert len(frame.persons) == 0
+
+    def test_persons_field_with_person_objects(self):
+        """Test persons field with actual Person objects."""
+        from personfromvid.data.person import (
+            BodyUnknown,
+            FaceUnknown,
+            Person,
+            PersonQuality,
+        )
+
+        # Create test Person objects
+        person1 = Person(
+            person_id=0,
+            face=FaceDetection(bbox=(100, 100, 200, 200), confidence=0.9),
+            body=BodyUnknown(),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.8, body_quality=0.0)
+        )
+
+        person2 = Person(
+            person_id=1,
+            face=FaceUnknown(),
+            body=PoseDetection(bbox=(300, 50, 500, 400), confidence=0.85, keypoints={}, pose_classifications=[]),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.0, body_quality=0.7)
+        )
+
+        frame = FrameData(
+            frame_id="persons_test",
+            file_path=self.frame_file,
+            source_info=SourceInfo(1.0, "test", 30, 30.0),
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG"),
+            persons=[person1, person2]
+        )
+
+        # Test persons field functionality
+        assert len(frame.persons) == 2
+        assert frame.persons[0].person_id == 0
+        assert frame.persons[1].person_id == 1
+        assert frame.persons[0].has_face
+        assert not frame.persons[0].has_body
+        assert not frame.persons[1].has_face
+        assert frame.persons[1].has_body
+
+    def test_persons_field_manipulation(self):
+        """Test persons field can be manipulated after creation."""
+        from personfromvid.data.person import BodyUnknown, Person, PersonQuality
+
+        frame = FrameData(
+            frame_id="manipulation_test",
+            file_path=self.frame_file,
+            source_info=SourceInfo(1.0, "test", 30, 30.0),
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+        )
+
+        # Start with empty persons
+        assert len(frame.persons) == 0
+
+        # Add a person
+        person = Person(
+            person_id=0,
+            face=FaceDetection(bbox=(100, 100, 200, 200), confidence=0.9),
+            body=BodyUnknown(),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.8, body_quality=0.0)
+        )
+        frame.persons.append(person)
+
+        # Verify manipulation worked
+        assert len(frame.persons) == 1
+        assert frame.persons[0].person_id == 0
+
+        # Clear persons
+        frame.persons.clear()
+        assert len(frame.persons) == 0
+
+    def test_get_persons_method(self):
+        """Test get_persons() method functionality."""
+        from personfromvid.data.person import (
+            BodyUnknown,
+            FaceUnknown,
+            Person,
+            PersonQuality,
+        )
+
+        frame = FrameData(
+            frame_id="get_persons_test",
+            file_path=self.frame_file,
+            source_info=SourceInfo(1.0, "test", 30, 30.0),
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+        )
+
+        # Test method exists
+        assert hasattr(frame, "get_persons")
+        assert callable(frame.get_persons)
+
+        # Test empty persons list
+        persons = frame.get_persons()
+        assert isinstance(persons, list)
+        assert len(persons) == 0
+        assert persons is frame.persons  # Should return same reference
+
+        # Test with populated persons list
+        person1 = Person(
+            person_id=0,
+            face=FaceDetection(bbox=(100, 100, 200, 200), confidence=0.9),
+            body=BodyUnknown(),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.8, body_quality=0.0)
+        )
+
+        person2 = Person(
+            person_id=1,
+            face=FaceUnknown(),
+            body=PoseDetection(bbox=(300, 50, 500, 400), confidence=0.85, keypoints={}, pose_classifications=[]),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.0, body_quality=0.7)
+        )
+
+        frame.persons.extend([person1, person2])
+
+        # Test method returns correct list
+        persons = frame.get_persons()
+        assert len(persons) == 2
+        assert persons[0].person_id == 0
+        assert persons[1].person_id == 1
+        assert persons is frame.persons  # Should return same reference
+
+        # Test return type consistency
+        assert isinstance(persons, list)
+        for person in persons:
+            assert isinstance(person, Person)
+
+    def test_to_dict_with_persons(self):
+        """Test FrameData.to_dict() includes persons field."""
+        from personfromvid.data.person import (
+            FaceUnknown,
+            Person,
+            PersonQuality,
+        )
+
+        # Create minimal frame data
+        frame_data = FrameData(
+            frame_id="test_frame_persons",
+            file_path=self.frame_file,
+            source_info=SourceInfo(
+                video_timestamp=15.0,
+                extraction_method="i_frame",
+                original_frame_number=450,
+                video_fps=30.0
+            ),
+            image_properties=ImageProperties(
+                width=1920,
+                height=1080,
+                channels=3,
+                file_size_bytes=245760,
+                format="JPEG"
+            )
+        )
+
+        # Test with empty persons list
+        frame_dict = frame_data.to_dict()
+        assert "persons" in frame_dict
+        assert isinstance(frame_dict["persons"], list)
+        assert len(frame_dict["persons"]) == 0
+
+        # Add a person with face and body
+        face = FaceDetection(
+            bbox=(100, 100, 200, 200),
+            confidence=0.9,
+            landmarks=[(120, 120), (180, 120), (150, 150), (130, 180), (170, 180)]
+        )
+        body = PoseDetection(
+            bbox=(80, 100, 220, 400),
+            confidence=0.85,
+            keypoints={'nose': (150.0, 120.0, 0.9)},
+            pose_classifications=[("standing", 0.8)]
+        )
+        quality = PersonQuality(face_quality=0.9, body_quality=0.85)
+
+        person = Person(
+            person_id=0,
+            face=face,
+            body=body,
+            head_pose=None,
+            quality=quality
+        )
+        frame_data.persons.append(person)
+
+        # Test serialization with person
+        frame_dict = frame_data.to_dict()
+        assert "persons" in frame_dict
+        assert len(frame_dict["persons"]) == 1
+
+        person_dict = frame_dict["persons"][0]
+        assert person_dict["person_id"] == 0
+        assert person_dict["face"]["type"] == "FaceDetection"
+        assert person_dict["body"]["type"] == "PoseDetection"
+        assert person_dict["head_pose"] is None
+        assert "quality" in person_dict
+
+        # Test with sentinel objects (person must have at least one real detection)
+        person_with_face_unknown = Person(
+            person_id=1,
+            face=FaceUnknown(),
+            body=PoseDetection(
+                bbox=(250, 50, 450, 400),
+                confidence=0.75,
+                keypoints={'nose': (350.0, 170.0, 0.8)},
+                pose_classifications=[("sitting", 0.75)]
+            ),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.0, body_quality=0.75)
+        )
+        frame_data.persons.append(person_with_face_unknown)
+
+        frame_dict = frame_data.to_dict()
+        assert len(frame_dict["persons"]) == 2
+
+        sentinel_person_dict = frame_dict["persons"][1]
+        assert sentinel_person_dict["person_id"] == 1
+        assert sentinel_person_dict["face"]["type"] == "FaceUnknown"
+        assert sentinel_person_dict["body"]["type"] == "PoseDetection"
+
+    def test_from_dict_with_persons(self):
+        """Test FrameData.from_dict() reconstructs persons correctly."""
+        from personfromvid.data.person import (
+            FaceUnknown,
+            Person,
+            PersonQuality,
+        )
+
+        # Create original frame data with persons
+        frame_data = FrameData(
+            frame_id="test_frame_roundtrip",
+            file_path=self.frame_file,
+            source_info=SourceInfo(
+                video_timestamp=25.0,
+                extraction_method="i_frame",
+                original_frame_number=750,
+                video_fps=30.0
+            ),
+            image_properties=ImageProperties(
+                width=1920,
+                height=1080,
+                channels=3,
+                file_size_bytes=245760,
+                format="JPEG"
+            )
+        )
+
+        # Add persons to original frame
+        face = FaceDetection(
+            bbox=(150, 150, 250, 250),
+            confidence=0.95,
+            landmarks=[(170, 170), (230, 170), (200, 200), (180, 230), (220, 230)]
+        )
+        body = PoseDetection(
+            bbox=(130, 150, 270, 450),
+            confidence=0.9,
+            keypoints={'nose': (200.0, 170.0, 0.95)},
+            pose_classifications=[("standing", 0.9)]
+        )
+        quality = PersonQuality(face_quality=0.95, body_quality=0.9)
+
+        person1 = Person(
+            person_id=0,
+            face=face,
+            body=body,
+            head_pose=None,
+            quality=quality
+        )
+
+        person2 = Person(
+            person_id=1,
+            face=FaceUnknown(),
+            body=PoseDetection(
+                bbox=(300, 100, 500, 400),
+                confidence=0.8,
+                keypoints={'nose': (400.0, 200.0, 0.8)},
+                pose_classifications=[("sitting", 0.8)]
+            ),
+            head_pose=None,
+            quality=PersonQuality(face_quality=0.0, body_quality=0.8)
+        )
+
+        frame_data.persons.extend([person1, person2])
+
+        # Test round-trip serialization
+        frame_dict = frame_data.to_dict()
+        reconstructed_frame = FrameData.from_dict(frame_dict)
+
+        # Verify basic frame properties
+        assert reconstructed_frame.frame_id == "test_frame_roundtrip"
+        assert reconstructed_frame.source_info.video_timestamp == 25.0
+        assert reconstructed_frame.image_properties.width == 1920
+
+        # Verify persons reconstruction
+        assert len(reconstructed_frame.persons) == 2
+
+        # Verify first person
+        recon_person1 = reconstructed_frame.persons[0]
+        assert recon_person1.person_id == 0
+        assert recon_person1.has_face
+        assert recon_person1.has_body
+        assert recon_person1.face.bbox == (150, 150, 250, 250)
+        assert recon_person1.face.confidence == 0.95
+        assert recon_person1.body.bbox == (130, 150, 270, 450)
+        assert recon_person1.quality.face_quality == 0.95
+        assert recon_person1.quality.body_quality == 0.9
+
+        # Verify second person with sentinel
+        recon_person2 = reconstructed_frame.persons[1]
+        assert recon_person2.person_id == 1
+        assert not recon_person2.has_face  # FaceUnknown
+        assert recon_person2.has_body
+        assert isinstance(recon_person2.face, FaceUnknown)
+        assert recon_person2.body.confidence == 0.8
+        assert recon_person2.quality.face_quality == 0.0
+        assert recon_person2.quality.body_quality == 0.8
+
+    def test_from_dict_backward_compatibility(self):
+        """Test FrameData.from_dict() handles missing persons field gracefully."""
+        # Create a frame dict without persons field (old format)
+        frame_dict = {
+            "frame_id": "backward_compat_test",
+            "file_path": str(self.frame_file),
+            "source_info": {
+                "video_timestamp": 10.0,
+                "extraction_method": "i_frame",
+                "original_frame_number": 300,
+                "video_fps": 30.0,
+            },
+            "image_properties": {
+                "width": 640,
+                "height": 480,
+                "channels": 3,
+                "file_size_bytes": 100000,
+                "format": "JPEG",
+                "color_space": "RGB",
+            },
+            "face_detections": [],
+            "pose_detections": [],
+            "head_poses": [],
+            "quality_metrics": None,
+            "closeup_detections": [],
+            # Note: no "persons" field
+            "selections": {
+                "selected_for_poses": [],
+                "selected_for_head_angles": [],
+                "final_output": False,
+                "output_files": [],
+                "crop_regions": {},
+                "selection_rank": None,
+                "quality_rank": None,
+                "category_scores": {},
+                "category_score_breakdowns": {},
+                "category_ranks": {},
+                "primary_selection_category": None,
+                "selection_competition": {},
+                "final_selection_score": None,
+                "rejection_reason": None,
+            },
+            "processing_timings": {},
+            "debug_info": {},
+        }
+
+        # Should reconstruct successfully with empty persons list
+        frame_data = FrameData.from_dict(frame_dict)
+
+        assert frame_data.frame_id == "backward_compat_test"
+        assert len(frame_data.persons) == 0
+        assert isinstance(frame_data.persons, list)
