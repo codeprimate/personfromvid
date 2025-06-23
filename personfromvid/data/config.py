@@ -321,7 +321,7 @@ class PersonSelectionCriteria(BaseModel):
 
     # Category-based selection within person groups
     enable_pose_categories: bool = Field(
-        default=False,
+        default=True,
         description="Enable pose category diversity within person groups",
     )
     enable_head_angle_categories: bool = Field(
@@ -399,6 +399,16 @@ class OutputImageConfig(BaseModel):
     face_crop_padding: float = Field(
         default=0.2,
         description="Padding around the face bounding box for crops (as a percentage).",
+    )
+    face_restoration_enabled: bool = Field(
+        default=False,
+        description="Enable GFPGAN face restoration for enhanced quality",
+    )
+    face_restoration_strength: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Face restoration strength (0.0=no effect, 1.0=full restoration)",
     )
     enable_pose_cropping: bool = Field(
         False, description="Enable generation of cropped pose images."

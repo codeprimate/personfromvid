@@ -106,6 +106,12 @@ class HeadPoseEstimationError(ModelInferenceError):
     pass
 
 
+class FaceRestorationError(ModelInferenceError):
+    """Raised when face restoration fails."""
+
+    pass
+
+
 class AnalysisError(PersonFromVidError):
     """Base class for analysis-related errors."""
 
@@ -231,6 +237,7 @@ ERROR_CODES = {
     FaceDetectionError: "PFV_204",
     PoseEstimationError: "PFV_205",
     HeadPoseEstimationError: "PFV_206",
+    FaceRestorationError: "PFV_207",
     AnalysisError: "PFV_300",
     QualityAssessmentError: "PFV_301",
     PoseClassificationError: "PFV_302",

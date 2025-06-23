@@ -273,6 +273,28 @@ class ModelConfigs:
         citation="6D Rotation Representation For Unconstrained Head Pose Estimation",
     )
 
+    # Image Restoration Models
+    GFPGAN_V1_4 = ModelMetadata(
+        name="gfpgan_v1_4",
+        version="1.4.0",
+        provider=ModelProvider.DIRECT_URL,
+        files=[
+            ModelFile(
+                filename="GFPGANv1.4.pth",
+                url="https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth",
+                sha256_hash="e2bf53430748286c3d9a7f6bd8f6eeeff2b2dcacd45dcd5141b7e6b29c8b03e6",
+                size_bytes=348632315,  # ~348MB
+                format=ModelFormat.PYTORCH,
+                description="GFPGAN v1.4 face restoration model for high-quality face enhancement at native resolution",
+            )
+        ],
+        supported_devices=[DeviceType.CPU, DeviceType.GPU],
+        input_size=(512, 512),  # Preferred input size for best results
+        description="GFPGAN v1.4 - High-quality face restoration using GAN priors, optimized for face enhancement",
+        license="Apache-2.0",
+        requirements=["gfpgan>=1.3.8"],
+    )
+
     @classmethod
     def get_all_models(cls) -> Dict[str, ModelMetadata]:
         """Get all available model configurations."""

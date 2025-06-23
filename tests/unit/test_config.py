@@ -144,7 +144,7 @@ def test_person_selection_criteria_defaults():
     assert criteria.min_quality_threshold == 0.3
 
     # Category parameters
-    assert criteria.enable_pose_categories is False
+    assert criteria.enable_pose_categories is True
     assert criteria.enable_head_angle_categories is True
     assert criteria.min_poses_per_person == 3
     assert criteria.min_head_angles_per_person == 3
@@ -336,6 +336,157 @@ def test_frame_selection_config_validation():
     
     with pytest.raises(ValidationError):
         FrameSelectionConfig(temporal_diversity_threshold=35.0)  # Above maximum
+
+
+def test_face_restoration_config_defaults():
+    """Test face restoration configuration default values."""
+    config = OutputImageConfig()
+
+    # Test default values per specification
+    assert config.face_restoration_enabled is False
+    assert config.face_restoration_strength == 0.8
+
+
+def test_face_restoration_config_validation():
+    """Test face restoration configuration validation."""
+    # Test valid configurations
+    valid_config = OutputImageConfig(
+        face_restoration_enabled=False,
+        face_restoration_strength=0.5
+    )
+    assert valid_config.face_restoration_enabled is False
+    assert valid_config.face_restoration_strength == 0.5
+
+    # Test boundary values
+    boundary_config = OutputImageConfig(
+        face_restoration_strength=0.0
+    )
+    assert boundary_config.face_restoration_strength == 0.0
+
+    boundary_config = OutputImageConfig(
+        face_restoration_strength=1.0
+    )
+    assert boundary_config.face_restoration_strength == 1.0
+
+
+def test_face_restoration_config_invalid_values():
+    """Test face restoration configuration with invalid values."""
+    from pydantic import ValidationError
+
+    # Test strength values below minimum
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_strength=-0.1)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_strength=-1.0)
+
+    # Test strength values above maximum
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_strength=1.1)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_strength=2.0)
+
+    # Test invalid type for strength
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_strength="invalid")
+
+    # Test invalid type for enabled flag
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_enabled="invalid_string")
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(face_restoration_enabled=42)
+
+
+def test_face_restoration_config_serialization():
+    """Test face restoration configuration serialization and deserialization."""
+    import json
+
+    # Create config with non-default values
+    original = OutputImageConfig(
+        face_restoration_enabled=False,
+        face_restoration_strength=0.3,
+        face_crop_enabled=True,
+        format="jpeg"
+    )
+
+    # Test model_dump (Pydantic v2)
+    data = original.model_dump()
+    assert isinstance(data, dict)
+    assert data["face_restoration_enabled"] is False
+    assert data["face_restoration_strength"] == 0.3
+
+    # Test JSON serialization
+    json_str = json.dumps(data)
+    assert isinstance(json_str, str)
+
+    # Test deserialization
+    restored_data = json.loads(json_str)
+    restored = OutputImageConfig(**restored_data)
+
+    # Verify face restoration fields match
+    assert restored.face_restoration_enabled == original.face_restoration_enabled
+    assert restored.face_restoration_strength == original.face_restoration_strength
+
+
+def test_face_restoration_config_integration():
+    """Test face restoration configuration integration with main Config class."""
+    config = Config()
+
+    # Test that face restoration fields exist through Config
+    assert hasattr(config.output.image, 'face_restoration_enabled')
+    assert hasattr(config.output.image, 'face_restoration_strength')
+    assert isinstance(config.output.image.face_restoration_enabled, bool)
+    assert isinstance(config.output.image.face_restoration_strength, float)
+
+    # Test default values through Config
+    assert config.output.image.face_restoration_enabled is False
+    assert config.output.image.face_restoration_strength == 0.8
+
+    # Test Config serialization includes face restoration fields
+    config_data = config.model_dump()
+    image_config = config_data["output"]["image"]
+    assert "face_restoration_enabled" in image_config
+    assert "face_restoration_strength" in image_config
+    assert image_config["face_restoration_enabled"] is False
+    assert image_config["face_restoration_strength"] == 0.8
+
+
+def test_face_restoration_config_custom_values():
+    """Test Config with custom face restoration configuration values."""
+    from personfromvid.data.config import OutputConfig
+
+    custom_image_config = OutputImageConfig(
+        face_restoration_enabled=False,
+        face_restoration_strength=0.2,
+        format="png"
+    )
+    custom_output_config = OutputConfig(image=custom_image_config)
+    config = Config(output=custom_output_config)
+
+    assert config.output.image.face_restoration_enabled is False
+    assert config.output.image.face_restoration_strength == 0.2
+    assert config.output.image.format == "png"
+
+
+def test_face_restoration_config_backward_compatibility():
+    """Test that face restoration configuration maintains backward compatibility."""
+    # Test that existing configurations without face restoration fields work
+    legacy_config_data = {
+        "format": "jpeg",
+        "face_crop_enabled": True,
+        "face_crop_padding": 0.15,
+        "enable_pose_cropping": False,
+        "resize": 1024
+    }
+
+    # Should not raise an exception and should use defaults
+    config = OutputImageConfig(**legacy_config_data)
+    assert config.face_restoration_enabled is False  # Default
+    assert config.face_restoration_strength == 0.8  # Default
+    assert config.format == "jpeg"  # Preserved
+    assert config.resize == 1024  # Preserved
 
 
 if __name__ == "__main__":

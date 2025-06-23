@@ -106,6 +106,17 @@ def get_version():
     help="Padding around face bounding box for crops",
 )
 @click.option(
+    "--face-restoration/--no-face-restoration",
+    "face_restoration_enabled",
+    default=None,
+            help="Enable/disable GFPGAN face restoration for enhanced quality",
+)
+@click.option(
+    "--face-restoration-strength",
+    type=click.FloatRange(0.0, 1.0),
+    help="Face restoration strength: 0.0=no effect, 1.0=full restoration, 0.8=recommended balance",
+)
+@click.option(
     "--crop",
     is_flag=True,
     help="Enable generation of cropped pose images",
@@ -171,6 +182,8 @@ def main(
     output_jpeg_quality: Optional[int],
     output_face_crop_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
+    face_restoration_enabled: Optional[bool],
+    face_restoration_strength: Optional[float],
     crop: bool,
     crop_padding: Optional[float],
     full_frames: bool,
@@ -613,6 +626,12 @@ def _apply_output_overrides(config: Config, cli_args: dict) -> None:
 
     if cli_args["output_face_crop_padding"]:
         config.output.image.face_crop_padding = cli_args["output_face_crop_padding"]
+
+    if cli_args["face_restoration_enabled"] is not None:
+        config.output.image.face_restoration_enabled = cli_args["face_restoration_enabled"]
+
+    if cli_args["face_restoration_strength"]:
+        config.output.image.face_restoration_strength = cli_args["face_restoration_strength"]
 
     if cli_args["crop"]:
         config.output.image.enable_pose_cropping = cli_args["crop"]

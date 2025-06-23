@@ -19,7 +19,8 @@ from personfromvid.utils.exceptions import ModelDownloadError, ModelNotFoundErro
 TEST_MODELS = {
     "FACE_DETECTION": "scrfd_10g",  # Use actual model name from config
     "POSE_ESTIMATION": "yolov8n-pose",
-    "HEAD_POSE": "sixdrepnet"  # Use actual default model from config
+    "HEAD_POSE": "sixdrepnet",  # Use actual default model from config
+    "FACE_RESTORATION": "gfpgan_v1_4"  # Add GFPGAN for integration testing
 }
 
 
@@ -261,3 +262,201 @@ class TestModelManagerIntegration:
         cached_models = manager.list_cached_models()
         for model_name in required_models:
             assert model_name in cached_models
+
+
+class TestGFPGANIntegration:
+    """Integration tests specific to GFPGAN model configuration."""
+
+    def setup_method(self):
+        """Set up test environment."""
+        self.temp_dir = Path(tempfile.mkdtemp())
+        # Reset global manager to use our temp directory
+        import personfromvid.models.model_manager as mm
+        mm._model_manager = None
+
+    def teardown_method(self):
+        """Clean up test environment."""
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir)
+        # Reset global manager
+        import personfromvid.models.model_manager as mm
+        mm._model_manager = None
+
+    def test_model_manager_can_locate_gfpgan_model(self):
+        """Test that ModelManager can locate and configure GFPGAN model."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        manager = ModelManager(cache_dir=self.temp_dir)
+
+        # Verify model can be found in configuration
+        model = ModelConfigs.get_model(model_name)
+        assert model is not None, "GFPGAN model should be locatable in configuration"
+        assert model.name == model_name
+
+        # Verify ModelManager can handle the model configuration
+        assert not manager.is_model_cached(model_name)
+        
+        # Simulate that model would be downloadable
+        model_dir = self.temp_dir / model_name
+        model_dir.mkdir(parents=True)
+        primary_file = model_dir / model.get_primary_file().filename
+        primary_file.write_bytes(b"fake gfpgan model content")
+
+        # Test ensure_model_available workflow
+        model_path = manager.ensure_model_available(model_name)
+        assert model_path.exists()
+        assert model_path.name == "GFPGANv1.4.pth"
+        assert manager.is_model_cached(model_name)
+
+    def test_gfpgan_model_download_configuration(self):
+        """Test GFPGAN model download configuration and metadata handling."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        manager = ModelManager(cache_dir=self.temp_dir)
+        
+        # Get model configuration
+        model = ModelConfigs.get_model(model_name)
+        primary_file = model.get_primary_file()
+        
+        # Verify download configuration is properly set up
+        assert primary_file.url.startswith("https://github.com/TencentARC/GFPGAN/releases/")
+        assert primary_file.filename == "GFPGANv1.4.pth"
+        assert primary_file.size_bytes == 348632315  # ~348MB
+        assert len(primary_file.sha256_hash) == 64  # Valid SHA256 hash length
+        
+        # Test that manager can handle the model download simulation
+        with patch.object(manager, '_download_file') as mock_download:
+            # Create fake model file to simulate successful download
+            model_dir = self.temp_dir / model_name
+            model_dir.mkdir(parents=True)
+            model_file = model_dir / primary_file.filename
+            model_file.write_bytes(b"fake gfpgan model for integration test")
+            
+            # Simulate download call
+            manager.ensure_model_available(model_name)
+            
+            # Verify model is now available
+            assert manager.is_model_cached(model_name)
+            cached_path = manager.get_model_path(model_name)
+            assert cached_path == model_file
+
+    def test_gfpgan_model_integration_with_device_management(self):
+        """Test GFPGAN model integration with device management system."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        model = ModelConfigs.get_model(model_name)
+        
+        # Test device compatibility with existing validation system
+        from personfromvid.data.config import DeviceType
+        
+        # Test all supported device types
+        assert ModelConfigs.validate_model_config(model_name, DeviceType.CPU) is True
+        assert ModelConfigs.validate_model_config(model_name, DeviceType.GPU) is True
+        assert ModelConfigs.validate_model_config(model_name, DeviceType.AUTO) is False  # AUTO not explicitly supported
+        
+        # Verify device support in model metadata
+        assert DeviceType.CPU in model.supported_devices
+        assert DeviceType.GPU in model.supported_devices
+
+    def test_gfpgan_requirements_compatibility(self):
+        """Test GFPGAN requirements compatibility with system."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        model = ModelConfigs.get_model(model_name)
+        
+        # Verify requirements are properly specified
+        assert model.requirements == ["gfpgan>=1.3.8"]
+        
+        # Test that requirements are accessible for dependency management
+        all_models = ModelConfigs.get_all_models()
+        restoration_models_with_requirements = [
+            m for m in all_models.values() 
+            if m.requirements and any("gfpgan" in req for req in m.requirements)
+        ]
+        assert len(restoration_models_with_requirements) == 1
+        assert restoration_models_with_requirements[0].name == model_name
+
+    def test_gfpgan_model_cache_integration(self):
+        """Test GFPGAN model integration with cache management system."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        manager = ModelManager(cache_dir=self.temp_dir)
+        
+        # Create fake cached GFPGAN model
+        model = ModelConfigs.get_model(model_name)
+        model_dir = self.temp_dir / model_name
+        model_dir.mkdir(parents=True)
+        
+        # Create model file with realistic size simulation
+        model_file = model_dir / model.get_primary_file().filename
+        # Simulate a smaller version of the 67MB file for testing
+        model_file.write_bytes(b"0" * 1000)  # 1KB for testing
+        
+        # Test cache operations
+        assert manager.is_model_cached(model_name)
+        cached_models = manager.list_cached_models()
+        assert model_name in cached_models
+        
+        # Test cache size calculation includes GFPGAN
+        cache_size = manager.get_cache_size()
+        assert cache_size >= 1000  # At least our fake file size
+        
+        # Test model path retrieval
+        model_path = manager.get_model_path(model_name)
+        assert model_path == model_file
+        assert model_path.exists()
+
+    def test_gfpgan_model_error_handling_integration(self):
+        """Test GFPGAN model error handling in integration scenarios."""
+        model_name = TEST_MODELS["FACE_RESTORATION"]
+        manager = ModelManager(cache_dir=self.temp_dir)
+        
+        # Test model not found scenarios
+        with pytest.raises(ModelNotFoundError):
+            manager.get_model_path(model_name)
+        
+        # Test download failure cleanup
+        with patch.object(manager, '_download_file', side_effect=Exception("Simulated download failure")):
+            with pytest.raises(ModelDownloadError):
+                manager.download_model(model_name)
+            
+            # Verify cleanup happened
+            assert not manager.is_model_cached(model_name)
+            model_dir = self.temp_dir / model_name
+            assert not model_dir.exists()
+
+    def test_gfpgan_with_multiple_models_scenario(self):
+        """Test GFPGAN integration in multi-model scenarios."""
+        # Realistic scenario: Application using face detection + face restoration
+        manager = ModelManager(cache_dir=self.temp_dir)
+        
+        model_names = [
+            TEST_MODELS["FACE_DETECTION"],
+            TEST_MODELS["FACE_RESTORATION"]
+        ]
+        
+        # Create fake models for both
+        for model_name in model_names:
+            model = ModelConfigs.get_model(model_name)
+            model_dir = self.temp_dir / model_name
+            model_dir.mkdir(parents=True)
+            
+            # Create all required files
+            for file_info in model.files:
+                file_path = model_dir / file_info.filename
+                file_path.write_bytes(f"fake {model_name} content".encode())
+        
+        # Verify both models are cached and accessible
+        for model_name in model_names:
+            assert manager.is_model_cached(model_name)
+            model_path = manager.get_model_path(model_name)
+            assert model_path.exists()
+        
+        # Verify listing includes both models
+        cached_models = manager.list_cached_models()
+        for model_name in model_names:
+            assert model_name in cached_models
+        
+        # Test that GFPGAN can coexist with other models
+        face_detection_path = manager.get_model_path(TEST_MODELS["FACE_DETECTION"])
+        face_restoration_path = manager.get_model_path(TEST_MODELS["FACE_RESTORATION"])
+        
+        assert face_detection_path != face_restoration_path
+        assert face_detection_path.exists()
+        assert face_restoration_path.exists()
+        assert face_restoration_path.name == "GFPGANv1.4.pth"

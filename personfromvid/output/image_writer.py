@@ -5,7 +5,7 @@ processing and file I/O operations for generating the final output images.
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List, Tuple, Optional
 
 import cv2
 import numpy as np
@@ -21,6 +21,7 @@ from .naming_convention import NamingConvention
 if TYPE_CHECKING:
     from ..analysis.person_selector import PersonSelection
     from ..data.person import Person
+    from ..models.face_restorer import FaceRestorer
 
 
 class ImageWriter:
@@ -39,6 +40,33 @@ class ImageWriter:
         self.naming = NamingConvention(context=context)
         self.output_directory.mkdir(parents=True, exist_ok=True)
         self._validate_config()
+        
+        # Initialize FaceRestorer with lazy loading for face restoration
+        self._face_restorer: Optional["FaceRestorer"] = None
+        self._face_restorer_initialized = False
+
+    def _get_face_restorer(self) -> Optional["FaceRestorer"]:
+        """Get FaceRestorer instance with lazy loading.
+        
+        Returns:
+            FaceRestorer instance if face restoration is enabled, None otherwise
+        """
+        if not self.config.face_restoration_enabled:
+            return None
+            
+        if not self._face_restorer_initialized:
+            try:
+                from ..models.face_restorer import create_face_restorer
+                self._face_restorer = create_face_restorer()
+                self.logger.debug("FaceRestorer initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize FaceRestorer: {e}")
+                self.logger.info("Face restoration will be disabled for this session")
+                self._face_restorer = None
+            finally:
+                self._face_restorer_initialized = True
+                
+        return self._face_restorer
 
     def save_frame_outputs(self, frame: FrameData) -> List[str]:
         """Save all output images for a frame using enhanced selection metadata.
@@ -501,7 +529,11 @@ class ImageWriter:
             ) from e
 
     def _crop_region(
-        self, image: np.ndarray, bbox: Tuple[int, int, int, int], padding: float
+        self, 
+        image: np.ndarray, 
+        bbox: Tuple[int, int, int, int], 
+        padding: float,
+        use_face_restoration: bool = False
     ) -> np.ndarray:
         """Crop region from image with padding and upscale to minimum size.
 
@@ -509,9 +541,10 @@ class ImageWriter:
             image: Source image as numpy array
             bbox: Bounding box as (x1, y1, x2, y2)
             padding: Padding factor as proportion of bbox size (0.0 to 1.0)
+            use_face_restoration: Whether to apply face restoration if enabled
 
         Returns:
-            Cropped and potentially upscaled image as numpy array
+            Cropped and potentially upscaled/restored image as numpy array
         """
         x1, y1, x2, y2 = bbox
 
@@ -534,10 +567,38 @@ class ImageWriter:
         # Determine minimum dimension: use resize value if configured, otherwise default to 512
         min_dimension = self.config.resize if self.config.resize is not None else 512
 
-        # Upscale if both dimensions are smaller than the minimum dimension
+        # Check if upscaling is needed
         crop_height, crop_width = cropped.shape[:2]
+        needs_upscaling = crop_height < min_dimension and crop_width < min_dimension
 
-        if crop_height < min_dimension and crop_width < min_dimension:
+        # Apply face restoration if enabled and requested
+        if use_face_restoration and needs_upscaling:
+            face_restorer = self._get_face_restorer()
+            if face_restorer is not None:
+                try:
+                    # Calculate target size for face restoration - use more conservative approach
+                    # Only upscale to the minimum needed size, not excessively large
+                    target_size = min(min_dimension, 512)  # Cap at 512px for performance
+                    
+                    # Apply GFPGAN face restoration with configured strength
+                    restored_image = face_restorer.restore_face(
+                        image=cropped,
+                        target_size=target_size,
+                        strength=self.config.face_restoration_strength
+                    )
+                    
+                    self.logger.debug(
+                        f"GFPGAN face restoration applied: {crop_width}x{crop_height} -> target {target_size}px "
+                        f"(strength: {self.config.face_restoration_strength:.2f})"
+                    )
+                    return restored_image
+                    
+                except Exception as e:
+                    self.logger.warning(f"Face restoration failed, falling back to Lanczos: {e}")
+                    # Fall through to standard Lanczos processing
+
+        # Standard upscaling logic (fallback or when face restoration not used)
+        if needs_upscaling:
             # Calculate scale factor to ensure at least one dimension equals min_dimension
             scale_factor = min_dimension / max(crop_width, crop_height)
             new_width = int(crop_width * scale_factor)
@@ -549,7 +610,7 @@ class ImageWriter:
             cropped = np.array(upscaled_pil)
 
             self.logger.debug(
-                f"Upscaled crop from {crop_width}x{crop_height} to {new_width}x{new_height} "
+                f"Lanczos upscaling applied: {crop_width}x{crop_height} -> {new_width}x{new_height} "
                 f"(scale: {scale_factor:.2f}, target: {min_dimension}px)"
             )
 
@@ -565,10 +626,13 @@ class ImageWriter:
             face_detection: Face detection with bounding box
 
         Returns:
-            Cropped and potentially upscaled face image as numpy array
+            Cropped and potentially upscaled/restored face image as numpy array
         """
         return self._crop_region(
-            image, face_detection.bbox, self.config.face_crop_padding
+            image, 
+            face_detection.bbox, 
+            self.config.face_crop_padding,
+            use_face_restoration=True  # Enable face restoration for face crops
         )
 
     def _save_image(self, image: np.ndarray, output_path: Path) -> None:

@@ -17,6 +17,7 @@ AI-powered video frame extraction and pose categorization tool that analyzes vid
     - Classifies shot types like **closeup, medium shot, and full body**.
 - 👤 **Head Orientation**: Classifies head directions into 9 cardinal orientations (front, profile, looking up/down, etc.).
 - 🖼️ **Advanced Quality Assessment**: Uses multiple metrics like blur, brightness, and contrast to select the sharpest, best-lit frames.
+- ✨ **AI-Powered Face Restoration**: GFPGAN face-specific enhancement for face crops with configurable strength control and automatic fallback.
 - ⚡ **GPU Acceleration**: Optional CUDA/MPS support for significantly faster processing.
 - 📊 **Rich Progress Tracking**: Modern console interface with real-time progress displays and detailed status.
 - 🔄 **Resumable Processing**: Automatically saves progress and resumes interrupted sessions (use `--force` to restart from scratch).
@@ -101,6 +102,12 @@ personfromvid video.mp4 --resize 1024
 # Enable pose cropping with full frames also output
 personfromvid video.mp4 --crop --full-frames
 
+# Enable face restoration with custom strength (0.0-1.0)
+personfromvid video.mp4 --face-restoration --face-restoration-strength 0.9
+
+# Disable face restoration for faster processing
+personfromvid video.mp4 --no-face-restoration
+
 # Force restart processing (clears previous state)
 personfromvid video.mp4 --force
 
@@ -146,6 +153,8 @@ personfromvid video.mp4 --no-structured-output
 | `--output-jpeg-quality` | Quality for JPEG output (70-100). | `95` |
 | `--output-face-crop-enabled` / `--no-output-face-crop-enabled` | Enable or disable generation of cropped face images. | `True` |
 | `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.3` |
+| `--face-restoration` / `--no-face-restoration` | Enable/disable GFPGAN face restoration for enhanced quality (faster than Real-ESRGAN, optimized for faces). | `False` |
+| `--face-restoration-strength` | Face restoration strength: 0.0=no effect, 1.0=full restoration, 0.8=recommended balance (0.0-1.0). | `0.8` |
 | `--crop` | Enable generation of cropped pose images. | `False` |
 | `--crop-padding` | Padding around pose bounding box for crops (0.0-1.0). | `0.1` |
 | `--full-frames` | Output full frames in addition to crops when `--crop` is enabled. | `False` |
@@ -261,6 +270,8 @@ output:
       optimize: true
     face_crop_enabled: true
     face_crop_padding: 0.3
+    face_restoration_enabled: false  # Enable GFPGAN face restoration
+    face_restoration_strength: 0.8   # Restoration strength (0.0-1.0)
     enable_pose_cropping: true
     full_frames: false  # Output full frames in addition to crops when enable_pose_cropping is true
 

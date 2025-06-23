@@ -4,6 +4,7 @@ This package contains AI model management, configuration, and inference componen
 """
 
 from .face_detector import FaceDetector, create_face_detector
+from .face_restorer import FaceRestorer, create_face_restorer
 from .head_pose_estimator import HeadPoseEstimator, create_head_pose_estimator
 from .model_configs import (
     ModelConfigs,
@@ -32,6 +33,9 @@ __all__ = [
     # Face detection
     "FaceDetector",
     "create_face_detector",
+    # Face restoration
+    "FaceRestorer",
+    "create_face_restorer",
     # Pose estimation
     "PoseEstimator",
     "create_pose_estimator",

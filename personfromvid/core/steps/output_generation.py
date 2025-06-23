@@ -144,26 +144,27 @@ class OutputGenerationStep(PipelineStep):
                 f"👥 Generating person-based output for {len(person_selections)} persons..."
             )
 
-        total_persons = len(person_selections)
-        self.state.get_step_progress(self.step_name).start(total_persons)
+        # Calculate expected total files based on configuration
+        total_expected_files = self._calculate_expected_files_count(person_selections)
+        self.state.get_step_progress(self.step_name).start(total_expected_files)
 
         output_dir = self.pipeline.context.output_directory
         image_writer = ImageWriter(context=self.pipeline.context)
         all_output_files = []
         step_start_time = time.time()
 
-        def progress_callback(processed_count):
+        def progress_callback(files_generated_count):
             self._check_interrupted()
-            self.state.update_step_progress(self.step_name, processed_count)
+            self.state.update_step_progress(self.step_name, files_generated_count)
             if self.formatter:
                 # Calculate rate
                 elapsed = time.time() - step_start_time
-                rate = processed_count / elapsed if elapsed > 0 else 0
+                rate = files_generated_count / elapsed if elapsed > 0 else 0
                 self.formatter.update_progress(1, rate=rate)
 
         if self.formatter:
             with self.formatter.create_progress_bar(
-                "Generating person files", total_persons
+                "Generating person files", total_expected_files
             ):
                 for i, person_selection in enumerate(person_selections):
                     # Check for interruption at regular intervals
@@ -175,13 +176,14 @@ class OutputGenerationStep(PipelineStep):
                             person_selection, image_writer
                         )
                         all_output_files.extend(output_files)
+                        
+                        # Update progress with actual files generated so far
+                        progress_callback(len(all_output_files))
                     except Exception as e:
                         self.logger.warning(
                             f"⚠️ Failed to generate output for person {person_selection.person_id}: {e}"
                         )
                         continue
-
-                    progress_callback(i + 1)
         else:
             for i, person_selection in enumerate(person_selections):
                 # Check for interruption at regular intervals
@@ -193,15 +195,56 @@ class OutputGenerationStep(PipelineStep):
                         person_selection, image_writer
                     )
                     all_output_files.extend(output_files)
+                    
+                    # Update progress with actual files generated so far
+                    progress_callback(len(all_output_files))
                 except Exception as e:
                     self.logger.warning(
                         f"⚠️ Failed to generate output for person {person_selection.person_id}: {e}"
                     )
                     continue
 
-                progress_callback(i + 1)
-
         self._finalize_output_generation(all_output_files, output_dir, "person-based")
+
+    def _calculate_expected_files_count(self, person_selections: List[PersonSelection]) -> int:
+        """Calculate expected number of files to be generated based on configuration.
+        
+        Args:
+            person_selections: List of PersonSelection objects
+            
+        Returns:
+            Estimated total number of files that will be generated
+        """
+        if not person_selections:
+            return 0
+            
+        # Get configuration from pipeline context
+        config = self.pipeline.context.config
+        
+        # Calculate files per person based on configuration
+        files_per_person = 0
+        
+        # Face crop (if face_crop_enabled and person has face detection)
+        if config.output.image.face_crop_enabled:
+            files_per_person += 1
+            
+        # Body crop (if enable_pose_cropping and person has body detection)
+        if config.output.image.enable_pose_cropping:
+            files_per_person += 1
+        
+        # Full frame (if enable_pose_cropping is False OR full_frames is True)
+        if not config.output.image.enable_pose_cropping or config.output.image.full_frames:
+            files_per_person += 1
+        
+        # Estimate total files
+        estimated_total = len(person_selections) * files_per_person
+        
+        self.logger.debug(
+            f"Expected files calculation: {len(person_selections)} persons × "
+            f"{files_per_person} files/person = {estimated_total} total files"
+        )
+        
+        return estimated_total
 
     def _process_frame_selections(self, selected_frame_ids: List[str]) -> None:
         """Process frame IDs for output generation (backwards compatibility)."""

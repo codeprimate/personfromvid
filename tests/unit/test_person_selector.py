@@ -167,7 +167,9 @@ class TestPersonSelector:
         criteria = PersonSelectionCriteria(
             min_instances_per_person=2,
             max_instances_per_person=5,
-            temporal_diversity_threshold=0.0  # Disable temporal diversity
+            temporal_diversity_threshold=0.0,  # Disable temporal diversity
+            enable_pose_categories=False,  # Disable category-based selection
+            enable_head_angle_categories=False  # Disable category-based selection
         )
         selector = PersonSelector(criteria)
 
@@ -180,7 +182,7 @@ class TestPersonSelector:
 
         selections = selector.select_best_instances_for_person(0, candidates)
 
-        # With temporal diversity disabled, should select all 3 candidates (up to max_instances_per_person=5)
+        # With temporal diversity disabled and category selection disabled, should select all 3 candidates (up to max_instances_per_person=5)
         assert len(selections) == 3  # All candidates selected when temporal diversity disabled
         assert len([s for s in selections if s.category == "minimum"]) == 2  # First 2 are minimum
         assert len([s for s in selections if s.category == "additional"]) == 1  # Third is additional
@@ -193,7 +195,9 @@ class TestPersonSelector:
         criteria = PersonSelectionCriteria(
             min_instances_per_person=3,
             max_instances_per_person=8,
-            temporal_diversity_threshold=5.0  # 5 second minimum gap
+            temporal_diversity_threshold=5.0,  # 5 second minimum gap
+            enable_pose_categories=False,  # Disable category-based selection
+            enable_head_angle_categories=False  # Disable category-based selection
         )
         selector = PersonSelector(criteria)
 
@@ -228,7 +232,9 @@ class TestPersonSelector:
         criteria = PersonSelectionCriteria(
             min_instances_per_person=2,
             max_instances_per_person=3,  # Low max limit
-            temporal_diversity_threshold=0.0  # Disable temporal diversity
+            temporal_diversity_threshold=0.0,  # Disable temporal diversity
+            enable_pose_categories=False,  # Disable category-based selection
+            enable_head_angle_categories=False  # Disable category-based selection
         )
         selector = PersonSelector(criteria)
 
@@ -256,7 +262,9 @@ class TestPersonSelector:
         criteria = PersonSelectionCriteria(
             min_instances_per_person=2,
             max_instances_per_person=5,
-            temporal_diversity_threshold=5.0
+            temporal_diversity_threshold=5.0,
+            enable_pose_categories=False,  # Disable category-based selection
+            enable_head_angle_categories=False  # Disable category-based selection
         )
         selector = PersonSelector(criteria)
 
@@ -420,6 +428,14 @@ class TestPersonSelector:
         person.person_id = person_id
         person.quality = Mock()
         person.quality.overall_quality = quality_score
+        
+        # Configure body attribute to avoid AttributeError
+        person.body = Mock()
+        person.body.pose_classifications = [("standing", 0.9)]  # Default pose
+        
+        # Configure head_pose attribute to avoid AttributeError
+        person.head_pose = Mock()
+        person.head_pose.direction = "front"  # Default direction
 
         return PersonCandidate(frame=frame, person=person)
 
