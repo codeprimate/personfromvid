@@ -101,7 +101,7 @@ class PersonBuildingStep(PipelineStep):
 
                         except Exception as e:
                             self.logger.error(
-                                f"Failed to build persons for frame {frame.frame_number}: {e}"
+                                f"Failed to build persons for frame {frame.source_info.original_frame_number}: {e}"
                             )
                             # Set empty persons list on failure
                             frame.persons = []
@@ -144,7 +144,7 @@ class PersonBuildingStep(PipelineStep):
 
                     except Exception as e:
                         self.logger.error(
-                            f"Failed to build persons for frame {frame.frame_number}: {e}"
+                            f"Failed to build persons for frame {frame.source_info.original_frame_number}: {e}"
                         )
                         # Set empty persons list on failure
                         frame.persons = []

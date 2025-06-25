@@ -288,7 +288,7 @@ class QualityAssessmentStep(PipelineStep):
             # Image is automatically loaded by FrameData.image property
             if frame.image is None:
                 self.logger.warning(
-                    f"⚠️  Skipping frame {frame.frame_number}: unable to load image"
+                    f"⚠️  Skipping frame {frame.source_info.original_frame_number}: unable to load image"
                 )
                 continue
 

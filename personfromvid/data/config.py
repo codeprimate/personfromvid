@@ -4,13 +4,14 @@ This module defines configuration classes and default settings for the video pro
 pipeline, with support for environment variable overrides and validation.
 """
 
+import re
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 
 import yaml
 from platformdirs import user_cache_dir
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
@@ -373,7 +374,7 @@ class PngConfig(BaseModel):
     """Configuration for PNG output."""
 
     optimize: bool = Field(
-        True, description="Enable PNG optimization for smaller file sizes."
+        False, description="Enable PNG optimization for smaller file sizes."
     )
 
 
@@ -425,9 +426,69 @@ class OutputImageConfig(BaseModel):
         le=4096,
         description="Maximum dimension for proportional image resizing (None for no resizing)",
     )
+    crop_ratio: Optional[str] = Field(
+        default=None,
+        description="Fixed aspect ratio for crops (e.g., '1:1', '16:9', '4:3')",
+    )
+    default_crop_size: int = Field(
+        default=640,
+        ge=256,
+        le=4096,
+        description="Default crop size in pixels when crop_ratio is specified",
+    )
 
     png: PngConfig = Field(default_factory=PngConfig)
     jpeg: JpegConfig = Field(default_factory=JpegConfig)
+
+    @field_validator('crop_ratio', mode='before')
+    @classmethod
+    def validate_crop_ratio_format(cls, v):
+        """Validate crop ratio format and range."""
+        if v is None:
+            return v
+        
+        if not isinstance(v, str):
+            raise ValueError("crop_ratio must be a string in format 'W:H' (e.g., '16:9', '4:3', '1:1') or 'any'")
+        
+        # Handle "any" case (case-insensitive)
+        if v.lower() == "any":
+            return "any"  # Normalize to lowercase
+        
+        # Use regex to match exact W:H format with positive integers
+        pattern = r'^(\d+):(\d+)$'
+        match = re.match(pattern, v)
+        
+        if not match:
+            raise ValueError(
+                f"Invalid crop_ratio format '{v}'. Must be in format 'W:H' where W and H are positive integers "
+                "(e.g., '16:9', '4:3', '1:1') or 'any'. Invalid formats like '16:', ':9', '16/9', or '1.5:1' are not allowed."
+            )
+        
+        # Extract width and height as integers
+        width, height = int(match.group(1)), int(match.group(2))
+        
+        # Validate that both width and height are positive
+        if width <= 0 or height <= 0:
+            raise ValueError(f"Invalid crop_ratio '{v}': both width and height must be positive integers")
+        
+        # Calculate ratio and validate range (0.1 to 100.0)
+        ratio = width / height
+        if not (0.1 <= ratio <= 100.0):
+            raise ValueError(
+                f"Invalid crop_ratio '{v}': calculated ratio {ratio:.2f} is outside valid range (0.1-100.0). "
+                "Use ratios like '1:10' (0.1) to '100:1' (100.0)."
+            )
+        
+        return v
+
+    @model_validator(mode='after')
+    @classmethod
+    def validate_crop_ratio_dependency(cls, values):
+        """Ensure crop_ratio is only specified when enable_pose_cropping is True."""
+        if hasattr(values, 'crop_ratio') and hasattr(values, 'enable_pose_cropping'):
+            if values.crop_ratio is not None and not values.enable_pose_cropping:
+                raise ValueError("crop_ratio can only be specified when enable_pose_cropping is True")
+        return values
 
 
 class OutputConfig(BaseModel):

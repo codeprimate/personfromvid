@@ -117,19 +117,19 @@ def get_version():
     help="Face restoration strength: 0.0=no effect, 1.0=full restoration, 0.8=recommended balance",
 )
 @click.option(
-    "--crop",
-    is_flag=True,
-    help="Enable generation of cropped pose images",
-)
-@click.option(
     "--crop-padding",
     type=click.FloatRange(0.0, 1.0),
-    help="Padding around pose bounding box for crops",
+    help="Padding around pose bounding box for crops, in percentage of the crop size (default: 0.2)",
+)
+@click.option(
+    "--crop-ratio",
+    type=str,
+    help="Aspect ratio for crops: fixed ratios (e.g., '1:1', '16:9', '4:3') or 'any' for variable aspect ratios. Automatically enables cropping.",
 )
 @click.option(
     "--full-frames",
     is_flag=True,
-    help="Output full frames in addition to crops when --crop is enabled",
+    help="Output full frames in addition to crops when cropping is enabled",
 )
 @click.option(
     "--output-png-optimize/--no-output-png-optimize",
@@ -184,8 +184,8 @@ def main(
     output_face_crop_padding: Optional[float],
     face_restoration_enabled: Optional[bool],
     face_restoration_strength: Optional[float],
-    crop: bool,
     crop_padding: Optional[float],
+    crop_ratio: Optional[str],
     full_frames: bool,
     output_png_optimize: Optional[bool],
     resize: Optional[int],
@@ -221,6 +221,21 @@ def main(
 
         # Resize output images to max 1024px dimension
         personfromvid video.mp4 --resize 1024
+
+        # Generate square crops with fixed 1:1 aspect ratio
+        personfromvid video.mp4 --crop-ratio 1:1
+
+        # Generate widescreen crops with 16:9 aspect ratio
+        personfromvid video.mp4 --crop-ratio 16:9 --output-dir ./widescreen_crops
+
+        # Generate portrait crops with custom padding
+        personfromvid video.mp4 --crop-ratio 4:3 --crop-padding 0.3
+
+        # Generate variable aspect ratio crops (preserve natural proportions)
+        personfromvid video.mp4 --crop-ratio any --crop-padding 0.2
+
+        # Combine fixed aspect ratio with face restoration and resizing
+        personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --resize 512
 
     """
     # Check for required video path
@@ -633,11 +648,13 @@ def _apply_output_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["face_restoration_strength"]:
         config.output.image.face_restoration_strength = cli_args["face_restoration_strength"]
 
-    if cli_args["crop"]:
-        config.output.image.enable_pose_cropping = cli_args["crop"]
-
     if cli_args["crop_padding"]:
         config.output.image.pose_crop_padding = cli_args["crop_padding"]
+
+    if cli_args["crop_ratio"]:
+        config.output.image.crop_ratio = cli_args["crop_ratio"]
+        # Automatically enable cropping when crop ratio is specified
+        config.output.image.enable_pose_cropping = True
 
     if cli_args["full_frames"]:
         config.output.image.full_frames = True

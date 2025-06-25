@@ -113,6 +113,9 @@ class TestPersonBuildingStep:
         frame1.pose_detections = [Mock(spec=PoseDetection)]
         frame1.head_poses = []
         frame1.frame_number = 1
+        # Add source_info for error logging
+        frame1.source_info = Mock()
+        frame1.source_info.original_frame_number = 1
 
         person_building_step.state.frames = [frame1]
         mock_progress = Mock()

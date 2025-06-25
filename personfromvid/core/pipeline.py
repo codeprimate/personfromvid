@@ -348,6 +348,7 @@ class ProcessingPipeline:
             model_versions={},
             created_at=datetime.now(),
             last_updated=datetime.now(),
+            config_snapshot=self.config.model_dump(),
         )
         self.logger.info(f"Created initial state for video: {self.video_path.name}")
 

@@ -16,13 +16,14 @@ from ..data.detection_results import FaceDetection
 from ..data.frame_data import FrameData
 from ..utils.exceptions import ImageWriteError
 from ..utils.logging import get_logger
+
+from .image_processor import ImageProcessor
 from .naming_convention import NamingConvention
 
 if TYPE_CHECKING:
     from ..analysis.person_selector import PersonSelection
     from ..data.person import Person
     from ..models.face_restorer import FaceRestorer
-
 
 class ImageWriter:
     """Handles image processing and file writing for output generation."""
@@ -40,6 +41,9 @@ class ImageWriter:
         self.naming = NamingConvention(context=context)
         self.output_directory.mkdir(parents=True, exist_ok=True)
         self._validate_config()
+        
+        # Initialize ImageProcessor for crop and resize operations
+        self.image_processor = ImageProcessor(self.config)
         
         # Initialize FaceRestorer with lazy loading for face restoration
         self._face_restorer: Optional["FaceRestorer"] = None
@@ -82,8 +86,9 @@ class ImageWriter:
         rank = frame.selections.selection_rank
 
         if not primary_category or rank is None:
-            # Fall back to legacy behavior for backward compatibility
-            return self._save_frame_outputs_legacy(frame)
+            # If no enhanced selection metadata, set reasonable defaults
+            primary_category = "unknown"
+            rank = 1
 
         output_files = []
         # Determine the correct file extension
@@ -92,8 +97,7 @@ class ImageWriter:
 
         try:
             # Load the source image
-            source_image = self._load_frame_image(frame)
-
+            source_image = self._load_frame_image(frame)           
             # Generate outputs for ALL pose categories the frame was selected for
             pose_categories = frame.selections.selected_for_poses
             if pose_categories:
@@ -115,7 +119,8 @@ class ImageWriter:
                 if self.config.enable_pose_cropping and frame.pose_detections:
                     best_pose = frame.get_best_pose()
                     if best_pose:
-                        pose_crop = self._crop_region(
+                        # Crop with padding - ImageProcessor handles aspect ratio conversion automatically
+                        pose_crop = self.image_processor.crop_and_resize(
                             source_image, best_pose.bbox, self.config.pose_crop_padding
                         )
 
@@ -151,6 +156,7 @@ class ImageWriter:
             ):
                 best_face = frame.get_best_face()
                 if best_face:
+                    # Crop face with padding - ImageProcessor handles aspect ratio conversion automatically
                     face_crop = self._crop_face(source_image, best_face)
 
                     # Only generate ONE face crop per frame using the primary head angle category
@@ -215,7 +221,7 @@ class ImageWriter:
         try:
             # Load the source image
             source_image = self._load_frame_image(frame)
-
+            
             # Import sentinel classes for proper type checking
             from ..data.person import BodyUnknown, FaceUnknown
 
@@ -235,6 +241,7 @@ class ImageWriter:
                 not isinstance(person.face, FaceUnknown)
                 and self.config.face_crop_enabled
             ):
+                # Crop face with padding - ImageProcessor handles aspect ratio conversion automatically
                 face_crop = self._crop_face(source_image, person.face)
 
                 # Use head direction as category for person-based face crops (simplified - no shot type)
@@ -259,7 +266,8 @@ class ImageWriter:
                 not isinstance(person.body, BodyUnknown)
                 and self.config.enable_pose_cropping
             ):
-                body_crop = self._crop_region(
+                # Crop body with padding - ImageProcessor handles aspect ratio conversion automatically
+                body_crop = self.image_processor.crop_and_resize(
                     source_image, person.body.bbox, self.config.pose_crop_padding
                 )
 
@@ -402,108 +410,6 @@ class ImageWriter:
         )
         return formatted_shot_type
 
-    def _save_frame_outputs_legacy(self, frame: FrameData) -> List[str]:
-        """Legacy save method for backward compatibility with old selection data.
-
-        This method uses the old selection fields (selected_for_poses, selected_for_head_angles)
-        to maintain compatibility with frames that haven't been processed by the enhanced
-        frame selection system.
-
-        Args:
-            frame: Frame data with legacy selection metadata
-
-        Returns:
-            List of output file paths that were created
-        """
-        pose_categories = frame.selections.selected_for_poses
-        head_angle_categories = frame.selections.selected_for_head_angles
-        output_files = []
-
-        # Determine the correct file extension
-        file_format = self.config.format.lower()
-        extension = "jpg" if file_format == "jpeg" else file_format
-
-        try:
-            # Load the source image
-            source_image = self._load_frame_image(frame)
-
-            # Save full frame images for pose categories (legacy) - if pose cropping disabled OR full_frames enabled
-            if pose_categories and (not self.config.enable_pose_cropping or self.config.full_frames):
-                for category in pose_categories:
-                    rank = frame.selections.selection_rank or 1
-                    filename = self.naming.get_full_frame_filename(
-                        frame, category, rank, extension
-                    )
-                    output_path = self.naming.get_full_output_path(filename)
-
-                    # Apply resize if configured
-                    resized_image = self._apply_resize(source_image)
-                    self._save_image(resized_image, output_path)
-                    output_files.append(str(output_path))
-                    self.logger.debug(f"Saved full frame (legacy): {filename}")
-
-            # Save face crop images for head angle categories (legacy)
-            if (
-                self.config.face_crop_enabled
-                and head_angle_categories
-                and frame.face_detections
-            ):
-                best_face = frame.get_best_face()
-                if best_face:
-                    face_crop = self._crop_face(source_image, best_face)
-
-                    # Generate face crop for the primary head angle category only (simplified)
-                    primary_category = head_angle_categories[0]  # Use first/primary category
-                    rank = frame.selections.selection_rank or 1
-                    filename = self.naming.get_face_crop_filename(
-                        frame, primary_category, rank, extension, shot_type=None
-                    )
-                    output_path = self.naming.get_full_output_path(filename)
-
-                    # Face crops already handle resize logic in _crop_face, so save directly
-                    self._save_image(face_crop, output_path)
-                    output_files.append(str(output_path))
-                    self.logger.debug(f"Saved face crop (legacy): {filename}")
-
-            # Generate pose crop if enabled (replaces full frames unless full_frames is enabled) - legacy
-            if (
-                self.config.enable_pose_cropping
-                and pose_categories
-                and frame.pose_detections
-            ):
-                best_pose = frame.get_best_pose()
-                if best_pose:
-                    pose_crop = self._crop_region(
-                        source_image, best_pose.bbox, self.config.pose_crop_padding
-                    )
-
-                    # Generate crop for the first pose category (legacy behavior)
-                    category = pose_categories[0]
-                    rank = frame.selections.selection_rank or 1
-                    base_filename = self.naming.get_full_frame_filename(
-                        frame, category, rank, extension
-                    )
-                    crop_filename = self.naming.get_crop_suffixed_filename(
-                        base_filename
-                    )
-                    crop_output_path = self.naming.get_full_output_path(crop_filename)
-
-                    self._save_image(pose_crop, crop_output_path)
-                    output_files.append(str(crop_output_path))
-                    self.logger.debug(f"Saved pose crop (legacy): {crop_filename}")
-
-            # Update frame's output files list
-            frame.selections.output_files.extend(output_files)
-
-            return output_files
-
-        except Exception as e:
-            error_msg = (
-                f"Failed to save outputs for frame {frame.frame_id} (legacy): {e}"
-            )
-            self.logger.error(error_msg)
-            raise ImageWriteError(error_msg) from e
-
     def _load_frame_image(self, frame: FrameData) -> np.ndarray:
         """Load frame image from cache or file.
 
@@ -528,94 +434,6 @@ class ImageWriter:
                 f"Error converting frame image {frame.frame_id} to RGB: {e}"
             ) from e
 
-    def _crop_region(
-        self, 
-        image: np.ndarray, 
-        bbox: Tuple[int, int, int, int], 
-        padding: float,
-        use_face_restoration: bool = False
-    ) -> np.ndarray:
-        """Crop region from image with padding and upscale to minimum size.
-
-        Args:
-            image: Source image as numpy array
-            bbox: Bounding box as (x1, y1, x2, y2)
-            padding: Padding factor as proportion of bbox size (0.0 to 1.0)
-            use_face_restoration: Whether to apply face restoration if enabled
-
-        Returns:
-            Cropped and potentially upscaled/restored image as numpy array
-        """
-        x1, y1, x2, y2 = bbox
-
-        # Calculate padding
-        bbox_width = x2 - x1
-        bbox_height = y2 - y1
-        padding_x = int(bbox_width * padding)
-        padding_y = int(bbox_height * padding)
-
-        # Apply padding with bounds checking
-        img_height, img_width = image.shape[:2]
-        crop_x1 = max(0, x1 - padding_x)
-        crop_y1 = max(0, y1 - padding_y)
-        crop_x2 = min(img_width, x2 + padding_x)
-        crop_y2 = min(img_height, y2 + padding_y)
-
-        # Crop the image
-        cropped = image[crop_y1:crop_y2, crop_x1:crop_x2]
-
-        # Determine minimum dimension: use resize value if configured, otherwise default to 512
-        min_dimension = self.config.resize if self.config.resize is not None else 512
-
-        # Check if upscaling is needed
-        crop_height, crop_width = cropped.shape[:2]
-        needs_upscaling = crop_height < min_dimension and crop_width < min_dimension
-
-        # Apply face restoration if enabled and requested
-        if use_face_restoration and needs_upscaling:
-            face_restorer = self._get_face_restorer()
-            if face_restorer is not None:
-                try:
-                    # Calculate target size for face restoration - use more conservative approach
-                    # Only upscale to the minimum needed size, not excessively large
-                    target_size = min(min_dimension, 512)  # Cap at 512px for performance
-                    
-                    # Apply GFPGAN face restoration with configured strength
-                    restored_image = face_restorer.restore_face(
-                        image=cropped,
-                        target_size=target_size,
-                        strength=self.config.face_restoration_strength
-                    )
-                    
-                    self.logger.debug(
-                        f"GFPGAN face restoration applied: {crop_width}x{crop_height} -> target {target_size}px "
-                        f"(strength: {self.config.face_restoration_strength:.2f})"
-                    )
-                    return restored_image
-                    
-                except Exception as e:
-                    self.logger.warning(f"Face restoration failed, falling back to Lanczos: {e}")
-                    # Fall through to standard Lanczos processing
-
-        # Standard upscaling logic (fallback or when face restoration not used)
-        if needs_upscaling:
-            # Calculate scale factor to ensure at least one dimension equals min_dimension
-            scale_factor = min_dimension / max(crop_width, crop_height)
-            new_width = int(crop_width * scale_factor)
-            new_height = int(crop_height * scale_factor)
-
-            # Convert to PIL for high-quality Lanczos upscaling
-            pil_image = Image.fromarray(cropped)
-            upscaled_pil = pil_image.resize((new_width, new_height), Image.LANCZOS)
-            cropped = np.array(upscaled_pil)
-
-            self.logger.debug(
-                f"Lanczos upscaling applied: {crop_width}x{crop_height} -> {new_width}x{new_height} "
-                f"(scale: {scale_factor:.2f}, target: {min_dimension}px)"
-            )
-
-        return cropped
-
     def _crop_face(
         self, image: np.ndarray, face_detection: FaceDetection
     ) -> np.ndarray:
@@ -628,7 +446,7 @@ class ImageWriter:
         Returns:
             Cropped and potentially upscaled/restored face image as numpy array
         """
-        return self._crop_region(
+        return self.image_processor.crop_and_resize(
             image, 
             face_detection.bbox, 
             self.config.face_crop_padding,
@@ -639,23 +457,36 @@ class ImageWriter:
         """Save image to file with appropriate format and quality settings.
 
         Args:
-            image: Image as numpy array (RGB format)
+            image: Image as numpy array (RGB or RGBA format)
             output_path: Path to save the image
         """
         try:
             # Convert numpy array to PIL Image
             pil_image = Image.fromarray(image)
 
-            # Ensure RGB mode
-            if pil_image.mode != "RGB":
-                pil_image = pil_image.convert("RGB")
-
-            # Save with format-specific settings
+            # Handle different image modes based on format
             if self.config.format.lower() == "png":
+                # PNG supports transparency, preserve RGBA if present
+                if pil_image.mode == "RGBA":
+                    # Keep RGBA mode for transparency
+                    pass
+                elif pil_image.mode != "RGB":
+                    # Convert other modes to RGB for PNG
+                    pil_image = pil_image.convert("RGB")
+                
                 pil_image.save(
                     output_path, format="PNG", optimize=self.config.png.optimize
                 )
             elif self.config.format.lower() in ["jpg", "jpeg"]:
+                # JPEG doesn't support transparency, convert RGBA to RGB
+                if pil_image.mode == "RGBA":
+                    # Convert RGBA to RGB with white background for JPEG
+                    rgb_image = Image.new("RGB", pil_image.size, (255, 255, 255))
+                    rgb_image.paste(pil_image, mask=pil_image.split()[-1])  # Use alpha as mask
+                    pil_image = rgb_image
+                elif pil_image.mode != "RGB":
+                    pil_image = pil_image.convert("RGB")
+                
                 pil_image.save(
                     output_path,
                     format="JPEG",

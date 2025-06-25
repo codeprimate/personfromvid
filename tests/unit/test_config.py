@@ -94,6 +94,322 @@ def test_resize_config_invalid_values():
         OutputImageConfig(resize=-1)
 
 
+def test_crop_ratio_config_defaults():
+    """Test crop_ratio configuration defaults."""
+    config = Config()
+
+    # crop_ratio should be None by default (no fixed aspect ratio)
+    assert config.output.image.crop_ratio is None
+
+
+def test_crop_ratio_config_valid_values():
+    """Test crop_ratio configuration with valid values."""
+    # Test valid crop_ratio values (need enable_pose_cropping=True for non-None values)
+    config = Config()
+    
+    # Enable pose cropping first, then set crop ratios
+    config.output.image.enable_pose_cropping = True
+    
+    # Test common aspect ratios
+    config.output.image.crop_ratio = "1:1"
+    assert config.output.image.crop_ratio == "1:1"
+
+    config.output.image.crop_ratio = "16:9"
+    assert config.output.image.crop_ratio == "16:9"
+
+    config.output.image.crop_ratio = "4:3"
+    assert config.output.image.crop_ratio == "4:3"
+
+    config.output.image.crop_ratio = "21:9"
+    assert config.output.image.crop_ratio == "21:9"
+
+    # Test None value (works regardless of pose cropping setting)
+    config.output.image.crop_ratio = None
+    assert config.output.image.crop_ratio is None
+
+
+def test_crop_ratio_config_type_validation():
+    """Test crop_ratio configuration type validation."""
+    from pydantic import ValidationError
+
+    # Test valid string type (must include enable_pose_cropping=True due to dependency validation)
+    config = OutputImageConfig(crop_ratio="1:1", enable_pose_cropping=True)
+    assert config.crop_ratio == "1:1"
+
+    # Test None type
+    config = OutputImageConfig(crop_ratio=None)
+    assert config.crop_ratio is None
+
+    # Test invalid types (with enable_pose_cropping=True to isolate type validation)
+    with pytest.raises(ValidationError):
+        OutputImageConfig(crop_ratio=123, enable_pose_cropping=True)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(crop_ratio=1.5, enable_pose_cropping=True)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(crop_ratio=["1:1"], enable_pose_cropping=True)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(crop_ratio={"ratio": "1:1"}, enable_pose_cropping=True)
+
+
+def test_default_crop_size_config_defaults():
+    """Test default_crop_size configuration defaults."""
+    config = Config()
+
+    # default_crop_size should be 640 by default
+    assert config.output.image.default_crop_size == 640
+
+
+def test_default_crop_size_config_valid_values():
+    """Test default_crop_size configuration with valid values."""
+    # Test valid default_crop_size values
+    config = Config()
+    
+    # Test different valid sizes
+    config.output.image.default_crop_size = 256
+    assert config.output.image.default_crop_size == 256
+
+    config.output.image.default_crop_size = 512
+    assert config.output.image.default_crop_size == 512
+
+    config.output.image.default_crop_size = 1024
+    assert config.output.image.default_crop_size == 1024
+
+    config.output.image.default_crop_size = 4096
+    assert config.output.image.default_crop_size == 4096
+
+    # Test default value
+    config = Config()
+    assert config.output.image.default_crop_size == 640
+
+
+def test_default_crop_size_config_invalid_values():
+    """Test default_crop_size configuration with invalid values."""
+    from pydantic import ValidationError
+
+    # Test values below minimum
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=255)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=100)
+
+    # Test values above maximum
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=4097)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=8192)
+
+    # Test invalid types
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size="invalid")
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=-1)
+
+    with pytest.raises(ValidationError):
+        OutputImageConfig(default_crop_size=None)
+
+
+def test_crop_ratio_format_validation():
+    """Test crop_ratio format validation."""
+    from pydantic import ValidationError
+
+    # Test valid aspect ratio formats
+    valid_formats = ["1:1", "16:9", "4:3", "21:9", "3:2", "2:3", "9:16"]
+    for fmt in valid_formats:
+        config = OutputImageConfig(crop_ratio=fmt, enable_pose_cropping=True)
+        assert config.crop_ratio == fmt
+
+    # Test invalid formats - malformed strings (format errors)
+    format_error_cases = [
+        "16:",      # Missing height
+        ":9",       # Missing width
+        "16/9",     # Wrong separator
+        "1.5:1",    # Decimal ratio
+        "16:9:2",   # Too many parts
+        "invalid",  # Non-numeric
+        "a:b",      # Non-numeric parts
+        "16 : 9",   # Spaces
+        "16-9",     # Wrong separator
+        "",         # Empty string
+        "-1:1",     # Negative width (fails regex)
+        "1:-1",     # Negative height (fails regex)
+    ]
+    
+    for fmt in format_error_cases:
+        with pytest.raises(ValidationError, match="Invalid crop_ratio format"):
+            OutputImageConfig(crop_ratio=fmt, enable_pose_cropping=True)
+
+    # Test invalid formats - positive integer validation errors
+    positive_int_error_cases = [
+        "0:1",      # Zero width
+        "1:0",      # Zero height
+    ]
+    
+    for fmt in positive_int_error_cases:
+        with pytest.raises(ValidationError, match="both width and height must be positive integers"):
+            OutputImageConfig(crop_ratio=fmt, enable_pose_cropping=True)
+
+    # Test boundary ratio values - valid boundaries
+    # Ratio 0.1 (minimum boundary)
+    config = OutputImageConfig(crop_ratio="1:10", enable_pose_cropping=True)
+    assert config.crop_ratio == "1:10"
+
+    # Ratio 100.0 (maximum boundary)
+    config = OutputImageConfig(crop_ratio="100:1", enable_pose_cropping=True)
+    assert config.crop_ratio == "100:1"
+
+    # Test ratio outside valid range
+    # Ratio < 0.1
+    with pytest.raises(ValidationError, match="calculated ratio.*outside valid range"):
+        OutputImageConfig(crop_ratio="1:11", enable_pose_cropping=True)
+
+    # Ratio > 100.0
+    with pytest.raises(ValidationError, match="calculated ratio.*outside valid range"):
+        OutputImageConfig(crop_ratio="101:1", enable_pose_cropping=True)
+
+    # Test very extreme ratios
+    with pytest.raises(ValidationError, match="calculated ratio.*outside valid range"):
+        OutputImageConfig(crop_ratio="1:1000", enable_pose_cropping=True)
+
+    with pytest.raises(ValidationError, match="calculated ratio.*outside valid range"):
+        OutputImageConfig(crop_ratio="1000:1", enable_pose_cropping=True)
+
+
+def test_crop_ratio_format_validation_error_messages():
+    """Test crop_ratio format validation error message quality."""
+    from pydantic import ValidationError
+
+    # Test type error message
+    with pytest.raises(ValidationError, match="crop_ratio must be a string in format"):
+        OutputImageConfig(crop_ratio=123, enable_pose_cropping=True)
+
+    # Test format error message includes examples
+    with pytest.raises(ValidationError, match="Must be in format 'W:H'.*'16:9', '4:3', '1:1'"):
+        OutputImageConfig(crop_ratio="16:", enable_pose_cropping=True)
+
+    # Test range error message includes valid range
+    with pytest.raises(ValidationError, match="outside valid range \\(0.1-100.0\\)"):
+        OutputImageConfig(crop_ratio="1:11", enable_pose_cropping=True)
+
+    # Test zero value error message
+    with pytest.raises(ValidationError, match="both width and height must be positive integers"):
+        OutputImageConfig(crop_ratio="0:1", enable_pose_cropping=True)
+
+
+def test_crop_ratio_format_validation_edge_cases():
+    """Test crop_ratio format validation edge cases."""
+    from pydantic import ValidationError
+
+    # Test None value (should pass)
+    config = OutputImageConfig(crop_ratio=None, enable_pose_cropping=True)
+    assert config.crop_ratio is None
+
+    # Test large but valid integer values
+    config = OutputImageConfig(crop_ratio="50:1", enable_pose_cropping=True)
+    assert config.crop_ratio == "50:1"
+
+    config = OutputImageConfig(crop_ratio="1:5", enable_pose_cropping=True)
+    assert config.crop_ratio == "1:5"
+
+    # Test exact boundary calculations
+    # 1:10 = 0.1 (exactly on boundary)
+    config = OutputImageConfig(crop_ratio="1:10", enable_pose_cropping=True)
+    assert config.crop_ratio == "1:10"
+
+    # 100:1 = 100.0 (exactly on boundary)
+    config = OutputImageConfig(crop_ratio="100:1", enable_pose_cropping=True)
+    assert config.crop_ratio == "100:1"
+
+    # Test just outside boundaries
+    # 1:11 ≈ 0.091 (just below 0.1)
+    with pytest.raises(ValidationError, match="outside valid range"):
+        OutputImageConfig(crop_ratio="1:11", enable_pose_cropping=True)
+
+    # 101:1 = 101.0 (just above 100.0)
+    with pytest.raises(ValidationError, match="outside valid range"):
+        OutputImageConfig(crop_ratio="101:1", enable_pose_cropping=True)
+
+
+def test_crop_ratio_dependency_validation():
+    """Test crop_ratio dependency validation."""
+    from pydantic import ValidationError
+
+    # Test valid combinations
+    # crop_ratio with enable_pose_cropping=True should work
+    config = OutputImageConfig(crop_ratio="1:1", enable_pose_cropping=True)
+    assert config.crop_ratio == "1:1"
+    assert config.enable_pose_cropping is True
+
+    # crop_ratio=None with enable_pose_cropping=False should work (default)
+    config = OutputImageConfig()
+    assert config.crop_ratio is None
+    assert config.enable_pose_cropping is False
+
+    # crop_ratio=None with enable_pose_cropping=True should work
+    config = OutputImageConfig(enable_pose_cropping=True)
+    assert config.crop_ratio is None
+    assert config.enable_pose_cropping is True
+
+    # Test invalid combination
+    # crop_ratio with enable_pose_cropping=False should fail
+    with pytest.raises(ValidationError, match="crop_ratio can only be specified when enable_pose_cropping is True"):
+        OutputImageConfig(crop_ratio="1:1", enable_pose_cropping=False)
+
+
+def test_crop_ratio_dependency_validation_various_ratios():
+    """Test crop_ratio dependency validation with various aspect ratios."""
+    from pydantic import ValidationError
+
+    # Test various valid aspect ratios with pose cropping enabled
+    valid_ratios = ["1:1", "16:9", "4:3", "21:9", "2:3"]
+    for ratio in valid_ratios:
+        config = OutputImageConfig(crop_ratio=ratio, enable_pose_cropping=True)
+        assert config.crop_ratio == ratio
+        assert config.enable_pose_cropping is True
+
+    # Test these same ratios should fail without pose cropping
+    for ratio in valid_ratios:
+        with pytest.raises(ValidationError, match="crop_ratio can only be specified when enable_pose_cropping is True"):
+            OutputImageConfig(crop_ratio=ratio, enable_pose_cropping=False)
+
+
+def test_crop_ratio_any_validation():
+    """Test crop_ratio validation with 'any' value."""
+    from pydantic import ValidationError
+
+    # Test valid "any" variations with pose cropping enabled
+    any_variations = ["any", "ANY", "Any", "AnY", "aNy"]
+    for variation in any_variations:
+        config = OutputImageConfig(crop_ratio=variation, enable_pose_cropping=True)
+        assert config.crop_ratio == "any"  # Should normalize to lowercase
+        assert config.enable_pose_cropping is True
+
+    # Test "any" still requires enable_pose_cropping=True
+    for variation in any_variations:
+        with pytest.raises(ValidationError, match="crop_ratio can only be specified when enable_pose_cropping is True"):
+            OutputImageConfig(crop_ratio=variation, enable_pose_cropping=False)
+
+    # Test that error messages include "any" as valid option
+    with pytest.raises(ValidationError, match="crop_ratio must be a string in format.*or 'any'"):
+        OutputImageConfig(crop_ratio=123, enable_pose_cropping=True)
+
+    with pytest.raises(ValidationError, match="Must be in format 'W:H'.*or 'any'"):
+        OutputImageConfig(crop_ratio="invalid_format", enable_pose_cropping=True)
+
+    # Test that "any" does not interfere with existing W:H validation
+    config = OutputImageConfig(crop_ratio="16:9", enable_pose_cropping=True)
+    assert config.crop_ratio == "16:9"
+
+    # Test None still works
+    config = OutputImageConfig(crop_ratio=None, enable_pose_cropping=True)
+    assert config.crop_ratio is None
+
+
 def test_config_environment_override():
     """Test environment variable override capability."""
     import os

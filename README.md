@@ -99,8 +99,28 @@ personfromvid video.mp4 \
 # Resize output images to a maximum of 1024 pixels
 personfromvid video.mp4 --resize 1024
 
-# Enable pose cropping with full frames also output
-personfromvid video.mp4 --crop --full-frames
+# Generate square crops (1:1 aspect ratio)
+personfromvid video.mp4 --crop-ratio 1:1
+
+# Generate widescreen crops (16:9 aspect ratio) with custom output directory
+personfromvid video.mp4 --crop-ratio 16:9 --output-dir ./widescreen_crops
+
+# Generate portrait crops (4:3) with custom padding and full frames
+personfromvid video.mp4 --crop-ratio 4:3 --crop-padding 0.3 --full-frames
+
+# Generate variable aspect ratio crops (preserve natural proportions)
+personfromvid video.mp4 --crop-ratio any --crop-padding 0.2
+
+# Combine fixed aspect ratio with face restoration and resizing
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --resize 512
+```
+
+**Crop Ratio Options:**
+- **Fixed ratios** (e.g., `1:1`, `16:9`, `4:3`): Enforces uniform aspect ratios, ideal for consistent layouts or specific display requirements
+- **`any`**: Preserves natural proportions while applying padding, best for maintaining original subject composition
+- **Omit `--crop-ratio`**: No cropping, outputs full frames only
+
+```bash
 
 # Enable face restoration with custom strength (0.0-1.0)
 personfromvid video.mp4 --face-restoration --face-restoration-strength 0.9
@@ -155,9 +175,9 @@ personfromvid video.mp4 --no-structured-output
 | `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.3` |
 | `--face-restoration` / `--no-face-restoration` | Enable/disable GFPGAN face restoration for enhanced quality (faster than Real-ESRGAN, optimized for faces). | `False` |
 | `--face-restoration-strength` | Face restoration strength: 0.0=no effect, 1.0=full restoration, 0.8=recommended balance (0.0-1.0). | `0.8` |
-| `--crop` | Enable generation of cropped pose images. | `False` |
+| `--crop-ratio` | Aspect ratio for crops: fixed ratios (e.g., '1:1', '16:9', '4:3') or 'any' for variable aspect ratios. Automatically enables cropping. | `None` |
 | `--crop-padding` | Padding around pose bounding box for crops (0.0-1.0). | `0.1` |
-| `--full-frames` | Output full frames in addition to crops when `--crop` is enabled. | `False` |
+| `--full-frames` | Output full frames in addition to crops when cropping is enabled. | `False` |
 | `--output-png-optimize` / `--no-output-png-optimize` | Enable or disable PNG optimization. | `True` |
 | `--resize` | Maximum dimension for proportional resizing (256-4096 pixels). | `None` |
 | `--min-frames-per-category` | Minimum frames to output per pose/angle category (1-10). | `3` |
@@ -273,6 +293,8 @@ output:
     face_restoration_enabled: false  # Enable GFPGAN face restoration
     face_restoration_strength: 0.8   # Restoration strength (0.0-1.0)
     enable_pose_cropping: true
+    crop_ratio: any  # Aspect ratio for crops: fixed ratios (e.g., "1:1", "16:9", "4:3") or "any" for variable aspect ratios. Automatically enables cropping.
+    pose_crop_padding: 0.1  # Padding around pose bounding box for crops
     full_frames: false  # Output full frames in addition to crops when enable_pose_cropping is true
 
 # Storage and caching
