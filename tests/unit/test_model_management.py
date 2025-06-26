@@ -437,18 +437,18 @@ class TestGFPGANModelConfig:
         """Test GFPGAN model metadata retrieval."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
         model = ModelConfigs.get_model(model_name)
-        
+
         # Basic metadata validation
         assert model is not None, "GFPGAN model should be retrievable"
         assert model.name == model_name
         assert model.version == "1.4.0"
         assert model.provider == ModelProvider.DIRECT_URL
         assert model.license == "Apache-2.0"
-        
+
         # Description validation
         expected_description = "GFPGAN v1.4 - High-quality face restoration using GAN priors, optimized for face enhancement"
         assert model.description == expected_description
-        
+
         # Requirements validation
         assert model.requirements == ["gfpgan>=1.3.8"]
 
@@ -456,12 +456,12 @@ class TestGFPGANModelConfig:
         """Test GFPGAN device support validation."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
         model = ModelConfigs.get_model(model_name)
-        
+
         # Device support validation
         assert model.is_device_supported(DeviceType.CPU) is True
         assert model.is_device_supported(DeviceType.GPU) is True
         assert model.is_device_supported(DeviceType.AUTO) is False  # Not explicitly in supported_devices
-        
+
         # Supported devices list validation
         expected_devices = [DeviceType.CPU, DeviceType.GPU]
         assert model.supported_devices == expected_devices
@@ -470,10 +470,10 @@ class TestGFPGANModelConfig:
         """Test GFPGAN file configuration validation."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
         model = ModelConfigs.get_model(model_name)
-        
+
         # File count validation
         assert len(model.files) == 1, "GFPGAN should have exactly one model file"
-        
+
         # Primary file validation
         primary_file = model.get_primary_file()
         assert primary_file.filename == "GFPGANv1.4.pth"
@@ -481,7 +481,7 @@ class TestGFPGANModelConfig:
         assert primary_file.sha256_hash == "e2bf53430748286c3d9a7f6bd8f6eeeff2b2dcacd45dcd5141b7e6b29c8b03e6"
         assert primary_file.size_bytes == 348632315  # ~348MB
         assert primary_file.format.value == "pt"  # ModelFormat.PYTORCH
-        
+
         # File description validation
         expected_desc = "GFPGAN v1.4 face restoration model for high-quality face enhancement at native resolution"
         assert primary_file.description == expected_desc
@@ -490,12 +490,12 @@ class TestGFPGANModelConfig:
         """Test GFPGAN cache key generation."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
         model = ModelConfigs.get_model(model_name)
-        
+
         # Cache key generation
         cache_key = model.get_cache_key()
         assert isinstance(cache_key, str)
         assert len(cache_key) == 32  # MD5 hash length
-        
+
         # Cache key consistency
         cache_key2 = model.get_cache_key()
         assert cache_key == cache_key2, "Cache key should be consistent"
@@ -504,18 +504,18 @@ class TestGFPGANModelConfig:
         """Test GFPGAN input size configuration for optimal input."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
         model = ModelConfigs.get_model(model_name)
-        
+
         # Preferred input size validation
         assert model.input_size == (512, 512), "GFPGAN should have preferred 512x512 input size"
 
     def test_gfpgan_model_validation_with_config(self):
         """Test GFPGAN model validation with ModelConfigs.validate_model_config."""
         model_name = TEST_MODELS["FACE_RESTORATION"]
-        
+
         # Valid device configurations
         assert ModelConfigs.validate_model_config(model_name, DeviceType.CPU) is True
         assert ModelConfigs.validate_model_config(model_name, DeviceType.GPU) is True
-        
+
         # AUTO device should return False as it's not explicitly supported (consistent with other models)
         assert ModelConfigs.validate_model_config(model_name, DeviceType.AUTO) is False
 

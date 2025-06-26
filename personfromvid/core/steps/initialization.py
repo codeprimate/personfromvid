@@ -11,7 +11,7 @@ class InitializationStep(PipelineStep):
 
     def execute(self) -> None:
         """Validate video and set up the processing environment."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             if self.formatter:
@@ -30,14 +30,14 @@ class InitializationStep(PipelineStep):
                 with progress_bar:
                     self.pipeline.video_processor.validate_format()
                     video_info = self.pipeline.video_processor.get_video_info_summary()
-                    self.state.get_step_progress(self.step_name).set_data(
+                    self._state.get_step_progress(self.step_name).set_data(
                         "video_info", video_info
                     )
             else:
                 self.logger.info("🔍 Validating video format...")
                 self.pipeline.video_processor.validate_format()
                 video_info = self.pipeline.video_processor.get_video_info_summary()
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "video_info", video_info
                 )
 
@@ -48,7 +48,7 @@ class InitializationStep(PipelineStep):
                     "workspace_success": "✅ Temporary workspace created",
                     "pipeline_success": "✅ Processing pipeline ready",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -62,5 +62,5 @@ class InitializationStep(PipelineStep):
         except Exception as e:
             error_msg = f"Video validation failed: {e}"
             self.logger.error(f"❌ {error_msg}")
-            self.state.fail_step(self.step_name, error_msg)
+            self._state.fail_step(self.step_name, error_msg)
             raise VideoProcessingError(error_msg) from e

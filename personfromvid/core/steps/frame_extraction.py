@@ -13,7 +13,7 @@ class FrameExtractionStep(PipelineStep):
 
     def execute(self) -> None:
         """Extract frames using a hybrid approach."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             # Check for interruption before starting
@@ -100,7 +100,7 @@ class FrameExtractionStep(PipelineStep):
                     f"Processing {actual_total_frames} frame candidates (including existing frames)"
                 )
 
-            self.state.get_step_progress(self.step_name).start(actual_total_frames)
+            self._state.get_step_progress(self.step_name).start(actual_total_frames)
 
             last_processed_count = 0
             step_start_time = self._get_step_start_time()
@@ -110,7 +110,7 @@ class FrameExtractionStep(PipelineStep):
                 # Check for interruption on each progress update
                 self._check_interrupted()
 
-                self.state.update_step_progress(self.step_name, current)
+                self._state.update_step_progress(self.step_name, current)
                 advance_amount = current - last_processed_count
                 last_processed_count = current
 
@@ -149,10 +149,10 @@ class FrameExtractionStep(PipelineStep):
             self._check_interrupted()
 
             # Update state with final results
-            self.state.get_step_progress(self.step_name).total_items = len(
+            self._state.get_step_progress(self.step_name).total_items = len(
                 extracted_frames
             )
-            self.state.update_step_progress(self.step_name, len(extracted_frames))
+            self._state.update_step_progress(self.step_name, len(extracted_frames))
 
             # Manually update statistics since we bypassed extract_frames()
             frame_extractor.stats["i_frames_found"] = len(i_frame_candidates)
@@ -160,10 +160,10 @@ class FrameExtractionStep(PipelineStep):
             frame_extractor.stats["total_extracted"] = len(extracted_frames)
 
             extraction_stats = frame_extractor.get_extraction_statistics()
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "extraction_stats", extraction_stats
             )
-            self.state.frames.extend(extracted_frames)
+            self._state.frames.extend(extracted_frames)
 
             # Store results for formatter
             if self.formatter:
@@ -172,7 +172,7 @@ class FrameExtractionStep(PipelineStep):
                     "temporal_info": f"📊 Temporal samples: {extraction_stats['temporal_samples_generated']}",
                     "extraction_summary": f"Extracted {len(extracted_frames)} unique frames ({extraction_stats['duplicates_removed']} duplicates removed)",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -187,5 +187,5 @@ class FrameExtractionStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Frame extraction failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise

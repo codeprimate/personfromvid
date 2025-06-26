@@ -12,12 +12,12 @@ import numpy as np
 
 from personfromvid.utils.logging import get_logger
 
+from ..data.detection_results import QualityMetrics
+
 # Default quality assessment thresholds
 DEFAULT_BLUR_THRESHOLD = 100.0
 DEFAULT_BRIGHTNESS_RANGE = (50.0, 200.0)
 DEFAULT_FACE_SIZE_THRESHOLD = 0.02
-
-from ..data.detection_results import QualityMetrics
 
 if TYPE_CHECKING:
     from ..data.frame_data import FrameData
@@ -76,7 +76,7 @@ class QualityAssessor:
         config = get_default_config()
         self.min_quality_threshold = config.frame_selection.min_quality_threshold
 
-    def assess_quality_in_frame(self, frame: "FrameData"):
+    def assess_quality_in_frame(self, frame: "FrameData") -> None:
         """Assess quality for a single frame and update it in place.
 
         Args:

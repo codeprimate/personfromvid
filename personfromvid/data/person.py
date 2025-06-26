@@ -19,7 +19,7 @@ class PersonQuality:
     body_quality: float
     overall_quality: float = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Calculate overall quality and validate ranges."""
         # Validate quality score ranges
         if not (0.0 <= self.face_quality <= 1.0):
@@ -71,19 +71,19 @@ class FaceUnknown(FaceDetection):
 
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls) -> Any:
         """Ensure only one instance exists."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize with default unknown values."""
         if not hasattr(self, "_initialized"):
             super().__init__(bbox=(0, 0, 0, 0), confidence=0.0, landmarks=None)
             self._initialized = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Override validation for sentinel object."""
         pass  # Skip validation for sentinel
 
@@ -93,13 +93,13 @@ class BodyUnknown(PoseDetection):
 
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls) -> Any:
         """Ensure only one instance exists."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize with default unknown values."""
         if not hasattr(self, "_initialized"):
             super().__init__(
@@ -107,7 +107,7 @@ class BodyUnknown(PoseDetection):
             )
             self._initialized = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Override validation for sentinel object."""
         pass  # Skip validation for sentinel
 
@@ -122,7 +122,7 @@ class Person:
     head_pose: Optional[HeadPoseResult]
     quality: PersonQuality
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate person data."""
         if self.person_id < 0:
             raise ValueError("person_id must be non-negative")
@@ -173,7 +173,7 @@ class Person:
         """Convert Person to dictionary for JSON serialization."""
         # Handle face serialization
         if isinstance(self.face, FaceUnknown):
-            face_dict = {"type": "FaceUnknown"}
+            face_dict: Dict[str, Any] = {"type": "FaceUnknown"}
         else:
             face_dict = {
                 "type": "FaceDetection",
@@ -184,7 +184,7 @@ class Person:
 
         # Handle body serialization
         if isinstance(self.body, BodyUnknown):
-            body_dict = {"type": "BodyUnknown"}
+            body_dict: Dict[str, Any] = {"type": "BodyUnknown"}
         else:
             body_dict = {
                 "type": "PoseDetection",
@@ -220,6 +220,7 @@ class Person:
         """Create Person from dictionary representation."""
         # Reconstruct face detection
         face_dict = person_dict.get("face", {})
+        face: Union[FaceDetection, FaceUnknown]
         if face_dict.get("type") == "FaceUnknown":
             face = FaceUnknown()
         else:
@@ -231,6 +232,7 @@ class Person:
 
         # Reconstruct body detection
         body_dict = person_dict.get("body", {})
+        body: Union[PoseDetection, BodyUnknown]
         if body_dict.get("type") == "BodyUnknown":
             body = BodyUnknown()
         else:

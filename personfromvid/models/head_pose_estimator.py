@@ -454,7 +454,7 @@ class HeadPoseEstimator:
 
         # 6DRepNet model matching X01D architecture
         class SixDRepNet(nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super(SixDRepNet, self).__init__()
 
                 # Layer naming to match the X01D model weights

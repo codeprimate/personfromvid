@@ -22,7 +22,7 @@ class PipelineStep(ABC):
         self.state = pipeline.state
         self.logger = pipeline.logger
         self.formatter = pipeline.formatter
-        
+
         # Note: state may be None during initialization and will be set later
 
     @property

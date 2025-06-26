@@ -347,5 +347,3 @@ class TempManager:
             pass
 
         return count
-
-

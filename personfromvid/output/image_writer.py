@@ -5,7 +5,7 @@ processing and file I/O operations for generating the final output images.
 """
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Tuple, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import cv2
 import numpy as np
@@ -16,7 +16,6 @@ from ..data.detection_results import FaceDetection
 from ..data.frame_data import FrameData
 from ..utils.exceptions import ImageWriteError
 from ..utils.logging import get_logger
-
 from .image_processor import ImageProcessor
 from .naming_convention import NamingConvention
 
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from ..analysis.person_selector import PersonSelection
     from ..data.person import Person
     from ..models.face_restorer import FaceRestorer
+
 
 class ImageWriter:
     """Handles image processing and file writing for output generation."""
@@ -41,26 +41,27 @@ class ImageWriter:
         self.naming = NamingConvention(context=context)
         self.output_directory.mkdir(parents=True, exist_ok=True)
         self._validate_config()
-        
+
         # Initialize ImageProcessor for crop and resize operations
         self.image_processor = ImageProcessor(self.config)
-        
+
         # Initialize FaceRestorer with lazy loading for face restoration
         self._face_restorer: Optional["FaceRestorer"] = None
         self._face_restorer_initialized = False
 
     def _get_face_restorer(self) -> Optional["FaceRestorer"]:
         """Get FaceRestorer instance with lazy loading.
-        
+
         Returns:
             FaceRestorer instance if face restoration is enabled, None otherwise
         """
         if not self.config.face_restoration_enabled:
             return None
-            
+
         if not self._face_restorer_initialized:
             try:
                 from ..models.face_restorer import create_face_restorer
+
                 self._face_restorer = create_face_restorer()
                 self.logger.debug("FaceRestorer initialized successfully")
             except Exception as e:
@@ -69,7 +70,7 @@ class ImageWriter:
                 self._face_restorer = None
             finally:
                 self._face_restorer_initialized = True
-                
+
         return self._face_restorer
 
     def save_frame_outputs(self, frame: FrameData) -> List[str]:
@@ -97,7 +98,7 @@ class ImageWriter:
 
         try:
             # Load the source image
-            source_image = self._load_frame_image(frame)           
+            source_image = self._load_frame_image(frame)
             # Generate outputs for ALL pose categories the frame was selected for
             pose_categories = frame.selections.selected_for_poses
             if pose_categories:
@@ -221,7 +222,7 @@ class ImageWriter:
         try:
             # Load the source image
             source_image = self._load_frame_image(frame)
-            
+
             # Import sentinel classes for proper type checking
             from ..data.person import BodyUnknown, FaceUnknown
 
@@ -447,10 +448,10 @@ class ImageWriter:
             Cropped and potentially upscaled/restored face image as numpy array
         """
         return self.image_processor.crop_and_resize(
-            image, 
-            face_detection.bbox, 
+            image,
+            face_detection.bbox,
             self.config.face_crop_padding,
-            use_face_restoration=True  # Enable face restoration for face crops
+            use_face_restoration=True,  # Enable face restoration for face crops
         )
 
     def _save_image(self, image: np.ndarray, output_path: Path) -> None:
@@ -473,7 +474,7 @@ class ImageWriter:
                 elif pil_image.mode != "RGB":
                     # Convert other modes to RGB for PNG
                     pil_image = pil_image.convert("RGB")
-                
+
                 pil_image.save(
                     output_path, format="PNG", optimize=self.config.png.optimize
                 )
@@ -482,11 +483,13 @@ class ImageWriter:
                 if pil_image.mode == "RGBA":
                     # Convert RGBA to RGB with white background for JPEG
                     rgb_image = Image.new("RGB", pil_image.size, (255, 255, 255))
-                    rgb_image.paste(pil_image, mask=pil_image.split()[-1])  # Use alpha as mask
+                    rgb_image.paste(
+                        pil_image, mask=pil_image.split()[-1]
+                    )  # Use alpha as mask
                     pil_image = rgb_image
                 elif pil_image.mode != "RGB":
                     pil_image = pil_image.convert("RGB")
-                
+
                 pil_image.save(
                     output_path,
                     format="JPEG",

@@ -36,7 +36,7 @@ class VideoMetadata:
     file_size_bytes: int  # Video file size
     format: str  # Container format (e.g., "mp4")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate video metadata."""
         if self.duration <= 0:
             raise ValueError("duration must be positive")
@@ -73,7 +73,7 @@ class StepProgress:
     # Step-specific data
     step_data: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate step progress."""
         if self.total_items < 0:
             raise ValueError("total_items cannot be negative")
@@ -151,7 +151,7 @@ class PipelineState:
     # Frame data - centralized storage for all frame information
     frames: List[FrameData] = field(default_factory=list, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default step progress tracking."""
         if not self.step_progress:
             self._initialize_step_progress()
@@ -451,7 +451,7 @@ class ProcessingResult:
     output_files: List[str] = field(default_factory=list)
     statistics: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate processing result."""
         if not self.success and not self.error_message:
             raise ValueError("Failed result must have error_message")

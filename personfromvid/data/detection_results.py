@@ -18,7 +18,7 @@ class FaceDetection:
     confidence: float
     landmarks: Optional[List[Tuple[float, float]]] = None  # List of (x, y) coordinates
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate bbox format and confidence range."""
         if len(self.bbox) != 4:
             raise ValueError("bbox must contain exactly 4 values (x1, y1, x2, y2)")
@@ -57,7 +57,7 @@ class PoseDetection:
     ]  # {keypoint_name: (x, y, confidence)}
     pose_classifications: List[Tuple[str, float]] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate detection data."""
         if len(self.bbox) != 4:
             raise ValueError("bbox must contain exactly 4 values (x1, y1, x2, y2)")
@@ -101,7 +101,7 @@ class HeadPoseResult:
         float
     ] = None  # Confidence of direction classification
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate angle ranges and confidence."""
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("confidence must be between 0.0 and 1.0")
@@ -142,7 +142,7 @@ class CloseupDetection:
     estimated_distance: Optional[str] = None  # "very_close", "close", "medium", "far"
     shoulder_width_ratio: Optional[float] = None  # Shoulder width / frame width
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate detection results and initialize lists."""
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("confidence must be between 0.0 and 1.0")
@@ -186,10 +186,10 @@ class QualityMetrics:
     contrast_score: float
     overall_quality: float
     method: QualityMethod = QualityMethod.DIRECT
-    quality_issues: List[str] = None
+    quality_issues: Optional[List[str]] = None
     usable: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize quality issues list if None."""
         if self.quality_issues is None:
             self.quality_issues = []
@@ -206,7 +206,7 @@ class QualityMetrics:
     @property
     def has_issues(self) -> bool:
         """Check if image has quality issues."""
-        return len(self.quality_issues) > 0
+        return len(self.quality_issues or []) > 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""

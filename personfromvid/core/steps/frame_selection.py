@@ -34,12 +34,12 @@ class FrameSelectionStep(PipelineStep):
 
     def execute(self) -> None:
         """Select best frames based on quality and diversity."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             candidate_frames = [
                 f
-                for f in self.state.frames
+                for f in self._state.frames
                 if (f.has_faces() or f.has_poses()) and f.quality_metrics is not None
             ]
 
@@ -52,7 +52,7 @@ class FrameSelectionStep(PipelineStep):
                     self.logger.warning(
                         "⚠️ No frames with quality assessments for selection"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
+                self._state.get_step_progress(self.step_name).start(0)
                 return
 
             total_candidates = len(candidate_frames)
@@ -65,7 +65,7 @@ class FrameSelectionStep(PipelineStep):
 
             # Calculate dynamic frames per category based on video duration
             baseline_frames = self.config.output.min_frames_per_category
-            video_duration = self.state.video_metadata.duration
+            video_duration = self._state.video_metadata.duration
             dynamic_max_frames = self._calculate_dynamic_max_frames(
                 baseline_frames, video_duration
             )
@@ -80,7 +80,7 @@ class FrameSelectionStep(PipelineStep):
                 temporal_diversity_threshold=self.config.frame_selection.temporal_diversity_threshold,
             )
             frame_selector = create_frame_selector(criteria)
-            self.state.get_step_progress(self.step_name).start(total_candidates)
+            self._state.get_step_progress(self.step_name).start(total_candidates)
 
             current_progress = 0
 
@@ -89,7 +89,7 @@ class FrameSelectionStep(PipelineStep):
                 self._check_interrupted()
                 # Simplified progress update
                 current_progress += 1
-                self.state.update_step_progress(self.step_name, current_progress)
+                self._state.update_step_progress(self.step_name, current_progress)
                 if self.formatter:
                     self.formatter.update_progress(1)
 
@@ -109,7 +109,7 @@ class FrameSelectionStep(PipelineStep):
                     interruption_check=self._check_interrupted,
                 )
 
-            self.state.update_step_progress(
+            self._state.update_step_progress(
                 self.step_name, total_candidates
             )  # Mark as complete
 
@@ -119,7 +119,7 @@ class FrameSelectionStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Frame selection failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _store_selection_results(self, selection_summary, criteria):
@@ -160,7 +160,7 @@ class FrameSelectionStep(PipelineStep):
                     },
                 }
 
-        self.state.get_step_progress(self.step_name).set_data(
+        self._state.get_step_progress(self.step_name).set_data(
             "frame_selections", frame_selections
         )
 
@@ -174,7 +174,7 @@ class FrameSelectionStep(PipelineStep):
         # Remove duplicates
         unique_frames_map = {frame.frame_id: frame for frame in all_selected_frames}
         unique_frame_ids = list(unique_frames_map.keys())
-        self.state.get_step_progress(self.step_name).set_data(
+        self._state.get_step_progress(self.step_name).set_data(
             ALL_SELECTED_FRAMES_KEY, unique_frame_ids
         )
 
@@ -206,7 +206,7 @@ class FrameSelectionStep(PipelineStep):
                     else "👤 No head angles selected"
                 ),
             }
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "step_results", results
             )
         else:

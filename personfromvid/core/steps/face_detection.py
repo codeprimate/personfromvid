@@ -12,7 +12,7 @@ class FaceDetectionStep(PipelineStep):
 
     def execute(self) -> None:
         """Detect faces in all extracted frames and filter for forward-facing only."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             if self.formatter:
@@ -20,10 +20,10 @@ class FaceDetectionStep(PipelineStep):
             else:
                 self.logger.info("👤 Starting face detection...")
 
-            if not self.state.frames:
+            if not self._state.frames:
                 self.logger.warning("⚠️  No frames found from extraction step")
-                self.state.get_step_progress(self.step_name).start(0)
-                self.state.update_step_progress(self.step_name, 0)
+                self._state.get_step_progress(self.step_name).start(0)
+                self._state.update_step_progress(self.step_name, 0)
                 return
 
             face_detector = create_face_detector(
@@ -36,15 +36,15 @@ class FaceDetectionStep(PipelineStep):
                 confidence_threshold=self.config.models.confidence_threshold,
             )
 
-            total_frames = len(self.state.frames)
-            self.state.get_step_progress(self.step_name).start(total_frames)
+            total_frames = len(self._state.frames)
+            self._state.get_step_progress(self.step_name).start(total_frames)
 
             last_processed_count = 0
 
             def progress_callback(processed_count: int, rate: float = None):
                 nonlocal last_processed_count
                 self._check_interrupted()
-                self.state.update_step_progress(self.step_name, processed_count)
+                self._state.update_step_progress(self.step_name, processed_count)
                 advance_amount = processed_count - last_processed_count
                 last_processed_count = processed_count
                 if self.formatter:
@@ -60,15 +60,15 @@ class FaceDetectionStep(PipelineStep):
                 )
                 with progress_bar:
                     face_detector.process_frame_batch(
-                        self.state.frames,
-                        self.state.video_metadata,
+                        self._state.frames,
+                        self._state.video_metadata,
                         progress_callback,
                         interruption_check=self._check_interrupted,
                     )
             else:
                 face_detector.process_frame_batch(
-                    self.state.frames,
-                    self.state.video_metadata,
+                    self._state.frames,
+                    self._state.video_metadata,
                     progress_callback,
                     interruption_check=self._check_interrupted,
                 )
@@ -76,13 +76,13 @@ class FaceDetectionStep(PipelineStep):
             # Filter out non-forward-facing detections
             self._filter_forward_facing_detections()
 
-            total_faces_found = sum(len(f.face_detections) for f in self.state.frames)
-            frames_with_faces = len([f for f in self.state.frames if f.has_faces()])
+            total_faces_found = sum(len(f.face_detections) for f in self._state.frames)
+            frames_with_faces = len([f for f in self._state.frames if f.has_faces()])
             coverage = (
                 (frames_with_faces / total_frames * 100) if total_frames > 0 else 0
             )
 
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "faces_found", total_faces_found
             )
 
@@ -92,7 +92,7 @@ class FaceDetectionStep(PipelineStep):
                     "frames_with_faces": frames_with_faces,
                     "detection_summary": f"Found {total_faces_found} forward-facing faces across {frames_with_faces} frames ({coverage:.1f}% coverage)",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -105,7 +105,7 @@ class FaceDetectionStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Face detection failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _filter_forward_facing_detections(self) -> None:
@@ -127,7 +127,7 @@ class FaceDetectionStep(PipelineStep):
             confidence_threshold=self.config.models.confidence_threshold,
         )
 
-        frames_with_faces = [f for f in self.state.frames if f.has_faces()]
+        frames_with_faces = [f for f in self._state.frames if f.has_faces()]
         total_original_faces = sum(len(f.face_detections) for f in frames_with_faces)
 
         # Process frames with appropriate progress tracking

@@ -8,11 +8,11 @@ from personfromvid.data.config import (
     DEFAULT_CONFIDENCE_THRESHOLD,
     Config,
     DeviceType,
+    FrameSelectionConfig,
     LogLevel,
     OutputImageConfig,
     PersonSelectionCriteria,
     get_default_config,
-    FrameSelectionConfig,
 )
 
 
@@ -106,10 +106,10 @@ def test_crop_ratio_config_valid_values():
     """Test crop_ratio configuration with valid values."""
     # Test valid crop_ratio values (need enable_pose_cropping=True for non-None values)
     config = Config()
-    
+
     # Enable pose cropping first, then set crop ratios
     config.output.image.enable_pose_cropping = True
-    
+
     # Test common aspect ratios
     config.output.image.crop_ratio = "1:1"
     assert config.output.image.crop_ratio == "1:1"
@@ -166,7 +166,7 @@ def test_default_crop_size_config_valid_values():
     """Test default_crop_size configuration with valid values."""
     # Test valid default_crop_size values
     config = Config()
-    
+
     # Test different valid sizes
     config.output.image.default_crop_size = 256
     assert config.output.image.default_crop_size == 256
@@ -239,7 +239,7 @@ def test_crop_ratio_format_validation():
         "-1:1",     # Negative width (fails regex)
         "1:-1",     # Negative height (fails regex)
     ]
-    
+
     for fmt in format_error_cases:
         with pytest.raises(ValidationError, match="Invalid crop_ratio format"):
             OutputImageConfig(crop_ratio=fmt, enable_pose_cropping=True)
@@ -249,7 +249,7 @@ def test_crop_ratio_format_validation():
         "0:1",      # Zero width
         "1:0",      # Zero height
     ]
-    
+
     for fmt in positive_int_error_cases:
         with pytest.raises(ValidationError, match="both width and height must be positive integers"):
             OutputImageConfig(crop_ratio=fmt, enable_pose_cropping=True)
@@ -624,7 +624,7 @@ def test_config_person_selection_custom_values():
 def test_frame_selection_config_defaults():
     """Test FrameSelectionConfig default values."""
     config = FrameSelectionConfig()
-    
+
     assert config.min_quality_threshold == 0.2
     assert config.face_size_weight == 0.3
     assert config.quality_weight == 0.7
@@ -635,7 +635,7 @@ def test_frame_selection_config_defaults():
 def test_frame_selection_config_validation():
     """Test FrameSelectionConfig validation."""
     from pydantic import ValidationError
-    
+
     # Test valid configuration
     valid_config = FrameSelectionConfig(
         min_quality_threshold=0.5,
@@ -645,11 +645,11 @@ def test_frame_selection_config_validation():
         temporal_diversity_threshold=5.0
     )
     assert valid_config.temporal_diversity_threshold == 5.0
-    
+
     # Test invalid temporal_diversity_threshold values
     with pytest.raises(ValidationError):
         FrameSelectionConfig(temporal_diversity_threshold=-1.0)  # Below minimum
-    
+
     with pytest.raises(ValidationError):
         FrameSelectionConfig(temporal_diversity_threshold=35.0)  # Above maximum
 

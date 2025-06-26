@@ -6,23 +6,39 @@ for high-quality face enhancement at native resolution.
 
 import logging
 import warnings
-from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
+from ..data.config import DeviceType, get_default_config
+from ..models.model_configs import ModelConfigs
+from ..models.model_manager import get_model_manager
+from ..utils.exceptions import FaceRestorationError
+
+if TYPE_CHECKING:
+    from ..data.config import Config
+
 # Suppress specific deprecation warnings from GFPGAN dependencies for better UX
 # These are not actionable by users and come from external libraries
-warnings.filterwarnings('ignore', message='.*torchvision.transforms.functional_tensor.*deprecated.*')
-warnings.filterwarnings('ignore', message='.*torchvision.transforms.functional_tensor.*removed.*')
-warnings.filterwarnings('ignore', message='.*pretrained.*deprecated.*', category=UserWarning)
-warnings.filterwarnings('ignore', message='.*Arguments other than a weight enum.*deprecated.*', category=UserWarning)
-warnings.filterwarnings('ignore', message='.*scipy.ndimage.filters.*deprecated.*', category=DeprecationWarning)
-
-from ..data.config import DeviceType, get_default_config
-from ..models.model_manager import get_model_manager
-from ..models.model_configs import ModelConfigs
-from ..utils.exceptions import FaceRestorationError
+warnings.filterwarnings(
+    "ignore", message=".*torchvision.transforms.functional_tensor.*deprecated.*"
+)
+warnings.filterwarnings(
+    "ignore", message=".*torchvision.transforms.functional_tensor.*removed.*"
+)
+warnings.filterwarnings(
+    "ignore", message=".*pretrained.*deprecated.*", category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*Arguments other than a weight enum.*deprecated.*",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*scipy.ndimage.filters.*deprecated.*",
+    category=DeprecationWarning,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +115,9 @@ class FaceRestorer:
         # Initialize model inference engine (lazy loading)
         self._gfpgan_restorer = None
 
-        logger.info(f"Initialized FaceRestorer with model {model_name} on {self.device}")
+        logger.info(
+            f"Initialized FaceRestorer with model {model_name} on {self.device}"
+        )
 
     def _resolve_device(self, device: str) -> str:
         """Resolve device string to actual device."""
@@ -127,8 +145,8 @@ class FaceRestorer:
         try:
             # Import GFPGAN dependencies
             try:
-                from gfpgan import GFPGANer
                 from facexlib.utils.face_restoration_helper import FaceRestoreHelper
+                from gfpgan import GFPGANer
             except ImportError as e:
                 raise FaceRestorationError(
                     "GFPGAN not installed. Install with: pip install gfpgan"
@@ -142,27 +160,35 @@ class FaceRestorer:
             original_init = FaceRestoreHelper.__init__
 
             def patched_init(
-                self, 
-                upscale_factor, 
-                face_size=512, 
-                crop_ratio=(1, 1), 
-                det_model='retinaface_resnet50', 
-                save_ext='png', 
-                template_3points=False, 
-                pad_blur=False, 
-                use_parse=False, 
-                device=None, 
-                model_rootpath=None
+                self,
+                upscale_factor,
+                face_size=512,
+                crop_ratio=(1, 1),
+                det_model="retinaface_resnet50",
+                save_ext="png",
+                template_3points=False,
+                pad_blur=False,
+                use_parse=False,
+                device=None,
+                model_rootpath=None,
             ):
                 # Override model_rootpath to use our cache directory
-                if model_rootpath == 'gfpgan/weights' or model_rootpath is None:
+                if model_rootpath == "gfpgan/weights" or model_rootpath is None:
                     model_rootpath = str(gfpgan_cache_dir)
-                
+
                 # Call original init with our cache directory
                 return original_init(
-                    self, upscale_factor, face_size, crop_ratio, 
-                    det_model, save_ext, template_3points, 
-                    pad_blur, use_parse, device, model_rootpath
+                    self,
+                    upscale_factor,
+                    face_size,
+                    crop_ratio,
+                    det_model,
+                    save_ext,
+                    template_3points,
+                    pad_blur,
+                    use_parse,
+                    device,
+                    model_rootpath,
                 )
 
             # Temporarily monkey-patch FaceRestoreHelper.__init__
@@ -173,10 +199,10 @@ class FaceRestorer:
                 self._gfpgan_restorer = GFPGANer(
                     model_path=str(self.model_path),
                     upscale=1,  # No upscaling, just enhancement
-                    arch='clean',  # Use clean architecture
+                    arch="clean",  # Use clean architecture
                     channel_multiplier=2,
                     bg_upsampler=None,  # No background upsampling
-                    device=self.device
+                    device=self.device,
                 )
 
                 logger.debug(f"Successfully loaded GFPGAN model on {self.device}")
@@ -192,10 +218,7 @@ class FaceRestorer:
             ) from e
 
     def restore_face(
-        self,
-        image: np.ndarray,
-        target_size: int = None,
-        strength: float = 0.8
+        self, image: np.ndarray, target_size: int = None, strength: float = 0.8
     ) -> np.ndarray:
         """Restore face using GFPGAN with configurable strength blending.
 
@@ -235,13 +258,13 @@ class FaceRestorer:
             else:
                 # Apply GFPGAN restoration
                 self._load_model()
-                
+
                 # GFPGAN enhancement
                 _, _, restored_img = self._gfpgan_restorer.enhance(
-                    image_bgr, 
+                    image_bgr,
                     has_aligned=False,
                     only_center_face=False,
-                    paste_back=True
+                    paste_back=True,
                 )
 
                 # Convert back to RGB
@@ -251,8 +274,9 @@ class FaceRestorer:
                 if strength == 1.0:
                     result = restored_img_rgb
                 else:
-                    blended = (strength * restored_img_rgb.astype(np.float32) + 
-                              (1.0 - strength) * image_uint8.astype(np.float32))
+                    blended = strength * restored_img_rgb.astype(np.float32) + (
+                        1.0 - strength
+                    ) * image_uint8.astype(np.float32)
                     result = np.clip(blended, 0, 255).astype(np.uint8)
 
             # Apply target size if specified (preserving aspect ratio)
@@ -265,7 +289,7 @@ class FaceRestorer:
             # Log error but don't crash - return original image as fallback
             logger.error(f"Face restoration failed: {str(e)}")
             logger.info("Falling back to original image")
-            
+
             try:
                 # Fallback to original image (optionally resized)
                 if target_size is not None:
@@ -289,19 +313,19 @@ class FaceRestorer:
         """
         try:
             from PIL import Image
-            
+
             height, width = image.shape[:2]
-            
+
             # Calculate new dimensions preserving aspect ratio
             scale_factor = target_size / max(width, height)
             new_width = int(width * scale_factor)
             new_height = int(height * scale_factor)
-            
+
             # Resize using PIL
             pil_image = Image.fromarray(image)
             resized_pil = pil_image.resize((new_width, new_height), Image.LANCZOS)
             return np.array(resized_pil)
-            
+
         except Exception as e:
             logger.warning(f"Resize failed, returning original: {e}")
             return image
@@ -318,19 +342,22 @@ class FaceRestorer:
             "model_path": str(self.model_path),
             "model_loaded": self._gfpgan_restorer is not None,
             "model_config": {
-                "supported_devices": [d.value for d in self.model_config.supported_devices],
+                "supported_devices": [
+                    d.value for d in self.model_config.supported_devices
+                ],
                 "input_size": self.model_config.input_size,
                 "description": self.model_config.description,
-            }
+            },
         }
 
     def __del__(self):
         """Clean up model resources."""
-        if hasattr(self, '_gfpgan_restorer') and self._gfpgan_restorer is not None:
+        if hasattr(self, "_gfpgan_restorer") and self._gfpgan_restorer is not None:
             try:
                 # Clean up CUDA memory if on GPU
                 if self.device == "cuda":
                     import torch
+
                     torch.cuda.empty_cache()
             except Exception:
                 pass  # Ignore cleanup errors
@@ -357,4 +384,4 @@ def create_face_restorer(
     if model_name is None:
         model_name = DEFAULT_MODEL_NAME
 
-    return FaceRestorer(model_name=model_name, device=device, config=config) 
+    return FaceRestorer(model_name=model_name, device=device, config=config)

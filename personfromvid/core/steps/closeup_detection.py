@@ -11,10 +11,10 @@ class CloseupDetectionStep(PipelineStep):
 
     def execute(self) -> None:
         """Perform closeup detection and shot type classification."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
-            frames_with_faces = self.state.get_frames_with_faces()
+            frames_with_faces = self._state.get_frames_with_faces()
             if not frames_with_faces:
                 if self.formatter:
                     self.formatter.print_warning(
@@ -24,8 +24,8 @@ class CloseupDetectionStep(PipelineStep):
                     self.logger.warning(
                         "⚠️  No frames with faces found for closeup detection"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
-                self.state.update_step_progress(self.step_name, 0)
+                self._state.get_step_progress(self.step_name).start(0)
+                self._state.update_step_progress(self.step_name, 0)
                 return
 
             total_frames = len(frames_with_faces)
@@ -37,7 +37,7 @@ class CloseupDetectionStep(PipelineStep):
                 )
 
             closeup_detector = CloseupDetector()
-            self.state.get_step_progress(self.step_name).start(total_frames)
+            self._state.get_step_progress(self.step_name).start(total_frames)
 
             last_processed_count = 0
 
@@ -45,9 +45,9 @@ class CloseupDetectionStep(PipelineStep):
                 nonlocal last_processed_count
                 self._check_interrupted()
                 advance = processed_count - last_processed_count
-                self.state.update_step_progress(
+                self._state.update_step_progress(
                     self.step_name,
-                    self.state.get_step_progress(self.step_name).processed_count
+                    self._state.get_step_progress(self.step_name).processed_count
                     + advance,
                 )
                 last_processed_count = processed_count
@@ -84,10 +84,10 @@ class CloseupDetectionStep(PipelineStep):
                     )
 
             total_closeups = sum(closeup_counts.values())
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "shot_types_found", closeup_counts
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "total_closeups", total_closeups
             )
 
@@ -101,7 +101,7 @@ class CloseupDetectionStep(PipelineStep):
                     "shot_analysis_summary": f"✅ Shot analysis: {total_closeups} classifications",
                     "shot_types_breakdown": f"📊 Types: {shot_types_str}",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -116,5 +116,5 @@ class CloseupDetectionStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Closeup detection failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise

@@ -649,95 +649,97 @@ class FaceDetector:
         self, detection: FaceDetection, image_shape: Tuple[int, int]
     ) -> bool:
         """Check if the entire face is visible (not cut off at frame edges).
-        
+
         Args:
             detection: Face detection to check
             image_shape: Original image shape (height, width)
-            
+
         Returns:
             True if face appears complete, False if likely cut off
         """
         height, width = image_shape
         x1, y1, x2, y2 = detection.bbox
-        
+
         # Get edge threshold from configuration
         edge_threshold = self.config.models.face_edge_threshold
-        
+
         # Check if face bounding box is too close to frame edges
         # Bottom edge check is most important for detecting missing chins
         if y2 >= height - edge_threshold:  # Face extends to bottom edge
             return False
-            
+
         # Also check other edges for completeness
         if x1 <= edge_threshold:  # Face extends to left edge
             return False
-        if x2 >= width - edge_threshold:  # Face extends to right edge  
+        if x2 >= width - edge_threshold:  # Face extends to right edge
             return False
         if y1 <= edge_threshold:  # Face extends to top edge
             return False
-            
+
         # If landmarks are available, use them for more precise checking
         if detection.landmarks and len(detection.landmarks) >= 5:
             return self._check_landmark_completeness(detection, image_shape)
-            
+
         return True
-        
+
     def _check_landmark_completeness(
         self, detection: FaceDetection, image_shape: Tuple[int, int]
     ) -> bool:
         """Check face completeness using landmark positions.
-        
+
         Args:
             detection: Face detection with landmarks
             image_shape: Original image shape (height, width)
-            
+
         Returns:
             True if landmarks suggest complete face visibility
         """
         height, width = image_shape
         landmarks = detection.landmarks
-        
+
         if not landmarks or len(landmarks) < 5:
             return True  # Can't verify, assume complete
-            
+
         # Expected landmark order: [left_eye, right_eye, nose, left_mouth, right_mouth]
         left_eye = landmarks[0]
-        right_eye = landmarks[1] 
-        nose = landmarks[2]
+        right_eye = landmarks[1]
+        _nose = landmarks[2]  # nose position not used in current completeness check
         left_mouth = landmarks[3]
         right_mouth = landmarks[4]
-        
+
         # Calculate face proportions to estimate where chin should be
         eye_y = (left_eye[1] + right_eye[1]) / 2  # Average eye level
         mouth_y = (left_mouth[1] + right_mouth[1]) / 2  # Average mouth level
-        
+
         # Estimate chin position based on facial proportions
         # Typically, chin is about 1.3-1.5x the eye-to-mouth distance below mouth
         eye_mouth_distance = mouth_y - eye_y
         if eye_mouth_distance <= 0:
             return True  # Invalid landmarks, can't verify
-            
+
         estimated_chin_y = mouth_y + (eye_mouth_distance * 1.4)
-        
+
         # Check if estimated chin position would be cut off
         chin_margin = self.config.models.chin_margin_pixels
         if estimated_chin_y + chin_margin >= height:
             return False  # Chin likely cut off
-            
+
         # Check horizontal completeness using eye positions
         eye_distance = abs(right_eye[0] - left_eye[0])
         face_center_x = (left_eye[0] + right_eye[0]) / 2
-        
+
         # Estimate face width (typically 1.3-1.5x inter-ocular distance)
         estimated_face_width = eye_distance * 1.4
         estimated_left_edge = face_center_x - (estimated_face_width / 2)
         estimated_right_edge = face_center_x + (estimated_face_width / 2)
-        
+
         edge_margin = 10
-        if (estimated_left_edge <= edge_margin or 
-            estimated_right_edge >= width - edge_margin):
+        if (
+            estimated_left_edge <= edge_margin
+            or estimated_right_edge >= width - edge_margin
+        ):
             return False  # Face sides likely cut off
-            
+
         return True
 
     def __del__(self):

@@ -109,7 +109,7 @@ def get_version():
     "--face-restoration/--no-face-restoration",
     "face_restoration_enabled",
     default=None,
-            help="Enable/disable GFPGAN face restoration for enhanced quality",
+    help="Enable/disable GFPGAN face restoration for enhanced quality",
 )
 @click.option(
     "--face-restoration-strength",
@@ -643,10 +643,14 @@ def _apply_output_overrides(config: Config, cli_args: dict) -> None:
         config.output.image.face_crop_padding = cli_args["output_face_crop_padding"]
 
     if cli_args["face_restoration_enabled"] is not None:
-        config.output.image.face_restoration_enabled = cli_args["face_restoration_enabled"]
+        config.output.image.face_restoration_enabled = cli_args[
+            "face_restoration_enabled"
+        ]
 
     if cli_args["face_restoration_strength"]:
-        config.output.image.face_restoration_strength = cli_args["face_restoration_strength"]
+        config.output.image.face_restoration_strength = cli_args[
+            "face_restoration_strength"
+        ]
 
     if cli_args["crop_padding"]:
         config.output.image.pose_crop_padding = cli_args["crop_padding"]

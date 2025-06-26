@@ -48,16 +48,16 @@ class TestPersonPipelineIntegration:
     def test_person_pipeline_step_registration(self):
         """Test that person_selection is properly registered in pipeline steps."""
         step_names = get_pipeline_step_names()
-        
+
         # Both selection steps should be registered
         assert "frame_selection" in step_names
         assert "person_selection" in step_names
-        
+
         # Verify step order is correct
         person_idx = step_names.index("person_selection")
         frame_idx = step_names.index("frame_selection")
         output_idx = step_names.index("output_generation")
-        
+
         # Both selection steps should come before output generation
         assert person_idx < output_idx
         assert frame_idx < output_idx
@@ -97,19 +97,19 @@ class TestPersonPipelineIntegration:
         # The key test: Verify person selection step was executed
         # This is the main bug we fixed - ensuring the step runs even if no persons are found
         assert pipeline.state.is_step_completed("person_selection"), "Person selection step should have completed"
-        
+
         # Verify person selection step progress exists (even if no persons were selected)
         person_step_progress = pipeline.state.get_step_progress("person_selection")
         assert person_step_progress is not None, "Person selection step should have progress tracking"
-        
+
         # Get person selections (may be empty if no faces/persons found)
         person_selections = person_step_progress.get_data("all_selected_persons", [])
-        
+
         # Test the pipeline configuration and execution logic rather than specific video content
         if result.faces_found > 0:
             # If faces were found, verify person selection worked
             assert len(person_selections) > 0, "Should have selected some persons when faces are found"
-            
+
             # Verify each person selection has required fields
             for selection in person_selections:
                 assert "frame_id" in selection
@@ -122,7 +122,7 @@ class TestPersonPipelineIntegration:
             # Verify output files were generated
             assert result.output_files is not None
             assert len(result.output_files) > 0, "Should have generated output files when persons are selected"
-            
+
             # Verify person-based naming pattern
             for output_file in result.output_files:
                 assert "person_" in str(output_file), f"Output file should have person-based naming: {output_file}"
@@ -155,7 +155,7 @@ class TestPersonPipelineIntegration:
 
         # Test state serialization by manually serializing the state
         state_dict = pipeline.state.to_dict()
-        
+
         # Verify state can be JSON serialized (this would catch set/object serialization bugs)
         try:
             json_str = json.dumps(state_dict, default=str)
@@ -252,11 +252,11 @@ class TestPersonPipelineIntegration:
 
         # Pipeline should still complete successfully even with no selections
         assert result.success is True
-        
+
         # But should have warnings about no selections
         person_step_progress = pipeline.state.get_step_progress("person_selection")
         if person_step_progress:
-            person_selections = person_step_progress.get_data("all_selected_persons", [])
+            person_step_progress.get_data("all_selected_persons", [])
             # With impossible threshold, might have no selections
             # This tests the "no selections" code path
 
@@ -319,7 +319,7 @@ class TestPersonPipelineIntegration:
 
             # Verify save_person_outputs was called (not save_frame_outputs)
             mock_writer.save_person_outputs.assert_called()
-            
+
             # save_frame_outputs should not be called for person-based pipeline
             # (it might be called for other reasons, but save_person_outputs should be primary)
             person_calls = mock_writer.save_person_outputs.call_count
@@ -354,4 +354,4 @@ class TestPersonPipelineIntegration:
             assert pipeline.state.is_step_completed("person_selection")
         else:
             # Frame selection should have been executed
-            assert pipeline.state.is_step_completed("frame_selection") 
+            assert pipeline.state.is_step_completed("frame_selection")

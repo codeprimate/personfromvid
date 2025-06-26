@@ -12,10 +12,10 @@ class PoseAnalysisStep(PipelineStep):
 
     def execute(self) -> None:
         """Analyze poses and head angles for faces."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
-            frames_with_faces = self.state.get_frames_with_faces()
+            frames_with_faces = self._state.get_frames_with_faces()
             if not frames_with_faces:
                 if self.formatter:
                     self.formatter.print_warning(
@@ -25,8 +25,8 @@ class PoseAnalysisStep(PipelineStep):
                     self.logger.info(
                         "⚠️  No frames with faces found, skipping pose analysis"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
-                self.state.update_step_progress(self.step_name, 0)
+                self._state.get_step_progress(self.step_name).start(0)
+                self._state.update_step_progress(self.step_name, 0)
                 return
 
             total_frames = len(frames_with_faces)
@@ -42,7 +42,7 @@ class PoseAnalysisStep(PipelineStep):
                 confidence_threshold=self.config.models.confidence_threshold,
             )
 
-            self.state.get_step_progress(self.step_name).total_items = total_frames * 2
+            self._state.get_step_progress(self.step_name).total_items = total_frames * 2
 
             body_last_processed, head_last_processed = 0, 0
 
@@ -50,9 +50,9 @@ class PoseAnalysisStep(PipelineStep):
                 nonlocal body_last_processed
                 self._check_interrupted()
                 advance = processed_count - body_last_processed
-                self.state.update_step_progress(
+                self._state.update_step_progress(
                     self.step_name,
-                    self.state.get_step_progress(self.step_name).processed_count
+                    self._state.get_step_progress(self.step_name).processed_count
                     + advance,
                 )
                 body_last_processed = processed_count
@@ -67,9 +67,9 @@ class PoseAnalysisStep(PipelineStep):
                 nonlocal head_last_processed
                 self._check_interrupted()
                 advance = processed_count - head_last_processed
-                self.state.update_step_progress(
+                self._state.update_step_progress(
                     self.step_name,
-                    self.state.get_step_progress(self.step_name).processed_count
+                    self._state.get_step_progress(self.step_name).processed_count
                     + advance,
                 )
                 head_last_processed = processed_count
@@ -121,19 +121,19 @@ class PoseAnalysisStep(PipelineStep):
                 len(frame.head_poses) for frame in frames_with_faces
             )
 
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "poses_found", poses_by_category
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "head_angles_found", head_angles_by_category
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "total_poses_found", total_poses_found
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "total_head_poses_found", total_head_poses_found
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "total_analyzed", len(frames_with_faces)
             )
 
@@ -153,7 +153,7 @@ class PoseAnalysisStep(PipelineStep):
                     "head_poses_summary": f"✅ Head poses: {total_head_poses_found} across {len(head_angles_by_category)} categories",
                     "top_poses_display": f"🏆 Top poses: {', '.join([f'{name} ({count})' for name, count in top_poses])}",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -175,5 +175,5 @@ class PoseAnalysisStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Pose analysis failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise

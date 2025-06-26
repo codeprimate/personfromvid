@@ -1,12 +1,13 @@
 """Unit tests for the FaceRestorer class."""
 
 import unittest
-from unittest.mock import Mock, MagicMock, patch, ANY
-import numpy as np
 from pathlib import Path
+from unittest.mock import ANY, Mock, patch
 
-from personfromvid.models.face_restorer import FaceRestorer, create_face_restorer
+import numpy as np
+
 from personfromvid.data.config import DeviceType
+from personfromvid.models.face_restorer import FaceRestorer, create_face_restorer
 from personfromvid.utils.exceptions import FaceRestorationError
 
 
@@ -21,7 +22,7 @@ class TestFaceRestorer(unittest.TestCase):
         self.mock_model_config.supported_devices = [DeviceType.CPU, DeviceType.GPU]
         self.mock_model_config.input_size = (None, None)
         self.mock_model_config.description = "Test GFPGAN model"
-        
+
         self.mock_model_manager = Mock()
         self.mock_model_manager.ensure_model_available.return_value = Path("/mock/path/model.pth")
 
@@ -82,7 +83,7 @@ class TestFaceRestorer(unittest.TestCase):
         # Act & Assert
         with self.assertRaises(FaceRestorationError) as context:
             FaceRestorer(model_name="unknown_model")
-        
+
         self.assertIn("Unknown face restoration model: unknown_model", str(context.exception))
 
     @patch('personfromvid.models.face_restorer.get_default_config')
@@ -99,7 +100,7 @@ class TestFaceRestorer(unittest.TestCase):
         # Act & Assert
         with self.assertRaises(FaceRestorationError) as context:
             FaceRestorer(device="cuda")
-        
+
         self.assertIn("does not support device cuda", str(context.exception))
 
     def test_resolve_device_auto_without_torch(self):
@@ -171,7 +172,7 @@ class TestFaceRestorer(unittest.TestCase):
         mock_get_config.return_value = self.mock_config
         mock_configs.get_model.return_value = self.mock_model_config
         mock_get_manager.return_value = self.mock_model_manager
-        
+
         restorer = FaceRestorer(model_name="test_model", device="cpu")
 
         # Act
@@ -216,7 +217,7 @@ class TestFaceRestorerModelLoading(unittest.TestCase):
         self.assertIsNotNone(restorer._gfpgan_restorer)
 
     @patch('personfromvid.models.face_restorer.get_default_config')
-    @patch('personfromvid.models.face_restorer.ModelConfigs') 
+    @patch('personfromvid.models.face_restorer.ModelConfigs')
     @patch('personfromvid.models.face_restorer.get_model_manager')
     def test_load_model_requires_gfpgan_not_loaded(self, mock_get_manager, mock_configs, mock_get_config):
         """Test that _load_model handles GFPGAN model loading errors."""
@@ -231,7 +232,7 @@ class TestFaceRestorerModelLoading(unittest.TestCase):
         # Act & Assert - Trying to load with invalid model path should raise error
         with self.assertRaises(FaceRestorationError) as context:
             restorer._load_model()
-        
+
         # With GFPGAN installed, we expect model file loading error
         self.assertIn("Failed to load GFPGAN model", str(context.exception))
 
@@ -266,14 +267,14 @@ class TestFaceRestorerRestoration(unittest.TestCase):
         # Act & Assert
         with self.assertRaises(FaceRestorationError) as context:
             restorer.restore_face(None, 512)
-        
+
         self.assertIn("Input image is empty or None", str(context.exception))
 
         # Test with empty array
         empty_image = np.array([])
         with self.assertRaises(FaceRestorationError) as context:
             restorer.restore_face(empty_image, 512)
-        
+
         self.assertIn("Input image is empty or None", str(context.exception))
 
     @patch('personfromvid.models.face_restorer.get_default_config')
@@ -291,11 +292,11 @@ class TestFaceRestorerRestoration(unittest.TestCase):
         mock_pil_image = Mock()
         mock_resized_pil = Mock()
         mock_resized_array = np.random.randint(0, 255, (512, 512, 3), dtype=np.uint8)
-        
+
         mock_from_array.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_resized_pil
         mock_resized_pil.__array__ = Mock(return_value=mock_resized_array)
-        
+
         # Mock np.array conversion
         with patch('numpy.array', return_value=mock_resized_array):
             restorer = FaceRestorer()
@@ -322,10 +323,10 @@ class TestFaceRestorerRestoration(unittest.TestCase):
         mock_pil_image = Mock()
         mock_resized_pil = Mock()
         mock_resized_array = np.random.randint(0, 255, (512, 512, 3), dtype=np.uint8)
-        
+
         mock_from_array.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_resized_pil
-        
+
         with patch('numpy.array', return_value=mock_resized_array):
             restorer = FaceRestorer()
 
@@ -348,13 +349,13 @@ class TestFaceRestorerRestoration(unittest.TestCase):
         mock_get_manager.return_value = self.mock_model_manager
 
         restorer = FaceRestorer()
-        
+
         # Mock _load_model to raise an error
         restorer._load_model = Mock(side_effect=Exception("Model load failed"))
 
         # Mock fallback image
         mock_fallback_array = np.random.randint(0, 255, (512, 512, 3), dtype=np.uint8)
-        
+
         with patch.object(restorer, '_resize_to_target', return_value=mock_fallback_array) as mock_resize:
             # Act
             result = restorer.restore_face(self.test_image_rgb, target_size=512, strength=0.8)
@@ -381,7 +382,7 @@ class TestCreateFaceRestorer(unittest.TestCase):
         # Assert
         mock_face_restorer.assert_called_once_with(
             model_name="gfpgan_v1_4",
-            device="auto", 
+            device="auto",
             config=None
         )
         self.assertEqual(result, mock_instance)
@@ -417,7 +418,7 @@ class TestCreateFaceRestorer(unittest.TestCase):
         mock_face_restorer.return_value = mock_instance
 
         # Act
-        result = create_face_restorer(model_name=None)
+        create_face_restorer(model_name=None)
 
         # Assert
         mock_face_restorer.assert_called_once_with(
@@ -428,4 +429,4 @@ class TestCreateFaceRestorer(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

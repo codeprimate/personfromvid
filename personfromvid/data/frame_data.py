@@ -33,7 +33,7 @@ class SourceInfo:
     original_frame_number: int  # Frame number in original video
     video_fps: float  # Original video FPS
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate source info."""
         if self.video_timestamp < 0:
             raise ValueError("video_timestamp cannot be negative")
@@ -54,7 +54,7 @@ class ImageProperties:
     format: str  # "JPEG", "PNG", etc.
     color_space: str = "RGB"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate image properties."""
         if self.width <= 0 or self.height <= 0:
             raise ValueError("width and height must be positive")
@@ -140,7 +140,7 @@ class FrameData:
     # Debug and analysis
     debug_info: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate frame data."""
         if not self.frame_id:
             raise ValueError("frame_id cannot be empty")

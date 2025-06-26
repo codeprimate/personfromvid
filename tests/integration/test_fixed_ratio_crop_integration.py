@@ -8,14 +8,12 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
-import numpy as np
 import pytest
 from PIL import Image
 
 from personfromvid.core.pipeline import ProcessingPipeline
-from personfromvid.data import Config, ProcessingContext
+from personfromvid.data import ProcessingContext
 from personfromvid.data.config import load_config
 
 
@@ -49,7 +47,7 @@ class TestFixedRatioCropIntegration:
         config.output.image.crop_ratio = "1:1"
         return config
 
-    @pytest.fixture  
+    @pytest.fixture
     def widescreen_ratio_config(self, base_config):
         """Configuration with widescreen aspect ratio."""
         config = base_config
@@ -80,7 +78,7 @@ class TestFixedRatioCropIntegration:
         """Test that --crop-ratio automatically enables cropping without requiring --crop flag."""
         # Test that crop-ratio automatically enables cropping (should succeed)
         test_video = Path(__file__).parent.parent / "fixtures" / "test_video.mp4"
-        
+
         # This should succeed - crop-ratio now automatically enables cropping
         result = subprocess.run(
             ["python", "-m", "personfromvid", str(test_video), "--crop-ratio", "1:1", "--help"],
@@ -88,7 +86,7 @@ class TestFixedRatioCropIntegration:
         )
         # Using --help to avoid actually processing video in test, just verify CLI parsing works
         assert result.returncode == 0
-        
+
         # Verify help text shows the updated behavior
         assert "--crop-ratio" in result.stdout
         # Check for the text accounting for line wrapping in Click help output
@@ -97,7 +95,7 @@ class TestFixedRatioCropIntegration:
     def test_cli_any_option_integration(self):
         """Test that --crop-ratio any option is properly integrated in CLI."""
         test_video = Path(__file__).parent.parent / "fixtures" / "test_video.mp4"
-        
+
         # Test that crop-ratio any is accepted by CLI parsing
         result = subprocess.run(
             ["python", "-m", "personfromvid", str(test_video), "--crop-ratio", "any", "--help"],
@@ -105,7 +103,7 @@ class TestFixedRatioCropIntegration:
         )
         # Using --help to avoid actually processing video in test, just verify CLI parsing works
         assert result.returncode == 0
-        
+
         # Verify help text includes "any" option
         assert "--crop-ratio" in result.stdout
         assert "'any' for variable" in result.stdout
@@ -115,11 +113,11 @@ class TestFixedRatioCropIntegration:
         # Test configuration parsing and validation
         config = base_config
         config.output.image.crop_ratio = "16:9"
-        
+
         # Verify configuration is valid
         assert config.output.image.crop_ratio == "16:9"
         assert config.output.image.enable_pose_cropping is True
-        
+
         # Test configuration with invalid ratio
         with pytest.raises(ValueError, match="Invalid aspect ratio format"):
             invalid_config = load_config()
@@ -129,8 +127,8 @@ class TestFixedRatioCropIntegration:
             from pydantic import ValidationError
             try:
                 invalid_config.model_validate(invalid_config.model_dump())
-            except ValidationError:
-                raise ValueError("Invalid aspect ratio format")
+            except ValidationError as e:
+                raise ValueError("Invalid aspect ratio format") from e
 
     def test_pipeline_execution_with_fixed_ratios(self, test_video_path, temp_output_dir, square_ratio_config):
         """Test complete pipeline execution with fixed aspect ratios."""
@@ -151,7 +149,7 @@ class TestFixedRatioCropIntegration:
 
         # Verify successful completion
         assert result.success is True, f"Pipeline failed: {result.error_message}"
-        
+
         # Verify pipeline completed all steps
         assert pipeline.state.is_step_completed("output_generation"), "Output generation should have completed"
 
@@ -180,7 +178,7 @@ class TestFixedRatioCropIntegration:
             if output_file.exists() and output_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
                 with Image.open(output_file) as img:
                     width, height = img.size
-                    
+
                     # For 1:1 ratio, width should equal height
                     assert width == height, f"Square ratio image should be square: {width}x{height} in {output_file}"
 
@@ -217,7 +215,7 @@ class TestFixedRatioCropIntegration:
                     with Image.open(output_file) as img:
                         width, height = img.size
                         actual_ratio = width / height
-                        
+
                         # Allow small tolerance for rounding
                         tolerance = 0.01
                         assert abs(actual_ratio - expected_ratio) < tolerance, \
@@ -285,10 +283,10 @@ class TestFixedRatioCropIntegration:
 
         # Test state serialization
         state_dict = pipeline.state.to_dict()
-        
+
         # Verify state can be JSON serialized
         try:
             json_str = json.dumps(state_dict, default=str)
             assert len(json_str) > 0
         except TypeError as e:
-            pytest.fail(f"Pipeline state with crop regions is not JSON serializable: {e}") 
+            pytest.fail(f"Pipeline state with crop regions is not JSON serializable: {e}")

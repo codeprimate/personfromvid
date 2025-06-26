@@ -6,15 +6,15 @@ body poses into standing, sitting, squatting, and closeup categories.
 
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+from personfromvid.data.config import PoseClassificationConfig
 
 from ..data.detection_results import PoseDetection
 from ..data.frame_data import FrameData
 from ..utils.exceptions import PoseClassificationError
-from personfromvid.data.config import PoseClassificationConfig
-from personfromvid.utils.logging import get_logger
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ class OutputGenerationStep(PipelineStep):
 
     def execute(self) -> None:
         """Generate output files for selected frames or persons."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             # Step 1: Input Type Detection
@@ -34,7 +34,7 @@ class OutputGenerationStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Output generation failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _detect_input_type(self) -> tuple[Union[List[PersonSelection], List[str]], str]:
@@ -45,18 +45,20 @@ class OutputGenerationStep(PipelineStep):
             "person_selection" or "frame_selection"
         """
         # Priority 1: Check for PersonSelection data (person-based pipeline)
-        person_selection_progress = self.state.get_step_progress("person_selection")
+        person_selection_progress = self._state.get_step_progress("person_selection")
         if person_selection_progress:
             serializable_persons = person_selection_progress.get_data(
                 ALL_SELECTED_PERSONS_KEY, []
             )
             if serializable_persons:
                 # Reconstruct PersonSelection objects from serializable data
-                person_selections = self._reconstruct_person_selections(serializable_persons)
+                person_selections = self._reconstruct_person_selections(
+                    serializable_persons
+                )
                 return person_selections, "person_selection"
 
         # Priority 2: Check for frame selection data (backwards compatibility)
-        frame_selection_progress = self.state.get_step_progress("frame_selection")
+        frame_selection_progress = self._state.get_step_progress("frame_selection")
         if frame_selection_progress:
             selected_frame_ids = frame_selection_progress.get_data(
                 ALL_SELECTED_FRAMES_KEY, []
@@ -67,58 +69,66 @@ class OutputGenerationStep(PipelineStep):
         # No input data found
         return [], "none"
 
-    def _reconstruct_person_selections(self, serializable_persons: List[dict]) -> List[PersonSelection]:
+    def _reconstruct_person_selections(
+        self, serializable_persons: List[dict]
+    ) -> List[PersonSelection]:
         """Reconstruct PersonSelection objects from serializable data.
-        
+
         Args:
             serializable_persons: List of dictionaries containing person selection data
                                  or actual PersonSelection objects (for testing)
-            
+
         Returns:
             List of PersonSelection objects
         """
         from ...analysis.person_selector import PersonSelection
-        
+
         # Handle case where PersonSelection objects are passed directly (for tests)
-        if serializable_persons and isinstance(serializable_persons[0], PersonSelection):
+        if serializable_persons and isinstance(
+            serializable_persons[0], PersonSelection
+        ):
             return serializable_persons
-        
+
         # Create lookup map for frames and persons
-        frames_map = {frame.frame_id: frame for frame in self.state.frames}
-        
+        frames_map = {frame.frame_id: frame for frame in self._state.frames}
+
         person_selections = []
         for data in serializable_persons:
             frame_id = data["frame_id"]
             person_id = data["person_id"]
-            
+
             if frame_id not in frames_map:
-                self.logger.warning(f"Frame {frame_id} not found, skipping person selection")
+                self.logger.warning(
+                    f"Frame {frame_id} not found, skipping person selection"
+                )
                 continue
-                
+
             frame_data = frames_map[frame_id]
-            
+
             # Find the person in the frame
             person = None
-            if hasattr(frame_data, 'persons') and frame_data.persons:
+            if hasattr(frame_data, "persons") and frame_data.persons:
                 for p in frame_data.persons:
                     if p.person_id == person_id:
                         person = p
                         break
-            
+
             if person is None:
-                self.logger.warning(f"Person {person_id} not found in frame {frame_id}, skipping")
+                self.logger.warning(
+                    f"Person {person_id} not found in frame {frame_id}, skipping"
+                )
                 continue
-                
+
             # Reconstruct PersonSelection object
             selection = PersonSelection(
                 frame_data=frame_data,
                 person_id=person_id,
                 person=person,
                 selection_score=data["selection_score"],
-                category=data["category"]
+                category=data["category"],
             )
             person_selections.append(selection)
-            
+
         return person_selections
 
     def _handle_no_input_data(self) -> None:
@@ -131,7 +141,7 @@ class OutputGenerationStep(PipelineStep):
             self.logger.warning(
                 "⚠️ No frames or persons selected for output generation"
             )
-        self.state.get_step_progress(self.step_name).start(0)
+        self._state.get_step_progress(self.step_name).start(0)
 
     def _process_person_selections(
         self, person_selections: List[PersonSelection]
@@ -146,7 +156,7 @@ class OutputGenerationStep(PipelineStep):
 
         # Calculate expected total files based on configuration
         total_expected_files = self._calculate_expected_files_count(person_selections)
-        self.state.get_step_progress(self.step_name).start(total_expected_files)
+        self._state.get_step_progress(self.step_name).start(total_expected_files)
 
         output_dir = self.pipeline.context.output_directory
         image_writer = ImageWriter(context=self.pipeline.context)
@@ -155,7 +165,7 @@ class OutputGenerationStep(PipelineStep):
 
         def progress_callback(files_generated_count):
             self._check_interrupted()
-            self.state.update_step_progress(self.step_name, files_generated_count)
+            self._state.update_step_progress(self.step_name, files_generated_count)
             if self.formatter:
                 # Calculate rate
                 elapsed = time.time() - step_start_time
@@ -176,7 +186,7 @@ class OutputGenerationStep(PipelineStep):
                             person_selection, image_writer
                         )
                         all_output_files.extend(output_files)
-                        
+
                         # Update progress with actual files generated so far
                         progress_callback(len(all_output_files))
                     except Exception as e:
@@ -195,7 +205,7 @@ class OutputGenerationStep(PipelineStep):
                         person_selection, image_writer
                     )
                     all_output_files.extend(output_files)
-                    
+
                     # Update progress with actual files generated so far
                     progress_callback(len(all_output_files))
                 except Exception as e:
@@ -206,50 +216,55 @@ class OutputGenerationStep(PipelineStep):
 
         self._finalize_output_generation(all_output_files, output_dir, "person-based")
 
-    def _calculate_expected_files_count(self, person_selections: List[PersonSelection]) -> int:
+    def _calculate_expected_files_count(
+        self, person_selections: List[PersonSelection]
+    ) -> int:
         """Calculate expected number of files to be generated based on configuration.
-        
+
         Args:
             person_selections: List of PersonSelection objects
-            
+
         Returns:
             Estimated total number of files that will be generated
         """
         if not person_selections:
             return 0
-            
+
         # Get configuration from pipeline context
         config = self.pipeline.context.config
-        
+
         # Calculate files per person based on configuration
         files_per_person = 0
-        
+
         # Face crop (if face_crop_enabled and person has face detection)
         if config.output.image.face_crop_enabled:
             files_per_person += 1
-            
+
         # Body crop (if enable_pose_cropping and person has body detection)
         if config.output.image.enable_pose_cropping:
             files_per_person += 1
-        
+
         # Full frame (if enable_pose_cropping is False OR full_frames is True)
-        if not config.output.image.enable_pose_cropping or config.output.image.full_frames:
+        if (
+            not config.output.image.enable_pose_cropping
+            or config.output.image.full_frames
+        ):
             files_per_person += 1
-        
+
         # Estimate total files
         estimated_total = len(person_selections) * files_per_person
-        
+
         self.logger.debug(
             f"Expected files calculation: {len(person_selections)} persons × "
             f"{files_per_person} files/person = {estimated_total} total files"
         )
-        
+
         return estimated_total
 
     def _process_frame_selections(self, selected_frame_ids: List[str]) -> None:
         """Process frame IDs for output generation (backwards compatibility)."""
         # Map IDs to the actual FrameData objects
-        all_frames_map = {frame.frame_id: frame for frame in self.state.frames}
+        all_frames_map = {frame.frame_id: frame for frame in self._state.frames}
         selected_frames = [
             all_frames_map[fid] for fid in selected_frame_ids if fid in all_frames_map
         ]
@@ -267,14 +282,14 @@ class OutputGenerationStep(PipelineStep):
             self.logger.info(f"📁 Generating output in {output_dir}...")
 
         total_frames = len(selected_frames)
-        self.state.get_step_progress(self.step_name).start(total_frames)
+        self._state.get_step_progress(self.step_name).start(total_frames)
 
         all_output_files = []
         step_start_time = time.time()
 
         def progress_callback(processed_count):
             self._check_interrupted()
-            self.state.update_step_progress(self.step_name, processed_count)
+            self._state.update_step_progress(self.step_name, processed_count)
             if self.formatter:
                 # Calculate rate
                 elapsed = time.time() - step_start_time
@@ -328,11 +343,11 @@ class OutputGenerationStep(PipelineStep):
             output_dir: Output directory path
             generation_type: Type of generation ("person-based" or "frame-based")
         """
-        self.state.processing_stats["output_files"] = all_output_files
-        self.state.processing_stats["total_output_files"] = len(all_output_files)
+        self._state.processing_stats["output_files"] = all_output_files
+        self._state.processing_stats["total_output_files"] = len(all_output_files)
 
         if self.formatter:
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "step_results",
                 {
                     "files_generated": f"✅ Generated {len(all_output_files)} files ({generation_type})",

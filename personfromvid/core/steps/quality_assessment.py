@@ -20,12 +20,12 @@ class QualityAssessmentStep(PipelineStep):
 
     def execute(self) -> None:
         """Assess quality of frames with faces and poses using inferred quality approach."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             frames_for_quality = [
                 frame
-                for frame in self.state.frames
+                for frame in self._state.frames
                 if frame.has_faces()
                 or frame.has_poses()  # either faces or poses are required for quality assessment
             ]
@@ -39,8 +39,8 @@ class QualityAssessmentStep(PipelineStep):
                     self.logger.warning(
                         "⚠️  No frames with faces/poses for quality assessment"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
-                self.state.update_step_progress(self.step_name, 0)
+                self._state.get_step_progress(self.step_name).start(0)
+                self._state.update_step_progress(self.step_name, 0)
                 return
 
             total_frames = len(frames_for_quality)
@@ -52,7 +52,7 @@ class QualityAssessmentStep(PipelineStep):
                 self.logger.info(f"🔍 Assessing quality for {total_frames} frames...")
 
             quality_assessor = create_quality_assessor()
-            self.state.get_step_progress(self.step_name).start(total_frames)
+            self._state.get_step_progress(self.step_name).start(total_frames)
 
             step_start_time = time.time()
             issue_counts = defaultdict(int)
@@ -62,7 +62,7 @@ class QualityAssessmentStep(PipelineStep):
 
             def progress_callback(processed_count: int):
                 self._check_interrupted()
-                self.state.update_step_progress(self.step_name, processed_count)
+                self._state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
                     # Calculate rate
                     elapsed = time.time() - step_start_time
@@ -147,7 +147,7 @@ class QualityAssessmentStep(PipelineStep):
                         progress_callback(i + 1)
 
             # PHASE 3: Rank all assessed frames by quality
-            self._rank_frames_by_quality(self.state.frames)
+            self._rank_frames_by_quality(self._state.frames)
 
             total_assessed = len(frames_for_quality)
             total_persons = sum(
@@ -173,10 +173,10 @@ class QualityAssessmentStep(PipelineStep):
                 else "0%",
             }
 
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "total_assessed", total_assessed
             )
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "quality_stats", quality_stats
             )
 
@@ -200,7 +200,7 @@ class QualityAssessmentStep(PipelineStep):
                     "method_breakdown": f"🔍 Quality methods: {inferred} inferred, {direct} direct",
                     "performance_optimization": f"⚡ Performance improvement: {performance_improvement} frames optimized",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -222,7 +222,7 @@ class QualityAssessmentStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Quality assessment failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _rank_frames_by_quality(self, frames: List["FrameData"]) -> None:

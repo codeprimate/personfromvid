@@ -11,7 +11,14 @@ from typing import List, Optional
 
 import yaml
 from platformdirs import user_cache_dir
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
@@ -72,23 +79,23 @@ class ModelConfig(BaseModel):
         le=1.0,
         description="Minimum confidence threshold for detections",
     )
-    
+
     # Face completeness validation settings
     require_complete_faces: bool = Field(
         default=True,
-        description="Reject face detections that appear cut off at frame edges (particularly missing chins)"
+        description="Reject face detections that appear cut off at frame edges (particularly missing chins)",
     )
     face_edge_threshold: int = Field(
         default=10,
         ge=0,
         le=50,
-        description="Minimum pixels from frame edge for complete face detection"
+        description="Minimum pixels from frame edge for complete face detection",
     )
     chin_margin_pixels: int = Field(
         default=15,
         ge=5,
         le=50,
-        description="Required margin below estimated chin position for complete face validation"
+        description="Required margin below estimated chin position for complete face validation",
     )
 
     @field_serializer("device")
@@ -415,7 +422,8 @@ class OutputImageConfig(BaseModel):
         False, description="Enable generation of cropped pose images."
     )
     full_frames: bool = Field(
-        False, description="Output full frames in addition to crops when pose cropping is enabled."
+        False,
+        description="Output full frames in addition to crops when pose cropping is enabled.",
     )
     pose_crop_padding: float = Field(
         0.1, ge=0.0, le=1.0, description="Padding around pose bounding box."
@@ -440,37 +448,41 @@ class OutputImageConfig(BaseModel):
     png: PngConfig = Field(default_factory=PngConfig)
     jpeg: JpegConfig = Field(default_factory=JpegConfig)
 
-    @field_validator('crop_ratio', mode='before')
+    @field_validator("crop_ratio", mode="before")
     @classmethod
     def validate_crop_ratio_format(cls, v):
         """Validate crop ratio format and range."""
         if v is None:
             return v
-        
+
         if not isinstance(v, str):
-            raise ValueError("crop_ratio must be a string in format 'W:H' (e.g., '16:9', '4:3', '1:1') or 'any'")
-        
+            raise ValueError(
+                "crop_ratio must be a string in format 'W:H' (e.g., '16:9', '4:3', '1:1') or 'any'"
+            )
+
         # Handle "any" case (case-insensitive)
         if v.lower() == "any":
             return "any"  # Normalize to lowercase
-        
+
         # Use regex to match exact W:H format with positive integers
-        pattern = r'^(\d+):(\d+)$'
+        pattern = r"^(\d+):(\d+)$"
         match = re.match(pattern, v)
-        
+
         if not match:
             raise ValueError(
                 f"Invalid crop_ratio format '{v}'. Must be in format 'W:H' where W and H are positive integers "
                 "(e.g., '16:9', '4:3', '1:1') or 'any'. Invalid formats like '16:', ':9', '16/9', or '1.5:1' are not allowed."
             )
-        
+
         # Extract width and height as integers
         width, height = int(match.group(1)), int(match.group(2))
-        
+
         # Validate that both width and height are positive
         if width <= 0 or height <= 0:
-            raise ValueError(f"Invalid crop_ratio '{v}': both width and height must be positive integers")
-        
+            raise ValueError(
+                f"Invalid crop_ratio '{v}': both width and height must be positive integers"
+            )
+
         # Calculate ratio and validate range (0.1 to 100.0)
         ratio = width / height
         if not (0.1 <= ratio <= 100.0):
@@ -478,16 +490,18 @@ class OutputImageConfig(BaseModel):
                 f"Invalid crop_ratio '{v}': calculated ratio {ratio:.2f} is outside valid range (0.1-100.0). "
                 "Use ratios like '1:10' (0.1) to '100:1' (100.0)."
             )
-        
+
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     @classmethod
     def validate_crop_ratio_dependency(cls, values):
         """Ensure crop_ratio is only specified when enable_pose_cropping is True."""
-        if hasattr(values, 'crop_ratio') and hasattr(values, 'enable_pose_cropping'):
+        if hasattr(values, "crop_ratio") and hasattr(values, "enable_pose_cropping"):
             if values.crop_ratio is not None and not values.enable_pose_cropping:
-                raise ValueError("crop_ratio can only be specified when enable_pose_cropping is True")
+                raise ValueError(
+                    "crop_ratio can only be specified when enable_pose_cropping is True"
+                )
         return values
 
 

@@ -54,7 +54,7 @@ class ProcessingResult:
     processing_time_seconds: float = 0.0
     error_message: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize default values."""
         if self.poses_found is None:
             self.poses_found = {}

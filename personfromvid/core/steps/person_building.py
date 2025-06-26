@@ -23,7 +23,7 @@ class PersonBuildingStep(PipelineStep):
 
     def execute(self) -> None:
         """Build Person objects from face and pose detections in each frame."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             # Get frames that have face and/or pose detections
@@ -38,8 +38,8 @@ class PersonBuildingStep(PipelineStep):
                     self.logger.warning(
                         "⚠️  No frames with detections for person building"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
-                self.state.update_step_progress(self.step_name, 0)
+                self._state.get_step_progress(self.step_name).start(0)
+                self._state.update_step_progress(self.step_name, 0)
                 return
 
             total_frames = len(frames_with_detections)
@@ -50,7 +50,7 @@ class PersonBuildingStep(PipelineStep):
 
             # Initialize PersonBuilder
             person_builder = PersonBuilder()
-            self.state.get_step_progress(self.step_name).start(total_frames)
+            self._state.get_step_progress(self.step_name).start(total_frames)
 
             # Statistics tracking
             total_persons_found = 0
@@ -60,7 +60,7 @@ class PersonBuildingStep(PipelineStep):
 
             def progress_callback(processed_count: int, rate: float = None):
                 self._check_interrupted()
-                self.state.update_step_progress(self.step_name, processed_count)
+                self._state.update_step_progress(self.step_name, processed_count)
                 if self.formatter:
                     if rate is not None:
                         self.formatter.update_progress(1, rate=rate)
@@ -170,7 +170,7 @@ class PersonBuildingStep(PipelineStep):
             }
 
             for key, value in step_data.items():
-                self.state.get_step_progress(self.step_name).set_data(key, value)
+                self._state.get_step_progress(self.step_name).set_data(key, value)
 
             # Display results
             if self.formatter:
@@ -181,7 +181,7 @@ class PersonBuildingStep(PipelineStep):
                     "multi_person_frames": f"👥 Multi-person frames: {multi_person_frames}",
                     "average_persons": f"📊 Average persons per frame: {average_persons_per_frame:.1f}",
                 }
-                self.state.get_step_progress(self.step_name).set_data(
+                self._state.get_step_progress(self.step_name).set_data(
                     "step_results", results
                 )
             else:
@@ -196,7 +196,7 @@ class PersonBuildingStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Person building failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _get_frames_with_detections(self) -> List["FrameData"]:
@@ -207,7 +207,7 @@ class PersonBuildingStep(PipelineStep):
         """
         frames_with_detections = []
 
-        for frame in self.state.frames:
+        for frame in self._state.frames:
             has_faces = frame.has_faces()
             has_poses = frame.has_poses()
 

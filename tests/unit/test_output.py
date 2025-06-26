@@ -576,26 +576,26 @@ class TestImageWriter:
         """Test FaceRestorer lazy initialization when face restoration is enabled."""
         # Enable face restoration in config
         processing_context.config.output.image.face_restoration_enabled = True
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Initially, FaceRestorer should not be initialized
         assert writer._face_restorer is None
         assert not writer._face_restorer_initialized
-        
+
         # Mock the FaceRestorer creation
         with patch('personfromvid.models.face_restorer.create_face_restorer') as mock_create_restorer:
             mock_restorer = Mock()
             mock_create_restorer.return_value = mock_restorer
-            
+
             # First call should initialize the restorer
             result = writer._get_face_restorer()
-            
+
             assert result is mock_restorer
             assert writer._face_restorer is mock_restorer
             assert writer._face_restorer_initialized
             mock_create_restorer.assert_called_once()
-            
+
             # Second call should return cached instance
             result2 = writer._get_face_restorer()
             assert result2 is mock_restorer
@@ -606,9 +606,9 @@ class TestImageWriter:
         """Test FaceRestorer initialization when face restoration is disabled."""
         # Disable face restoration in config
         processing_context.config.output.image.face_restoration_enabled = False
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Should return None when disabled
         result = writer._get_face_restorer()
         assert result is None
@@ -618,16 +618,16 @@ class TestImageWriter:
         """Test FaceRestorer initialization failure handling."""
         # Enable face restoration in config
         processing_context.config.output.image.face_restoration_enabled = True
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Mock the FaceRestorer creation to fail
         with patch('personfromvid.models.face_restorer.create_face_restorer') as mock_create_restorer:
             mock_create_restorer.side_effect = Exception("Model loading failed")
-            
+
             # Should handle the error gracefully
             result = writer._get_face_restorer()
-            
+
             assert result is None
             assert writer._face_restorer is None
             assert writer._face_restorer_initialized  # Should mark as initialized even on failure
@@ -639,9 +639,9 @@ class TestImageWriter:
         processing_context.config.output.image.face_restoration_enabled = True
         processing_context.config.output.image.face_restoration_strength = 0.8
         processing_context.config.output.image.resize = 512
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create test image and face detection
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         face_detection = FaceDetection(
@@ -649,28 +649,28 @@ class TestImageWriter:
             confidence=0.9,
             landmarks=[]
         )
-        
+
         # Mock PIL Image operations
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
-        
+
         # Mock FaceRestorer
         mock_restorer = Mock()
         mock_restored_image = np.ones((512, 512, 3), dtype=np.uint8) * 128  # Gray image
         mock_restorer.restore_face.return_value = mock_restored_image
-        
+
         with patch.object(writer.image_processor, '_get_face_restorer', return_value=mock_restorer):
             result = writer._crop_face(test_image, face_detection)
-            
+
             # Should call face restoration via image processor
             mock_restorer.restore_face.assert_called_once()
             call_args = mock_restorer.restore_face.call_args
-            
+
             # Check arguments passed to restore_face
             assert call_args[1]['target_size'] == 512  # Should use resize config
             assert call_args[1]['strength'] == 0.8  # Should use configured strength
-            
+
             # Result should be the restored image
             assert np.array_equal(result, mock_restored_image)
 
@@ -680,9 +680,9 @@ class TestImageWriter:
         # Enable face restoration
         processing_context.config.output.image.face_restoration_enabled = True
         processing_context.config.output.image.resize = 512
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create test image and face detection
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         face_detection = FaceDetection(
@@ -690,24 +690,24 @@ class TestImageWriter:
             confidence=0.9,
             landmarks=[]
         )
-        
+
         # Mock PIL Image operations
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
         mock_lanczos_result = Mock()
         mock_pil_image.resize.return_value = mock_lanczos_result
-        
+
         # Mock FaceRestorer to fail
         mock_restorer = Mock()
         mock_restorer.restore_face.side_effect = Exception("Restoration failed")
-        
+
         with patch.object(writer.image_processor, '_get_face_restorer', return_value=mock_restorer):
             with patch('numpy.array', return_value=np.ones((256, 256, 3), dtype=np.uint8) * 64):
-                result = writer._crop_face(test_image, face_detection)
-                
+                writer._crop_face(test_image, face_detection)
+
                 # Should attempt face restoration first via image processor
                 mock_restorer.restore_face.assert_called_once()
-                
+
                 # Should fall back to Lanczos upscaling
                 mock_pil_image.resize.assert_called()
 
@@ -717,9 +717,9 @@ class TestImageWriter:
         # Disable face restoration
         processing_context.config.output.image.face_restoration_enabled = False
         processing_context.config.output.image.resize = 512
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create test image and face detection
         test_image = np.zeros((1080, 1920, 3), dtype=np.uint8)
         face_detection = FaceDetection(
@@ -727,18 +727,18 @@ class TestImageWriter:
             confidence=0.9,
             landmarks=[]
         )
-        
+
         # Mock PIL Image operations
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
-        
+
         with patch('numpy.array', return_value=np.ones((256, 256, 3), dtype=np.uint8) * 64):
-            result = writer._crop_face(test_image, face_detection)
-            
+            writer._crop_face(test_image, face_detection)
+
             # Should use Lanczos upscaling directly
             mock_pil_image.resize.assert_called()
-            
+
             # Should not attempt to get face restorer
             assert writer._get_face_restorer() is None
 
@@ -746,37 +746,37 @@ class TestImageWriter:
         """Test that face restoration strength parameter is properly validated."""
         # Enable face restoration with various strength values
         processing_context.config.output.image.face_restoration_enabled = True
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Test various strength values are passed correctly
         test_strengths = [0.0, 0.5, 0.8, 1.0]
-        
+
         # Mock the FaceRestorer class directly to avoid heavy model loading
         with patch('personfromvid.models.face_restorer.create_face_restorer') as mock_create_restorer:
             mock_restorer = Mock()
             mock_restorer.restore_face.return_value = np.ones((512, 512, 3), dtype=np.uint8)
             mock_create_restorer.return_value = mock_restorer
-            
+
             for strength in test_strengths:
                 processing_context.config.output.image.face_restoration_strength = strength
                 mock_restorer.reset_mock()  # Clear previous calls
-                
+
                 # Reset face restorer initialization to test each strength value
                 writer.image_processor._face_restorer_initialized = False
                 writer.image_processor._face_restorer = None
-                
+
                 # Get the face restorer (triggers initialization)
                 restorer = writer.image_processor._get_face_restorer()
                 assert restorer is mock_restorer
-                
+
                 # Simulate calling restore_face with current config
                 restorer.restore_face(
                     image=np.zeros((100, 100, 3), dtype=np.uint8),
                     target_size=512,
                     strength=processing_context.config.output.image.face_restoration_strength
                 )
-                
+
                 # Verify restore_face was called with the correct strength
                 mock_restorer.restore_face.assert_called_once()
                 call_args = mock_restorer.restore_face.call_args
@@ -788,24 +788,24 @@ class TestImageWriter:
         # Enable face restoration
         processing_context.config.output.image.face_restoration_enabled = True
         processing_context.config.output.image.resize = 256  # Smaller than default 512
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create small test image that needs upscaling
         test_image = np.zeros((100, 150, 3), dtype=np.uint8)  # 100x150 image
-        
+
         # Mock PIL Image operations
         mock_pil_image = Mock()
         mock_fromarray.return_value = mock_pil_image
         mock_pil_image.resize.return_value = mock_pil_image
-        
+
         # Mock FaceRestorer
         mock_restorer = Mock()
         mock_restorer.restore_face.return_value = np.ones((256, 256, 3), dtype=np.uint8)
-        
+
         with patch.object(writer.image_processor, '_get_face_restorer', return_value=mock_restorer):
             writer.image_processor.crop_and_resize(test_image, (0, 0, 100, 150), 0.0, use_face_restoration=True)
-            
+
             # Should call restore_face with target_size = max(resize_config, max(crop_width, crop_height))
             # In this case: max(256, max(100, 150)) = max(256, 150) = 256
             mock_restorer.restore_face.assert_called_once()
@@ -816,20 +816,20 @@ class TestImageWriter:
         """Test that face restoration is not applied to pose crops."""
         # Enable face restoration
         processing_context.config.output.image.face_restoration_enabled = True
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create test image for pose crop
         test_image = np.zeros((200, 200, 3), dtype=np.uint8)  # Small image that would need upscaling
-        
+
         # Mock FaceRestorer
         mock_restorer = Mock()
-        
+
         with patch.object(writer.image_processor, '_get_face_restorer', return_value=mock_restorer):
             with patch('personfromvid.output.image_processor.Image.fromarray'):
                 # Call crop_and_resize without use_face_restoration flag (default False for pose crops)
                 writer.image_processor.crop_and_resize(test_image, (0, 0, 200, 200), 0.1, use_face_restoration=False)
-                
+
                 # Should NOT call face restoration
                 mock_restorer.restore_face.assert_not_called()
 
@@ -838,22 +838,22 @@ class TestImageWriter:
         # Enable face restoration
         processing_context.config.output.image.face_restoration_enabled = True
         processing_context.config.output.image.resize = 256
-        
+
         writer = ImageWriter(context=processing_context)
-        
+
         # Create large test image that doesn't need upscaling
         test_image = np.zeros((600, 800, 3), dtype=np.uint8)  # Large image (both dimensions > 256)
-        
+
         # Mock FaceRestorer
         mock_restorer = Mock()
-        
+
         with patch.object(writer.image_processor, '_get_face_restorer', return_value=mock_restorer):
             result = writer.image_processor.crop_and_resize(test_image, (0, 0, 600, 800), 0.0, use_face_restoration=True)
-            
+
             # Should NOT call face restoration since no upscaling is needed
             # (both dimensions 600 and 800 are >= 256)
             mock_restorer.restore_face.assert_not_called()
-            
+
             # Should return some cropped image (exact content doesn't matter for this test)
             assert result is not None
             # Just verify it's a valid result, dimensions may be altered by existing resize logic
@@ -862,7 +862,7 @@ class TestImageWriter:
         """Test that face restoration configuration is properly validated."""
         # Test that configuration includes face restoration fields
         config = processing_context.config.output.image
-        
+
         # Should have face restoration fields with proper defaults
         assert hasattr(config, 'face_restoration_enabled')
         assert hasattr(config, 'face_restoration_strength')
@@ -1002,7 +1002,7 @@ class TestOutputGenerationStep:
         # Person with face and body should generate multiple outputs (face crop + body crop + full frame)
         mock_image_writer.save_person_outputs.return_value = [
             "/test/output/person_0_face.jpg",
-            "/test/output/person_0_standing_crop.jpg", 
+            "/test/output/person_0_standing_crop.jpg",
             "/test/output/person_0_standing_full.jpg"
         ]
         mock_image_writer_class.return_value = mock_image_writer

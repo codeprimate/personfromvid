@@ -4,17 +4,18 @@ These tests verify end-to-end functionality including real model downloads,
 device management, and complete restoration workflows.
 """
 
-import unittest
-from unittest.mock import Mock, patch
-import numpy as np
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
 
-from personfromvid.models.face_restorer import FaceRestorer, create_face_restorer
-from personfromvid.models.model_manager import ModelManager
-from personfromvid.models.model_configs import ModelConfigs
+import numpy as np
+
 from personfromvid.data.config import DeviceType, get_default_config
+from personfromvid.models.face_restorer import FaceRestorer, create_face_restorer
+from personfromvid.models.model_configs import ModelConfigs
+from personfromvid.models.model_manager import ModelManager
 from personfromvid.utils.exceptions import FaceRestorationError
 
 
@@ -25,7 +26,7 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         """Set up test fixtures with temporary cache directory."""
         self.temp_dir = Path(tempfile.mkdtemp())
         self.model_manager = ModelManager(cache_dir=self.temp_dir)
-        
+
         # Create test image data
         self.test_image = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
 
@@ -40,11 +41,11 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         model_config = ModelConfigs.get_model("gfpgan_v1_4")
         self.assertIsNotNone(model_config)
         self.assertEqual(model_config.name, "gfpgan_v1_4")
-        
+
         # Verify device support
         self.assertTrue(model_config.is_device_supported(DeviceType.CPU))
         self.assertTrue(model_config.is_device_supported(DeviceType.GPU))
-        
+
         # Verify model files configuration
         self.assertEqual(len(model_config.files), 1)
         model_file = model_config.files[0]
@@ -56,16 +57,16 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         """Test FaceRestorer initialization integrates with model management system."""
         # Arrange
         mock_get_manager.return_value = self.model_manager
-        
+
         # Mock model path to avoid actual download
         mock_model_path = self.temp_dir / "gfpgan_v1_4" / "GFPGANv1.4.pth"
         mock_model_path.parent.mkdir(parents=True)
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             # Act
             restorer = FaceRestorer(model_name="gfpgan_v1_4", device="cpu")
-            
+
             # Assert
             self.assertEqual(restorer.model_name, "gfpgan_v1_4")
             self.assertEqual(restorer.device, "cpu")
@@ -79,16 +80,16 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         mock_get_manager.return_value = self.model_manager
         mock_model_path = self.temp_dir / "model.pth"
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             # Test CPU device
             restorer_cpu = FaceRestorer(device="cpu")
             self.assertEqual(restorer_cpu.device, "cpu")
-            
+
             # Test CUDA device (should work regardless of actual CUDA availability)
             restorer_cuda = FaceRestorer(device="cuda")
             self.assertEqual(restorer_cuda.device, "cuda")
-            
+
             # Test AUTO device resolution
             restorer_auto = FaceRestorer(device="auto")
             self.assertIn(restorer_auto.device, ["cpu", "cuda"])
@@ -98,19 +99,19 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         """Test FaceRestorer error handling in integration scenarios."""
         # Arrange
         mock_get_manager.return_value = self.model_manager
-        
+
         # Test unknown model error
         with self.assertRaises(FaceRestorationError) as context:
             FaceRestorer(model_name="unknown_model")
         self.assertIn("Unknown face restoration model", str(context.exception))
-        
+
         # Test model path handling
         mock_model_path = self.temp_dir / "model.pth"
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             restorer = FaceRestorer()
-            
+
             # Test restore_face error handling
             with self.assertRaises(FaceRestorationError):
                 restorer.restore_face(None, 512)
@@ -122,16 +123,16 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         mock_get_manager.return_value = self.model_manager
         mock_model_path = self.temp_dir / "model.pth"
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             restorer = FaceRestorer()
-            
+
             # Mock _load_model to simulate GFPGAN failure
             restorer._load_model = Mock(side_effect=Exception("Model loading failed"))
-            
+
             # Test that fallback works
             result = restorer.restore_face(self.test_image, target_size=128, strength=0.8)
-            
+
             # Should return resized image without crashing
             self.assertIsInstance(result, np.ndarray)
             self.assertEqual(result.shape[:2], (128, 128))
@@ -142,9 +143,9 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         with patch('personfromvid.models.face_restorer.FaceRestorer') as mock_restorer:
             mock_instance = Mock()
             mock_restorer.return_value = mock_instance
-            
+
             result = create_face_restorer()
-            
+
             mock_restorer.assert_called_once_with(
                 model_name="gfpgan_v1_4",
                 device="auto",
@@ -159,20 +160,20 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         mock_get_manager.return_value = self.model_manager
         mock_model_path = self.temp_dir / "model.pth"
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             restorer = FaceRestorer(model_name="gfpgan_v1_4", device="cpu")
-            
+
             # Act
             info = restorer.get_model_info()
-            
+
             # Assert
             self.assertEqual(info["model_name"], "gfpgan_v1_4")
             self.assertEqual(info["device"], "cpu")
             self.assertIn("model_path", info)
             self.assertIn("model_config", info)
             self.assertFalse(info["model_loaded"])  # Not loaded yet
-            
+
             # Verify model config info
             model_config_info = info["model_config"]
             self.assertIn("supported_devices", model_config_info)
@@ -185,21 +186,21 @@ class TestFaceRestorerIntegration(unittest.TestCase):
         mock_get_manager.return_value = self.model_manager
         mock_model_path = self.temp_dir / "model.pth"
         mock_model_path.touch()
-        
+
         with patch.object(self.model_manager, 'ensure_model_available', return_value=mock_model_path):
             # Create and destroy restorer to test cleanup
             restorer = FaceRestorer(device="cpu")
-            
+
             # Mock the cleanup behavior
             with patch('torch.cuda.empty_cache') as mock_empty_cache:
                 # Test CPU cleanup (should not call CUDA cleanup)
                 del restorer
                 mock_empty_cache.assert_not_called()
-            
+
             # Test GPU cleanup
             restorer_gpu = FaceRestorer(device="cuda")
             restorer_gpu._gfpgan_restorer = Mock()  # Simulate loaded model
-            
+
             with patch('torch.cuda.empty_cache') as mock_empty_cache:
                 del restorer_gpu
                 # Cleanup is called in __del__, but might not be immediate
@@ -212,16 +213,16 @@ class TestFaceRestorerConfigurationIntegration(unittest.TestCase):
         """Test FaceRestorer with real application configuration."""
         # Get real default config
         config = get_default_config()
-        
+
         # Test that FaceRestorer can use real config
         with patch('personfromvid.models.face_restorer.get_model_manager') as mock_get_manager:
             mock_manager = Mock()
             mock_model_path = Path("/mock/model.pth")
             mock_manager.ensure_model_available.return_value = mock_model_path
             mock_get_manager.return_value = mock_manager
-            
+
             restorer = FaceRestorer(config=config)
-            
+
             self.assertEqual(restorer.config, config)
             self.assertIsNotNone(restorer.model_config)
 
@@ -229,13 +230,13 @@ class TestFaceRestorerConfigurationIntegration(unittest.TestCase):
         """Test FaceRestorer device type compatibility with config system."""
         # Test DeviceType enum compatibility
         model_config = ModelConfigs.get_model("gfpgan_v1_4")
-        
+
         # Verify CPU support
         self.assertTrue(model_config.is_device_supported(DeviceType.CPU))
-        
+
         # Verify GPU support
         self.assertTrue(model_config.is_device_supported(DeviceType.GPU))
-        
+
         # Verify supported devices list
         supported_devices = model_config.supported_devices
         self.assertIn(DeviceType.CPU, supported_devices)
@@ -243,4 +244,4 @@ class TestFaceRestorerConfigurationIntegration(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

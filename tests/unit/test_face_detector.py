@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
+from personfromvid.data.config import Config
 from personfromvid.data.detection_results import FaceDetection
 from personfromvid.models.face_detector import (
     DEFAULT_CONFIDENCE_THRESHOLD,
@@ -14,7 +15,6 @@ from personfromvid.models.face_detector import (
 )
 from personfromvid.models.model_configs import ModelFormat
 from personfromvid.utils.exceptions import FaceDetectionError
-from personfromvid.data.config import Config
 
 # Test constants to reduce duplication
 TEST_FACE_MODEL = "scrfd_10g"  # Use actual model name from config
@@ -384,43 +384,43 @@ class TestFaceDetector:
         """Test that faces with cut-off chins are rejected."""
         # Image dimensions
         image_shape = (1080, 1920)  # height, width
-        
+
         # Face detection near bottom edge (chin likely cut off)
         face_near_bottom = FaceDetection(
             bbox=(500, 950, 700, 1070),  # Bottom at y=1070, close to frame bottom (1080)
             confidence=0.9,
             landmarks=None
         )
-        
+
         # This should be rejected due to being too close to bottom edge
         assert not mock_detector.validate_face_detection(face_near_bottom, image_shape)
 
     def test_face_completeness_validation_with_landmarks(self, mock_detector):
         """Test face completeness validation using landmark-based chin estimation."""
         image_shape = (1080, 1920)
-        
+
         # Face with landmarks where estimated chin would be cut off
         landmarks = [
             (600, 400),  # left_eye
-            (700, 400),  # right_eye  
+            (700, 400),  # right_eye
             (650, 450),  # nose
             (620, 500),  # left_mouth
             (680, 500),  # right_mouth
         ]
-        
+
         # Eye-to-mouth distance: 500 - 400 = 100 pixels
         # Estimated chin: 500 + (100 * 1.4) = 640 pixels
         # With chin_margin (15): 640 + 15 = 655 pixels
         # Since frame height is 1080, this should pass
-        
+
         face_with_safe_chin = FaceDetection(
             bbox=(550, 350, 750, 650),
             confidence=0.9,
             landmarks=landmarks
         )
-        
+
         assert mock_detector.validate_face_detection(face_with_safe_chin, image_shape)
-        
+
         # Now test with face positioned so chin would be cut off
         landmarks_cutoff = [
             (600, 900),  # left_eye (moved down)
@@ -429,37 +429,37 @@ class TestFaceDetector:
             (620, 1000), # left_mouth
             (680, 1000), # right_mouth
         ]
-        
+
         # Eye-to-mouth distance: 1000 - 900 = 100 pixels
         # Estimated chin: 1000 + (100 * 1.4) = 1140 pixels
         # With chin_margin (15): 1140 + 15 = 1155 pixels
         # Since frame height is only 1080, this should be rejected
-        
+
         face_with_cutoff_chin = FaceDetection(
             bbox=(550, 850, 750, 1070),
             confidence=0.9,
             landmarks=landmarks_cutoff
         )
-        
+
         assert not mock_detector.validate_face_detection(face_with_cutoff_chin, image_shape)
 
     def test_face_completeness_can_be_disabled(self, config):
         """Test that face completeness checking can be disabled via configuration."""
         # Disable face completeness checking
         config.models.require_complete_faces = False
-        
+
         detector = FaceDetector("yolov8s-face", config=config)
         detector._model = "mocked_model"
-        
+
         image_shape = (1080, 1920)
-        
+
         # Face that would normally be rejected for being at edge
         face_at_edge = FaceDetection(
             bbox=(500, 950, 700, 1080),  # Extends to very bottom of frame
             confidence=0.9,
             landmarks=None
         )
-        
+
         # Should pass validation when completeness checking is disabled
         assert detector.validate_face_detection(face_at_edge, image_shape)
 
@@ -467,48 +467,48 @@ class TestFaceDetector:
         """Test that edge thresholds are configurable."""
         # Set a larger edge threshold
         config.models.face_edge_threshold = 50
-        
+
         detector = FaceDetector("yolov8s-face", config=config)
         detector._model = "mocked_model"
-        
+
         image_shape = (1080, 1920)
-        
+
         # Face that would pass with default threshold (10) but fail with larger threshold (50)
         face_near_edge = FaceDetection(
             bbox=(500, 950, 700, 1040),  # 40 pixels from bottom edge
             confidence=0.9,
             landmarks=None
         )
-        
+
         # Should be rejected with larger threshold
         assert not detector.validate_face_detection(face_near_edge, image_shape)
 
     def test_face_side_edges_validation(self, mock_detector):
         """Test that faces cut off at side edges are also rejected."""
         image_shape = (1080, 1920)
-        
+
         # Face extending to left edge
         face_left_edge = FaceDetection(
             bbox=(0, 400, 200, 600),  # Starts at x=0 (left edge)
             confidence=0.9,
             landmarks=None
         )
-        
+
         assert not mock_detector.validate_face_detection(face_left_edge, image_shape)
-        
-        # Face extending to right edge  
+
+        # Face extending to right edge
         face_right_edge = FaceDetection(
             bbox=(1720, 400, 1920, 600),  # Ends at x=1920 (right edge)
             confidence=0.9,
             landmarks=None
         )
-        
+
         assert not mock_detector.validate_face_detection(face_right_edge, image_shape)
 
     def test_complete_face_validation_passes(self, mock_detector):
         """Test that complete faces pass validation."""
         image_shape = (1080, 1920)
-        
+
         # Well-positioned face with adequate margins
         complete_face = FaceDetection(
             bbox=(500, 300, 700, 500),
@@ -521,7 +521,7 @@ class TestFaceDetector:
                 (630, 450),  # right_mouth
             ]
         )
-        
+
         assert mock_detector.validate_face_detection(complete_face, image_shape)
 
 

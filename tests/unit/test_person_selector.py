@@ -251,7 +251,7 @@ class TestPersonSelector:
         assert len(selections) == 3  # Should select up to max limit when temporal diversity disabled
         assert len([s for s in selections if s.category == "minimum"]) == 2  # First 2 are minimum
         assert len([s for s in selections if s.category == "additional"]) == 1  # Third is additional
-        
+
         # Should be ordered by quality (descending)
         assert selections[0].selection_score == 0.9  # Best quality
         assert selections[1].selection_score == 0.8  # Second best
@@ -273,7 +273,7 @@ class TestPersonSelector:
             self._create_person_candidate(0, 0, 0.9, 0.0),   # Best quality, first
             self._create_person_candidate(1, 0, 0.8, 2.0),   # Too close to first (within 5s)
             self._create_person_candidate(2, 0, 0.7, 6.0),   # Good gap from first
-            self._create_person_candidate(3, 0, 0.6, 8.0),   # Too close to second (within 5s) 
+            self._create_person_candidate(3, 0, 0.6, 8.0),   # Too close to second (within 5s)
             self._create_person_candidate(4, 0, 0.5, 12.0),  # Good gap from second
         ]
 
@@ -283,7 +283,7 @@ class TestPersonSelector:
         assert len(selections) == 3  # Candidates 0, 2, and 4
         selected_frame_ids = [int(s.frame_data.frame_id) for s in selections]
         assert selected_frame_ids == [0, 2, 4]
-        
+
         # Verify timestamps have sufficient diversity
         timestamps = [s.timestamp for s in selections]
         for i in range(len(timestamps)):
@@ -428,11 +428,11 @@ class TestPersonSelector:
         person.person_id = person_id
         person.quality = Mock()
         person.quality.overall_quality = quality_score
-        
+
         # Configure body attribute to avoid AttributeError
         person.body = Mock()
         person.body.pose_classifications = [("standing", 0.9)]  # Default pose
-        
+
         # Configure head_pose attribute to avoid AttributeError
         person.head_pose = Mock()
         person.head_pose.direction = "front"  # Default direction

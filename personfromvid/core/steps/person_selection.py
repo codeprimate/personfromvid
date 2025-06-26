@@ -21,13 +21,13 @@ class PersonSelectionStep(PipelineStep):
 
     def execute(self) -> None:
         """Select best person instances based on positional identity and quality."""
-        self.state.start_step(self.step_name)
+        self._state.start_step(self.step_name)
 
         try:
             # Filter candidate frames: must have persons AND quality metrics (following FrameSelectionStep pattern)
             candidate_frames = [
                 f
-                for f in self.state.frames
+                for f in self._state.frames
                 if hasattr(f, "persons") and f.persons and f.quality_metrics is not None
             ]
 
@@ -40,7 +40,7 @@ class PersonSelectionStep(PipelineStep):
                     self.logger.warning(
                         "⚠️ No frames with persons and quality assessments for selection"
                     )
-                self.state.get_step_progress(self.step_name).start(0)
+                self._state.get_step_progress(self.step_name).start(0)
                 return
 
             # Count total person candidates across all frames
@@ -57,7 +57,7 @@ class PersonSelectionStep(PipelineStep):
 
             # Create PersonSelector with configuration from pipeline config
             person_selector = PersonSelector(self.config.person_selection)
-            self.state.get_step_progress(self.step_name).start(total_person_candidates)
+            self._state.get_step_progress(self.step_name).start(total_person_candidates)
 
             current_progress = 0
 
@@ -66,7 +66,7 @@ class PersonSelectionStep(PipelineStep):
                 self._check_interrupted()
                 # Update progress based on person candidates processed
                 current_progress = min(current_progress + 1, total_person_candidates)
-                self.state.update_step_progress(self.step_name, current_progress)
+                self._state.update_step_progress(self.step_name, current_progress)
                 if self.formatter:
                     self.formatter.update_progress(1)
 
@@ -77,12 +77,14 @@ class PersonSelectionStep(PipelineStep):
                 ):
                     selected_persons = person_selector.select_persons(candidate_frames)
                     # Mark progress as complete
-                    self.state.update_step_progress(
+                    self._state.update_step_progress(
                         self.step_name, total_person_candidates
                     )
             else:
                 selected_persons = person_selector.select_persons(candidate_frames)
-                self.state.update_step_progress(self.step_name, total_person_candidates)
+                self._state.update_step_progress(
+                    self.step_name, total_person_candidates
+                )
 
             # Store detailed results and summary statistics
             self._store_selection_results(selected_persons, total_person_candidates)
@@ -90,7 +92,7 @@ class PersonSelectionStep(PipelineStep):
 
         except Exception as e:
             self.logger.error(f"❌ Person selection failed: {e}")
-            self.state.fail_step(self.step_name, str(e))
+            self._state.fail_step(self.step_name, str(e))
             raise
 
     def _store_selection_results(
@@ -147,7 +149,7 @@ class PersonSelectionStep(PipelineStep):
                 }
 
         # Store detailed selection data in pipeline state
-        self.state.get_step_progress(self.step_name).set_data(
+        self._state.get_step_progress(self.step_name).set_data(
             "person_selections", person_selections
         )
 
@@ -162,7 +164,7 @@ class PersonSelectionStep(PipelineStep):
             }
             for ps in selected_persons
         ]
-        self.state.get_step_progress(self.step_name).set_data(
+        self._state.get_step_progress(self.step_name).set_data(
             ALL_SELECTED_PERSONS_KEY, serializable_persons
         )
 
@@ -211,7 +213,7 @@ class PersonSelectionStep(PipelineStep):
                 ),
             }
 
-            self.state.get_step_progress(self.step_name).set_data(
+            self._state.get_step_progress(self.step_name).set_data(
                 "step_results", results
             )
         else:
