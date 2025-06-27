@@ -724,7 +724,7 @@ def test_face_restoration_config_serialization():
         face_restoration_enabled=False,
         face_restoration_strength=0.3,
         face_crop_enabled=True,
-        format="jpeg"
+        format="jpg"
     )
 
     # Test model_dump (Pydantic v2)
@@ -783,14 +783,14 @@ def test_face_restoration_config_custom_values():
 
     assert config.output.image.face_restoration_enabled is False
     assert config.output.image.face_restoration_strength == 0.2
-    assert config.output.image.format == "png"
+    assert config.output.image.format == "png"  # This test explicitly sets format to png
 
 
 def test_face_restoration_config_backward_compatibility():
     """Test that face restoration configuration maintains backward compatibility."""
     # Test that existing configurations without face restoration fields work
     legacy_config_data = {
-        "format": "jpeg",
+        "format": "jpg",
         "face_crop_enabled": True,
         "face_crop_padding": 0.15,
         "enable_pose_cropping": False,
@@ -801,7 +801,7 @@ def test_face_restoration_config_backward_compatibility():
     config = OutputImageConfig(**legacy_config_data)
     assert config.face_restoration_enabled is False  # Default
     assert config.face_restoration_strength == 0.8  # Default
-    assert config.format == "jpeg"  # Preserved
+    assert config.format == "jpg"  # Preserved
     assert config.resize == 1024  # Preserved
 
 

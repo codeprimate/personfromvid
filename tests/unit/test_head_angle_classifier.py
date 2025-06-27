@@ -31,7 +31,7 @@ class TestHeadAngleClassifier:
             height=1080,
             channels=3,
             file_size_bytes=1000000,
-            format="JPEG"
+            format="JPG"
         )
 
     def create_head_pose_result(self, yaw, pitch, roll, confidence=0.9):

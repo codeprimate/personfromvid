@@ -2,26 +2,27 @@
 
 [![PyPI version](https://badge.fury.io/py/personfromvid.svg)](https://badge.fury.io/py/personfromvid) [![Python versions](https://img.shields.io/pypi/pyversions/personfromvid.svg)](https://pypi.org/project/personfromvid) [![License: GPL-3.0-or-later](https://img.shields.io/pypi/l/personfromvid.svg)](https://github.com/personfromvid/personfromvid/blob/main/LICENSE)
 
-AI-powered video frame extraction and pose categorization tool that analyzes video files to identify and extract high-quality frames containing people in specific poses and head orientations.
+AI-powered video frame extraction and pose categorization tool designed for creating high-quality training datasets. Analyzes video files to identify and extract consistent, well-posed frames containing people - perfect for LoRA training, face datasets, and machine learning applications.
 
 ## Features
 
-- 🎥 **Video Analysis**: Supports multiple video formats (MP4, AVI, MOV, MKV, WebM, etc.).
-- 🤖 **AI-Powered Detection**: Uses state-of-the-art models for face detection (`yolov8s-face`), pose estimation (`yolov8s-pose`), and head pose analysis (`sixdrepnet`).
-- 🧠 **Smart Frame Selection**:
-    - **Keyframe Detection**: Prioritizes information-rich I-frames.
-    - **Temporal Sampling**: Extracts frames at regular intervals to ensure coverage.
-    - **Deduplication**: Avoids saving visually similar frames.
-- 📐 **Pose & Shot Classification**:
-    - Automatically categorizes poses into **standing, sitting, and squatting**.
-    - Classifies shot types like **closeup, medium shot, and full body**.
-- 👤 **Head Orientation**: Classifies head directions into 9 cardinal orientations (front, profile, looking up/down, etc.).
-- 🖼️ **Advanced Quality Assessment**: Uses multiple metrics like blur, brightness, and contrast to select the sharpest, best-lit frames.
-- ✨ **AI-Powered Face Restoration**: GFPGAN face-specific enhancement for face crops with configurable strength control and automatic fallback.
-- ⚡ **GPU Acceleration**: Optional CUDA/MPS support for significantly faster processing.
-- 📊 **Rich Progress Tracking**: Modern console interface with real-time progress displays and detailed status.
-- 🔄 **Resumable Processing**: Automatically saves progress and resumes interrupted sessions (use `--force` to restart from scratch).
-- ⚙️ **Highly Configurable**: Extensive configuration options via CLI, YAML files, or environment variables.
+### 🎯 Dataset Creation Focused
+- 📐 **Consistent Crop Formats**: Generate uniform square (1:1), portrait (4:3), or widescreen (16:9) crops perfect for ML training
+- ✨ **AI-Powered Face Restoration**: GFPGAN enhancement automatically improves face quality in your dataset
+- 🔄 **Resumable Batch Processing**: Process hundreds of videos reliably - interruptions automatically resume where they left off
+- 📊 **Quality-Filtered Output**: Only saves high-quality, well-posed frames using advanced blur, brightness, and contrast metrics
+
+### 🤖 Advanced AI Analysis
+- 🎥 **Multi-Format Video Support**: Works with MP4, AVI, MOV, MKV, WebM, and more
+- 🧠 **Intelligent Detection**: Uses state-of-the-art models for face detection (`yolov8s-face`), pose estimation (`yolov8s-pose`), and head pose analysis (`sixdrepnet`)
+- 📐 **Pose & Shot Classification**: Automatically categorizes poses (standing, sitting, squatting) and shot types (closeup, medium shot, full body)
+- 👤 **Head Orientation Analysis**: Classifies head directions into 9 cardinal orientations (front, profile, looking up/down, etc.)
+
+### ⚡ Performance & Workflow
+- 🚀 **GPU Acceleration**: Optional CUDA/MPS support for significantly faster processing of large datasets
+- 🧠 **Smart Frame Selection**: Keyframe detection, temporal sampling, and deduplication ensure diverse, high-quality results
+- 📊 **Rich Progress Tracking**: Modern console interface with real-time progress displays
+- ⚙️ **Highly Configurable**: Extensive configuration options via CLI, YAML files, or environment variables
 
 ## Installation
 
@@ -69,73 +70,172 @@ pip install -e .
 
 ## Quick Start
 
+```bash
+# Standard square crops
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration
+
+# Specific resolution
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --resize 512 --output-dir ./dataset
+
+# Portrait-oriented crops with enhanced faces
+personfromvid video.mp4 --crop-ratio 4:3 --face-restoration --resize 768
+
+# Batch processing multiple videos to the same dataset directory
+personfromvid video1.mp4 --crop-ratio 1:1 --face-restoration --output-dir ./my_dataset
+personfromvid video2.mp4 --crop-ratio 1:1 --face-restoration --output-dir ./my_dataset
+personfromvid video3.mp4 --crop-ratio 1:1 --face-restoration --output-dir ./my_dataset
+```
+
+### Resume & Processing Control
+
+```bash
+# Normal processing automatically resumes from where it left off
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration
+
+# Force restart from beginning (clears previous state)
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --force
+
+# Keep extracted frames and data files between runs (useful for incremental processing)
+personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --keep-temp
+```
+
+**💡 Pro Tips for Dataset Creation:**
+- Use `--crop-ratio 1:1` for square crops (most compatible with ML models)
+- Enable `--face-restoration` for higher quality faces in your dataset
+- Set `--resize 512` or `--resize 768` for consistent resolutions
+- Processing is **resumable** - interrupted sessions automatically continue where they left off
+- Use `--force` to restart processing from the beginning when needed
+
 ### Basic Usage
 
 ```bash
-# Process a video file, saving results to the same directory
+# Simple processing (saves to video's directory)
 personfromvid video.mp4
 
-# Specify a different output directory
+# Specify output directory
 personfromvid video.mp4 --output-dir ./extracted_frames
 
-# Enable verbose logging for detailed information
-personfromvid video.mp4 --verbose
-
-# Use GPU for faster processing (if available)
+# Use GPU for faster processing (recommended for large datasets)
 personfromvid video.mp4 --device gpu
+
+# Verbose output for monitoring progress
+personfromvid video.mp4 --verbose
 ```
 
-### Advanced Usage
+### Advanced Crop Options
 
 ```bash
-# High-quality processing with custom settings
-personfromvid video.mp4 \
-    --output-dir ./custom_output \
-    --output-jpeg-quality 98 \
-    --confidence 0.5 \
-    --batch-size 16 \
-    --max-frames 1000
-
-# Resize output images to a maximum of 1024 pixels
-personfromvid video.mp4 --resize 1024
-
-# Generate square crops (1:1 aspect ratio)
-personfromvid video.mp4 --crop-ratio 1:1
-
-# Generate widescreen crops (16:9 aspect ratio) with custom output directory
-personfromvid video.mp4 --crop-ratio 16:9 --output-dir ./widescreen_crops
-
-# Generate portrait crops (4:3) with custom padding and full frames
-personfromvid video.mp4 --crop-ratio 4:3 --crop-padding 0.3 --full-frames
-
-# Generate variable aspect ratio crops (preserve natural proportions)
+# Variable aspect ratio crops (preserve natural proportions)
 personfromvid video.mp4 --crop-ratio any --crop-padding 0.2
 
-# Combine fixed aspect ratio with face restoration and resizing
-personfromvid video.mp4 --crop-ratio 1:1 --face-restoration --resize 512
+# Widescreen crops with full frames included
+personfromvid video.mp4 --crop-ratio 16:9 --full-frames --output-dir ./widescreen
+
+# Custom padding and high-quality output
+personfromvid video.mp4 --crop-ratio 1:1 --crop-padding 0.3 --output-jpg-quality 98
+
+# Large dataset processing with limits
+personfromvid video.mp4 \
+    --crop-ratio 1:1 \
+    --face-restoration \
+    --max-frames 1000 \
+    --batch-size 16 \
+    --device gpu
 ```
 
 **Crop Ratio Options:**
-- **Fixed ratios** (e.g., `1:1`, `16:9`, `4:3`): Enforces uniform aspect ratios, ideal for consistent layouts or specific display requirements
-- **`any`**: Preserves natural proportions while applying padding, best for maintaining original subject composition
+- **`1:1`** (square): Most common for ML training, ensures consistent dimensions
+- **`16:9`** (widescreen): Good for cinematic shots, wider context
+- **`4:3`** (portrait): Better for full-body poses, traditional aspect ratio
+- **`any`**: Preserves natural proportions while applying padding
 - **Omit `--crop-ratio`**: No cropping, outputs full frames only
 
+### Processing Control
+
 ```bash
-
-# Enable face restoration with custom strength (0.0-1.0)
-personfromvid video.mp4 --face-restoration --face-restoration-strength 0.9
-
-# Disable face restoration for faster processing
-personfromvid video.mp4 --no-face-restoration
-
 # Force restart processing (clears previous state)
 personfromvid video.mp4 --force
 
 # Keep temporary files for debugging
 personfromvid video.mp4 --keep-temp
 
-# Disable structured output (use basic logging)
-personfromvid video.mp4 --no-structured-output
+# Disable face restoration for faster processing
+personfromvid video.mp4 --no-face-restoration
+
+# Custom face restoration strength (0.0-1.0)
+personfromvid video.mp4 --face-restoration --face-restoration-strength 0.9
+```
+
+## Batch Processing Workflows
+
+### Creating Large Datasets
+
+For processing multiple videos with consistent settings, create a simple script or use shell commands:
+
+```bash
+# Process all MP4 files in a directory to create a unified dataset
+for video in *.mp4; do
+    personfromvid "$video" \
+        --crop-ratio 1:1 \
+        --face-restoration \
+        --resize 512 \
+        --output-format jpg \
+        --output-dir ./training_dataset
+done
+
+# Or using find for recursive processing
+find ./videos -name "*.mp4" -exec personfromvid {} \
+    --crop-ratio 1:1 \
+    --face-restoration \
+    --output-dir ./dataset \
+    --device gpu \;
+```
+
+### Configuration File Approach
+
+For consistent settings across multiple runs, use a configuration file:
+
+```yaml
+# dataset_config.yaml
+output:
+  image:
+    format: "jpg"
+    jpg:
+      quality: 95
+    crop_ratio: "1:1"
+    face_restoration_enabled: true
+    resize: 512
+models:
+  device: "gpu"
+  batch_size: 8
+```
+
+Then process videos:
+```bash
+personfromvid video1.mp4 --config dataset_config.yaml --output-dir ./dataset
+personfromvid video2.mp4 --config dataset_config.yaml --output-dir ./dataset
+personfromvid video3.mp4 --config dataset_config.yaml --output-dir ./dataset
+```
+
+### Quality Control and Dataset Curation
+
+```bash
+# High-quality settings for final dataset
+personfromvid video.mp4 \
+    --crop-ratio 1:1 \
+    --face-restoration \
+    --resize 768 \
+    --output-jpg-quality 98 \
+    --quality-threshold 0.4 \
+    --confidence 0.5 \
+    --max-frames-per-category 8
+
+# Quick preview with lower quality for initial review
+personfromvid video.mp4 \
+    --crop-ratio 1:1 \
+    --resize 256 \
+    --max-frames 50 \
+    --output-dir ./preview
 ```
 
 ## Command-line Options
@@ -169,8 +269,8 @@ personfromvid video.mp4 --no-structured-output
 ### Output Options
 | Option | Description | Default |
 | --- | --- | --- |
-| `--output-format` | Output image format (`jpeg` or `png`). | `png` |
-| `--output-jpeg-quality` | Quality for JPEG output (70-100). | `95` |
+| `--output-format` | Output image format (`jpg` or `png`). | `jpg` |
+| `--output-jpg-quality` | Quality for JPG output (70-100). | `95` |
 | `--output-face-crop-enabled` / `--no-output-face-crop-enabled` | Enable or disable generation of cropped face images. | `True` |
 | `--output-face-crop-padding` | Padding around face bounding box (0.0-1.0). | `0.3` |
 | `--face-restoration` / `--no-face-restoration` | Enable/disable GFPGAN face restoration for enhanced quality (faster than Real-ESRGAN, optimized for faces). | `False` |
@@ -193,22 +293,44 @@ For a full list of options, run `personfromvid --help`.
 
 ## Output Structure
 
-By default, Person From Vid saves all output files into the same directory as the input video. You can specify a different location with the `--output-dir` option. All files are prefixed with the base name of the video file.
+Person From Vid creates dataset-friendly output with descriptive filenames and organized structure. By default, files are saved to the video's directory, but `--output-dir` lets you create unified datasets from multiple videos.
 
-Here is an example of the output for a video named `interview.mp4`:
+### Example Output for `interview.mp4`:
 
 ```
-interview_info.json                     # Detailed processing metadata and results
-interview_standing_front_closeup_001.jpg  # Full frame: {video}_{pose}_{head}_{shot}_{rank}.jpg
+interview_info.json                         # Processing metadata and frame details
+interview_standing_front_closeup_001.jpg   # Full frame: {video}_{pose}_{head}_{shot}_{rank}
 interview_sitting_profile-left_medium-shot_002.jpg
-interview_face_front_001.jpg              # Face crop: {video}_face_{head-angle}_{rank}.jpg
+interview_face_front_001.jpg               # Face crop: {video}_face_{head-angle}_{rank}
 interview_face_profile-right_002.jpg
+interview_crop_standing_front_001.jpg      # Pose crop: {video}_crop_{pose}_{head}_{rank}
+interview_crop_sitting_profile-left_002.jpg
 ```
 
-- **`{video_base_name}_info.json`**: A detailed JSON file containing the configuration used, video metadata, and data for every selected frame.
-- **Full Frame Images**: The filename captures the detected pose, head orientation, and shot type.
-- **Cropped Face Images**: Saved if `output.image.face_crop_enabled` is `true`. The filename includes head orientation details.
-- **Cropped Pose Images**: Saved if `output.image.enable_pose_cropping` is `true`. A `_crop` suffix is added to the original filename.
+### Dataset-Friendly Organization
+
+When using `--output-dir` for multiple videos, files are naturally organized:
+
+```bash
+# Process multiple videos to the same dataset directory
+personfromvid video1.mp4 --crop-ratio 1:1 --output-dir ./my_dataset
+personfromvid video2.mp4 --crop-ratio 1:1 --output-dir ./my_dataset
+
+# Results in organized dataset:
+my_dataset/
+├── video1_crop_standing_front_001.jpg
+├── video1_crop_sitting_profile-left_002.jpg
+├── video1_face_front_001.jpg
+├── video2_crop_standing_front_001.jpg
+├── video2_crop_sitting_profile-right_002.jpg
+└── video2_face_front_001.jpg
+```
+
+### File Types
+- **`{video}_info.json`**: Processing metadata, configuration, and frame analysis details
+- **Full Frame Images**: Complete frames with pose, head orientation, and shot type in filename
+- **Face Crops**: Cropped and optionally restored faces with head orientation details
+- **Pose Crops**: Body/pose crops with consistent aspect ratios for ML training
 
 ## Configuration
 
@@ -283,9 +405,9 @@ output:
   max_frames_per_category: 5
   preserve_metadata: true
   image:
-    format: "jpeg"
-    jpeg:
-      quality: 98
+    format: "jpg"
+    jpg:
+      quality: 95
     png:
       optimize: true
     face_crop_enabled: true
@@ -429,8 +551,8 @@ python scripts/clean.py
 - MP4, AVI, MOV, MKV, WMV, FLV, WebM, M4V, 3GP, OGV
 
 ### Output Formats
+- JPG images (configurable quality)
 - PNG images (configurable quality)
-- JPEG images (configurable quality)
 - JSON metadata files
 
 ## Cache and Temporary Files

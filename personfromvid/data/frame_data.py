@@ -51,7 +51,7 @@ class ImageProperties:
     height: int
     channels: int
     file_size_bytes: int
-    format: str  # "JPEG", "PNG", etc.
+    format: str  # "JPG", "PNG", etc.
     color_space: str = "RGB"
 
     def __post_init__(self) -> None:
@@ -469,7 +469,7 @@ class FrameData:
             height=image_props_dict.get("height", 0),
             channels=image_props_dict.get("channels", 3),
             file_size_bytes=image_props_dict.get("file_size_bytes", 0),
-            format=image_props_dict.get("format", "JPEG"),
+            format=image_props_dict.get("format", "JPG"),
             color_space=image_props_dict.get("color_space", "RGB"),
         )
 

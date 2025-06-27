@@ -19,7 +19,7 @@ The current implementation in `ImageWriter._crop_region()` applies Lanczos upsca
 7. **CLI Interface**: Provide `--face-restoration/--no-face-restoration` and `--face-restoration-strength` command-line controls
 8. **Fallback Mechanism**: Gracefully fall back to current Lanczos-only processing if Real-ESRGAN fails
 9. **Device Support**: Support both CPU and GPU inference following existing device management patterns
-10. **Output Compatibility**: Maintain full compatibility with existing output formats (PNG/JPEG) and resize configurations
+10. **Output Compatibility**: Maintain full compatibility with existing output formats (PNG/JPG) and resize configurations
 
 ### Technical Constraints
 

@@ -375,7 +375,7 @@ class TestPersonSelector:
             height=480,
             channels=3,
             file_size_bytes=1024,
-            format="JPEG"
+            format="JPG"
         )
 
         frame = FrameData(

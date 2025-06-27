@@ -486,19 +486,19 @@ class TestFrameExtractor:
                 frame_id="frame1",
                 file_path=frame1_path,
                 source_info=SourceInfo(1.0, "i_frame", 30, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             ),
             FrameData(
                 frame_id="frame2",
                 file_path=frame2_path,
                 source_info=SourceInfo(2.0, "temporal_sampling", 60, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             ),
             FrameData(
                 frame_id="frame3",
                 file_path=frame3_path,
                 source_info=SourceInfo(3.0, "i_frame", 90, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             )
         ]
 
@@ -520,7 +520,7 @@ class TestFrameExtractor:
                 frame_id="frame1",
                 file_path=frame_path,
                 source_info=SourceInfo(1.0, "i_frame", 30, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             )
         ]
 
@@ -673,13 +673,13 @@ class TestFrameExtractor:
                 frame_id="frame1",
                 file_path=frame1_path,
                 source_info=SourceInfo(1.0, "i_frame", 30, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             ),
             FrameData(
                 frame_id="frame2",
                 file_path=frame2_path,
                 source_info=SourceInfo(2.0, "temporal_sampling", 60, 30.0),
-                image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+                image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
             )
         ]
 

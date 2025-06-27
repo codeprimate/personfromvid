@@ -41,7 +41,7 @@ def create_test_frame(
         height=1080,
         channels=3,
         file_size_bytes=100000,
-        format="JPEG"
+        format="JPG"
     )
 
     quality_metrics = QualityMetrics(

@@ -175,7 +175,7 @@ class TestFixedRatioCropIntegration:
 
         # Verify output file dimensions
         for output_file in result.output_files:
-            if output_file.exists() and output_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+            if output_file.exists() and output_file.suffix.lower() in ['.jpg', '.jpg', '.png']:
                 with Image.open(output_file) as img:
                     width, height = img.size
 
@@ -211,7 +211,7 @@ class TestFixedRatioCropIntegration:
         if result.success and result.output_files:
             # Verify aspect ratios of generated images
             for output_file in result.output_files:
-                if output_file.exists() and output_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+                if output_file.exists() and output_file.suffix.lower() in ['.jpg', '.jpg', '.png']:
                     with Image.open(output_file) as img:
                         width, height = img.size
                         actual_ratio = width / height

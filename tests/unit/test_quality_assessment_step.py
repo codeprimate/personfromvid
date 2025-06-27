@@ -43,7 +43,7 @@ class TestQualityAssessmentStep:
                 height=480,
                 channels=3,
                 file_size_bytes=100000,
-                format='JPEG'
+                format='JPG'
             )
         )
 

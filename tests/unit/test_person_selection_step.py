@@ -68,7 +68,7 @@ def sample_frames_with_persons():
                 height=1080,
                 channels=3,
                 file_size_bytes=1024000,
-                format="JPEG"
+                format="JPG"
             ),
             quality_metrics=QualityMetrics(
                 laplacian_variance=150.0,
@@ -155,7 +155,7 @@ def test_person_selection_step_no_persons(mock_pipeline):
                 height=1080,
                 channels=3,
                 file_size_bytes=1024000,
-                format="JPEG"
+                format="JPG"
             ),
             quality_metrics=QualityMetrics(
                 laplacian_variance=150.0,
@@ -364,7 +364,7 @@ def test_format_and_log_results_with_formatter(mock_pipeline):
             height=1080,
             channels=3,
             file_size_bytes=1024000,
-            format="JPEG"
+            format="JPG"
         )
     )
     person = Person(

@@ -23,7 +23,7 @@ from pydantic import (
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 0.3
 DEFAULT_BATCH_SIZE = 1
-DEFAULT_JPEG_QUALITY = 95
+DEFAULT_JPG_QUALITY = 95
 
 
 class ModelType(str, Enum):
@@ -385,11 +385,11 @@ class PngConfig(BaseModel):
     )
 
 
-class JpegConfig(BaseModel):
-    """Configuration for JPEG output."""
+class JpgConfig(BaseModel):
+    """Configuration for JPG output."""
 
     quality: int = Field(
-        95, ge=70, le=100, description="Quality for JPEG images (1-100)."
+        95, ge=70, le=100, description="Quality for JPG images (1-100)."
     )
 
 
@@ -397,8 +397,8 @@ class OutputImageConfig(BaseModel):
     """Configuration for output generation."""
 
     format: str = Field(
-        "png",
-        description="The output image format ('png' or 'jpeg'). 'jpg' is used as the extension for 'jpeg'.",
+        "jpg",
+        description="The output image format ('png' or 'jpg'). 'jpg' is used as the extension for 'jpg'.",
     )
     face_crop_enabled: bool = Field(
         default=True,
@@ -446,7 +446,7 @@ class OutputImageConfig(BaseModel):
     )
 
     png: PngConfig = Field(default_factory=PngConfig)
-    jpeg: JpegConfig = Field(default_factory=JpegConfig)
+    jpg: JpgConfig = Field(default_factory=JpgConfig)
 
     @field_validator("crop_ratio", mode="before")
     @classmethod

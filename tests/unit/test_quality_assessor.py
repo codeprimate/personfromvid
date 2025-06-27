@@ -52,7 +52,7 @@ class TestQualityAssessor:
                 height=image.shape[0],
                 channels=image.shape[2] if len(image.shape) == 3 else 1,
                 file_size_bytes=os.path.getsize(temp_path),
-                format='JPEG'
+                format='JPG'
             )
         )
 
@@ -241,7 +241,7 @@ class TestQualityAssessor:
                 height=480,
                 channels=3,
                 file_size_bytes=0,
-                format='JPEG'
+                format='JPG'
             )
         )
 

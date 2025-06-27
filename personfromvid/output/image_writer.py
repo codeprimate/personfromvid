@@ -94,7 +94,7 @@ class ImageWriter:
         output_files = []
         # Determine the correct file extension
         file_format = self.config.format.lower()
-        extension = "jpg" if file_format == "jpeg" else file_format
+        extension = "jpg" if file_format == "jpg" else file_format
 
         try:
             # Load the source image
@@ -214,7 +214,7 @@ class ImageWriter:
 
         # Determine the correct file extension
         file_format = self.config.format.lower()
-        extension = "jpg" if file_format == "jpeg" else file_format
+        extension = "jpg" if file_format == "jpg" else file_format
 
         # Generate rank based on selection score (higher score = lower rank number)
         rank = 1  # For now, use rank 1 - could be enhanced later for multiple selections per person
@@ -478,10 +478,10 @@ class ImageWriter:
                 pil_image.save(
                     output_path, format="PNG", optimize=self.config.png.optimize
                 )
-            elif self.config.format.lower() in ["jpg", "jpeg"]:
-                # JPEG doesn't support transparency, convert RGBA to RGB
+            elif self.config.format.lower() in ["jpg", "jpg"]:
+                # JPG doesn't support transparency, convert RGBA to RGB
                 if pil_image.mode == "RGBA":
-                    # Convert RGBA to RGB with white background for JPEG
+                    # Convert RGBA to RGB with white background for JPG
                     rgb_image = Image.new("RGB", pil_image.size, (255, 255, 255))
                     rgb_image.paste(
                         pil_image, mask=pil_image.split()[-1]
@@ -492,8 +492,8 @@ class ImageWriter:
 
                 pil_image.save(
                     output_path,
-                    format="JPEG",
-                    quality=self.config.jpeg.quality,
+                    format="JPG",
+                    quality=self.config.jpg.quality,
                     optimize=True,
                 )
             else:
@@ -508,7 +508,7 @@ class ImageWriter:
 
     def _validate_config(self) -> None:
         """Validate the output configuration."""
-        if self.config.format.lower() not in ["png", "jpg", "jpeg"]:
+        if self.config.format.lower() not in ["png", "jpg", "jpg"]:
             raise ValueError(f"Unsupported output format: {self.config.format}")
 
         if not (0.0 <= self.config.face_crop_padding <= 1.0):
@@ -521,10 +521,10 @@ class ImageWriter:
                 f"Pose crop padding must be between 0.0 and 1.0, got: {self.config.pose_crop_padding}"
             )
 
-        if self.config.format.lower() in ["jpg", "jpeg"]:
-            if not (70 <= self.config.jpeg.quality <= 100):
+        if self.config.format.lower() in ["jpg", "jpg"]:
+            if not (70 <= self.config.jpg.quality <= 100):
                 raise ValueError(
-                    f"JPEG quality must be between 70 and 100, got: {self.config.jpeg.quality}"
+                    f"JPG quality must be between 70 and 100, got: {self.config.jpg.quality}"
                 )
 
         if self.config.resize is not None:

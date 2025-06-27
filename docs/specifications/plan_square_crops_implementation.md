@@ -81,7 +81,7 @@ This approach isolates complex geometric calculations, validates configuration e
     - **Placement**: Add after existing field validators in `OutputImageConfig`
   - **EXECUTION DETAILS**:
     - **Import Addition**: Added `model_validator` to Pydantic imports
-    - **Code Location**: After png/jpeg fields in `OutputImageConfig` class
+    - **Code Location**: After png/jpg fields in `OutputImageConfig` class
     - **Pattern Followed**: Cross-field validation using `@model_validator(mode='after')`
 
 ##### 1.2.1.1 Unit Testing

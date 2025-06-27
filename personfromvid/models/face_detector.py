@@ -959,7 +959,7 @@ class FaceDetector:
             height=height,
             channels=channels,
             file_size_bytes=file_size,
-            format="JPEG",
+            format="JPG",
         )
 
         # Create and return FrameData object

@@ -87,13 +87,13 @@ def get_version():
 )
 @click.option(
     "--output-format",
-    type=click.Choice(["png", "jpeg"], case_sensitive=False),
+    type=click.Choice(["png", "jpg"], case_sensitive=False),
     help="Output image format",
 )
 @click.option(
-    "--output-jpeg-quality",
+    "--output-jpg-quality",
     type=click.IntRange(70, 100),
-    help="JPEG quality for output images",
+    help="JPG quality for output images",
 )
 @click.option(
     "--output-face-crop-enabled/--no-output-face-crop-enabled",
@@ -179,7 +179,7 @@ def main(
     max_frames: Optional[int],
     quality_threshold: Optional[float],
     output_format: Optional[str],
-    output_jpeg_quality: Optional[int],
+    output_jpg_quality: Optional[int],
     output_face_crop_enabled: Optional[bool],
     output_face_crop_padding: Optional[float],
     face_restoration_enabled: Optional[bool],
@@ -214,7 +214,7 @@ def main(
         personfromvid video.mp4 --output-dir ./extracted_frames
 
         # High quality with verbose output
-        personfromvid video.mp4 --jpeg-quality 98 --verbose
+        personfromvid video.mp4 --jpg-quality 98 --verbose
 
         # Use GPU acceleration with custom batch size
         personfromvid video.mp4 --device gpu --batch-size 16
@@ -633,8 +633,8 @@ def _apply_output_overrides(config: Config, cli_args: dict) -> None:
     if cli_args["output_format"]:
         config.output.image.format = cli_args["output_format"]
 
-    if cli_args["output_jpeg_quality"]:
-        config.output.image.jpeg.quality = cli_args["output_jpeg_quality"]
+    if cli_args["output_jpg_quality"]:
+        config.output.image.jpg.quality = cli_args["output_jpg_quality"]
 
     if cli_args["output_face_crop_enabled"] is not None:
         config.output.image.face_crop_enabled = cli_args["output_face_crop_enabled"]
@@ -710,7 +710,7 @@ def show_processing_plan(video_path: Path, output_dir: Path, config: Config) -> 
         f"Confidence threshold: {config.models.confidence_threshold}",
         "Resume enabled: always (use --force to restart)",
         f"Output format: {config.output.image.format.upper()}",
-        f"Output quality: {config.output.image.jpeg.quality if config.output.image.format.lower() in ['jpg', 'jpeg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
+        f"Output quality: {config.output.image.jpg.quality if config.output.image.format.lower() in ['jpg', 'jpg'] else 'PNG optimized' if config.output.image.png.optimize else 'PNG standard'}",
         f"Face crops: {'enabled' if config.output.image.face_crop_enabled else 'disabled'}",
     ]
 

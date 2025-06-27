@@ -37,7 +37,7 @@ class TestCloseupDetector:
             height=1080,
             channels=3,
             file_size_bytes=1000000,
-            format="JPEG"
+            format="JPG"
         )
 
     def create_face_detection(self, bbox, confidence=0.9, landmarks=None):

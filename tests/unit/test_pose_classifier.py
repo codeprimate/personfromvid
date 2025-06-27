@@ -30,7 +30,7 @@ class TestPoseClassifier:
             height=1080,
             channels=3,
             file_size_bytes=1000000,
-            format="JPEG"
+            format="JPG"
         )
 
     def _create_frame_data(self, pose_detections):

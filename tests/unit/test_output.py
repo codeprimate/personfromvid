@@ -77,7 +77,7 @@ def sample_frame_data(tmp_path):
             height=1080,
             channels=3,
             file_size_bytes=100000,
-            format="JPEG"
+            format="JPG"
         ),
         face_detections=[
             FaceDetection(
@@ -127,7 +127,7 @@ class TestNamingConvention:
         # Test various filename formats
         assert naming.get_crop_suffixed_filename("video_pose_001.jpg") == "video_pose_001_crop.jpg"
         assert naming.get_crop_suffixed_filename("test.png") == "test_crop.png"
-        assert naming.get_crop_suffixed_filename("complex_name_with_underscores.jpeg") == "complex_name_with_underscores_crop.jpeg"
+        assert naming.get_crop_suffixed_filename("complex_name_with_underscores.jpg") == "complex_name_with_underscores_crop.jpg"
 
     def test_full_frame_filename_with_person_id(self, processing_context, sample_frame_data):
         """Test full frame filename generation with person_id."""
@@ -255,7 +255,7 @@ class TestImageWriter:
 
         # Update config to enable face crop output
         processing_context.config.output.image.face_crop_enabled = True
-        processing_context.config.output.image.format = 'jpeg'
+        processing_context.config.output.image.format = 'jpg'
 
         # Set up enhanced selection data for head angle category
         sample_frame_data.selections.primary_selection_category = "head_angle_front"
@@ -498,7 +498,7 @@ class TestImageWriter:
         processing_context.config.output.image.enable_pose_cropping = True
         processing_context.config.output.image.pose_crop_padding = 0.2
         processing_context.config.output.image.face_crop_enabled = False
-        processing_context.config.output.image.format = "jpeg"
+        processing_context.config.output.image.format = "jpg"
 
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"
@@ -546,7 +546,7 @@ class TestImageWriter:
         # Disable pose cropping feature (default)
         processing_context.config.output.image.enable_pose_cropping = False
         processing_context.config.output.image.face_crop_enabled = False
-        processing_context.config.output.image.format = "jpeg"
+        processing_context.config.output.image.format = "jpg"
 
         # Set up enhanced selection data for pose category
         sample_frame_data.selections.primary_selection_category = "pose_standing"

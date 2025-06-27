@@ -60,7 +60,7 @@ personfromvid/
 │   │   └── pose_estimator.py         # Body pose estimation
 │   ├── output/                       # Output generation
 │   │   ├── __init__.py
-│   │   ├── image_writer.py           # JPEG encoding and file generation
+│   │   ├── image_writer.py           # JPG encoding and file generation
 │   │   └── naming_convention.py      # File naming logic
 │   └── utils/                        # Utility modules
 │       ├── __init__.py
@@ -245,7 +245,7 @@ The final step generates the output images based on the selections from the prev
     - **Full Frames**: Saved for categories where the full context is important (e.g., `standing`).
     - **Pose Crops**: If enabled, crops focusing on the person's body are generated.
     - **Face Crops**: If enabled, tight crops of the face are generated for head angle categories.
-3. **Image Encoding**: All output images are saved as high-quality JPEGs (or other configured formats) in the final output directory.
+3. **Image Encoding**: All output images are saved as high-quality JPGs (or other configured formats) in the final output directory.
 4. **State Update**: A list of all generated output file paths is added to the pipeline's processing statistics.
 
 ### State Persistence and Cleanup
@@ -588,7 +588,7 @@ class ProcessingTimings:
 #### `ImageWriter`
 **File**: `output/image_writer.py`
 
-**Purpose**: Handles high-quality JPEG encoding and file output
+**Purpose**: Handles high-quality JPG encoding and file output
 
 **Key Public Methods:**
 ```python

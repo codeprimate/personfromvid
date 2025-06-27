@@ -612,14 +612,14 @@ class TestImageProperties:
             height=1080,
             channels=3,
             file_size_bytes=245760,
-            format="JPEG"
+            format="JPG"
         )
 
         assert props.width == 1920
         assert props.height == 1080
         assert props.channels == 3
         assert props.file_size_bytes == 245760
-        assert props.format == "JPEG"
+        assert props.format == "JPG"
 
     def test_different_resolutions(self):
         """Test different image resolutions."""
@@ -636,7 +636,7 @@ class TestImageProperties:
                 height=height,
                 channels=3,
                 file_size_bytes=width * height * 3,
-                format="JPEG"
+                format="JPG"
             )
 
             assert props.width == width
@@ -647,7 +647,7 @@ class TestImageProperties:
 
     def test_different_formats(self):
         """Test different image formats."""
-        formats = ["JPEG", "PNG", "BMP", "TIFF"]
+        formats = ["JPG", "PNG", "BMP", "TIFF"]
 
         for fmt in formats:
             props = ImageProperties(
@@ -667,7 +667,7 @@ class TestImageProperties:
             height=480,
             channels=1,  # Grayscale
             file_size_bytes=640 * 480,
-            format="JPEG"
+            format="JPG"
         )
 
         assert grayscale.channels == 1
@@ -764,7 +764,7 @@ class TestFrameData:
             height=1080,
             channels=3,
             file_size_bytes=self.frame_file.stat().st_size,
-            format="JPEG"
+            format="JPG"
         )
 
         face_detection = FaceDetection(
@@ -845,7 +845,7 @@ class TestFrameData:
                 height=480,
                 channels=3,
                 file_size_bytes=100000,
-                format="JPEG"
+                format="JPG"
             ),
             face_detections=[],
             pose_detections=[],
@@ -879,7 +879,7 @@ class TestFrameData:
             frame_id="multi_person",
             file_path=self.frame_file,
             source_info=SourceInfo(60.0, "i_frame", 1800, 30.0),
-            image_properties=ImageProperties(1920, 1080, 3, 200000, "JPEG"),
+            image_properties=ImageProperties(1920, 1080, 3, 200000, "JPG"),
             face_detections=faces,
             pose_detections=poses,
             head_poses=[],
@@ -905,7 +905,7 @@ class TestFrameData:
             frame_id="multi_class",
             file_path=self.frame_file,
             source_info=SourceInfo(60.0, "i_frame", 1800, 30.0),
-            image_properties=ImageProperties(1920, 1080, 3, 200000, "JPEG"),
+            image_properties=ImageProperties(1920, 1080, 3, 200000, "JPG"),
             pose_detections=poses
         )
 
@@ -921,7 +921,7 @@ class TestFrameData:
             frame_id="persons_default_test",
             file_path=self.frame_file,
             source_info=SourceInfo(1.0, "test", 30, 30.0),
-            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
         )
 
         # Test default empty list
@@ -959,7 +959,7 @@ class TestFrameData:
             frame_id="persons_test",
             file_path=self.frame_file,
             source_info=SourceInfo(1.0, "test", 30, 30.0),
-            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG"),
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPG"),
             persons=[person1, person2]
         )
 
@@ -980,7 +980,7 @@ class TestFrameData:
             frame_id="manipulation_test",
             file_path=self.frame_file,
             source_info=SourceInfo(1.0, "test", 30, 30.0),
-            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
         )
 
         # Start with empty persons
@@ -1017,7 +1017,7 @@ class TestFrameData:
             frame_id="get_persons_test",
             file_path=self.frame_file,
             source_info=SourceInfo(1.0, "test", 30, 30.0),
-            image_properties=ImageProperties(640, 480, 3, 1000, "JPEG")
+            image_properties=ImageProperties(640, 480, 3, 1000, "JPG")
         )
 
         # Test method exists
@@ -1084,7 +1084,7 @@ class TestFrameData:
                 height=1080,
                 channels=3,
                 file_size_bytes=245760,
-                format="JPEG"
+                format="JPG"
             )
         )
 
@@ -1175,7 +1175,7 @@ class TestFrameData:
                 height=1080,
                 channels=3,
                 file_size_bytes=245760,
-                format="JPEG"
+                format="JPG"
             )
         )
 
@@ -1266,7 +1266,7 @@ class TestFrameData:
                 "height": 480,
                 "channels": 3,
                 "file_size_bytes": 100000,
-                "format": "JPEG",
+                "format": "JPG",
                 "color_space": "RGB",
             },
             "face_detections": [],
