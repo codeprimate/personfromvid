@@ -174,7 +174,7 @@ class OutputGenerationStep(PipelineStep):
 
         if self.formatter:
             with self.formatter.create_progress_bar(
-                "Saving images", total_expected_files
+                f"Saving images to {output_dir}", total_expected_files
             ):
                 for i, person_selection in enumerate(person_selections):
                     # Check for interruption at regular intervals
