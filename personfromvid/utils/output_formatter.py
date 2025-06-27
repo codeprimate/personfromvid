@@ -427,7 +427,7 @@ class ConsolidatedFormatter:
         self.console.print()
 
         if result.success:
-            self.console.print("🎉 Processing Complete")
+            self.console.print("[bold white]🎉 Processing Complete[/bold white]")
 
             # Compact results summary - just the key metrics
             self.console.print(
@@ -449,8 +449,14 @@ class ConsolidatedFormatter:
                 head_str = ", ".join([f"{angle}({count})" for angle, count in head_top])
                 self.console.print(f"🎯 Head poses: {head_str}")
 
-            # Output files are now shown during output generation step, so we don't repeat them here
-            # Just show the output directory location
+            # Show output files listing
+            if result.output_files:
+                self.console.print("📁 Output files:")
+                for file_path in result.output_files:
+                    filename = Path(file_path).name
+                    self.console.print(f"   • {filename}")
+
+            # Show the output directory location
             if result.output_files:
                 output_dir = (
                     Path(result.output_files[0]).parent
