@@ -478,7 +478,7 @@ class ImageWriter:
                 pil_image.save(
                     output_path, format="PNG", optimize=self.config.png.optimize
                 )
-            elif self.config.format.lower() in ["jpg", "jpg"]:
+            elif self.config.format.lower() in ["jpg", "jpeg"]:
                 # JPG doesn't support transparency, convert RGBA to RGB
                 if pil_image.mode == "RGBA":
                     # Convert RGBA to RGB with white background for JPG
@@ -492,7 +492,7 @@ class ImageWriter:
 
                 pil_image.save(
                     output_path,
-                    format="JPG",
+                    format="JPEG",
                     quality=self.config.jpg.quality,
                     optimize=True,
                 )
@@ -508,7 +508,7 @@ class ImageWriter:
 
     def _validate_config(self) -> None:
         """Validate the output configuration."""
-        if self.config.format.lower() not in ["png", "jpg", "jpg"]:
+        if self.config.format.lower() not in ["png", "jpg", "jpeg"]:
             raise ValueError(f"Unsupported output format: {self.config.format}")
 
         if not (0.0 <= self.config.face_crop_padding <= 1.0):
@@ -521,7 +521,7 @@ class ImageWriter:
                 f"Pose crop padding must be between 0.0 and 1.0, got: {self.config.pose_crop_padding}"
             )
 
-        if self.config.format.lower() in ["jpg", "jpg"]:
+        if self.config.format.lower() in ["jpg", "jpeg"]:
             if not (70 <= self.config.jpg.quality <= 100):
                 raise ValueError(
                     f"JPG quality must be between 70 and 100, got: {self.config.jpg.quality}"
