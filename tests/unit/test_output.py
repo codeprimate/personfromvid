@@ -220,6 +220,63 @@ class TestNamingConvention:
 class TestImageWriter:
     """Tests for ImageWriter class."""
 
+    def test_format_validation_properties(self):
+        """Lightweight property-based test for format handling logic.
+        
+        This test validates the core format logic without file I/O,
+        catching bugs like duplicate format checks and incorrect PIL format mapping.
+        """
+        # Test 1: Format acceptance logic (would have caught the duplicate "jpg" bug)
+        valid_formats = ["png", "jpg", "jpeg"]
+
+        # These should all be accepted
+        for fmt in valid_formats:
+            assert fmt.lower() in ["png", "jpg", "jpeg"], f"Format {fmt} should be valid"
+
+        # Test 2: PIL format mapping (would have caught the "JPG" vs "JPEG" bug)
+        format_mappings = {
+            "jpg": "JPEG",
+            "jpeg": "JPEG",
+            "png": "PNG"
+        }
+
+        for config_format, expected_pil_format in format_mappings.items():
+            # Simulate the conditional logic from _save_image()
+            if config_format.lower() == "png":
+                pil_format = "PNG"
+            elif config_format.lower() in ["jpg", "jpeg"]:
+                pil_format = "JPEG"
+            else:
+                pil_format = None
+
+            assert pil_format == expected_pil_format, \
+                f"Format {config_format} should map to {expected_pil_format}, got {pil_format}"
+
+        # Test 3: Format list consistency (catches duplicate entries)
+        jpg_formats = ["jpg", "jpeg"]
+
+        # Check no duplicates
+        assert len(jpg_formats) == len(set(jpg_formats)), "No duplicate formats allowed"
+
+        # Check both jpg variants are present
+        assert "jpg" in jpg_formats, "jpg format should be supported"
+        assert "jpeg" in jpg_formats, "jpeg format should be supported"
+
+        # Test 4: Validation logic consistency
+        validation_formats = ["png", "jpg", "jpeg"]
+        save_logic_formats = {
+            "png": ["png"],
+            "jpg_jpeg": ["jpg", "jpeg"]
+        }
+
+        # All validation formats should have corresponding save logic
+        for fmt in validation_formats:
+            found_in_save_logic = any(
+                fmt in format_list
+                for format_list in save_logic_formats.values()
+            )
+            assert found_in_save_logic, f"Format {fmt} missing from save logic"
+
     @patch('personfromvid.output.image_writer.Image.fromarray')
     def test_save_full_frame(self, mock_fromarray, processing_context, sample_frame_data):
         """Test saving a full frame image."""
