@@ -194,7 +194,11 @@ class HeadPoseEstimator:
             ) from e
 
         # Load the model state dict
-        checkpoint = torch.load(str(self.model_path), map_location=self.device)
+        checkpoint = torch.load(
+            str(self.model_path),
+            map_location=self.device,
+            weights_only=False,
+        )
 
         # Create HopeNet model architecture
         self._model = self._create_hopenet_model()
@@ -403,7 +407,11 @@ class HeadPoseEstimator:
                     f"Failed to load safetensors model from {self.model_path}: {str(e)}"
                 ) from e
         else:
-            state_dict = torch.load(str(self.model_path), map_location=self.device)
+            state_dict = torch.load(
+                str(self.model_path),
+                map_location=self.device,
+                weights_only=False,
+            )
             if "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]
 

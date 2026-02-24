@@ -100,9 +100,11 @@ class RichFormatter:
 
     def print_app_header(self, video_path: str) -> None:
         """Print the application header."""
-        self.console.print(f"\npersonfromvid {video_path}")
+        from personfromvid import __version__
+
+        self.console.print(f"\npersonfromvid v{__version__}  {video_path}")
         self.console.print()
-        self.console.print(f"{EMOJIS['app']} Person From Vid")
+        self.console.print(f"{EMOJIS['app']} Person From Vid  v{__version__}")
         self.console.print(
             "   AI-powered video frame extraction and pose categorization"
         )

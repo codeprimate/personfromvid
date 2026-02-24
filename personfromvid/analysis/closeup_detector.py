@@ -209,13 +209,14 @@ class CloseupDetector:
             result.shoulder_width_ratio = shoulder_width_ratio
 
             # Update shot type if shoulder analysis suggests different classification
-            if shoulder_width_ratio >= SHOULDER_WIDTH_CLOSEUP_THRESHOLD:
-                if result.shot_type in ["medium_shot", "wide_shot"]:
-                    result.shot_type = "medium_closeup"
-                    result.is_closeup = True
-
-                    # Update confidence with shoulder information
-                    result.confidence = min(1.0, result.confidence + 0.1)
+            if (
+                shoulder_width_ratio >= SHOULDER_WIDTH_CLOSEUP_THRESHOLD
+                and result.shot_type in ["medium_shot", "wide_shot"]
+            ):
+                result.shot_type = "medium_closeup"
+                result.is_closeup = True
+                # Update confidence with shoulder information
+                result.confidence = min(1.0, result.confidence + 0.1)
 
         return result
 

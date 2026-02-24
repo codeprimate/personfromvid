@@ -222,7 +222,7 @@ class TestImageWriter:
 
     def test_format_validation_properties(self):
         """Lightweight property-based test for format handling logic.
-        
+
         This test validates the core format logic without file I/O,
         catching bugs like duplicate format checks and incorrect PIL format mapping.
         """

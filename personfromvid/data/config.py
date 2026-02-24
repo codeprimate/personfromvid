@@ -494,15 +494,13 @@ class OutputImageConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    @classmethod
-    def validate_crop_ratio_dependency(cls, values):
+    def validate_crop_ratio_dependency(self) -> "OutputImageConfig":
         """Ensure crop_ratio is only specified when enable_pose_cropping is True."""
-        if hasattr(values, "crop_ratio") and hasattr(values, "enable_pose_cropping"):
-            if values.crop_ratio is not None and not values.enable_pose_cropping:
-                raise ValueError(
-                    "crop_ratio can only be specified when enable_pose_cropping is True"
-                )
-        return values
+        if self.crop_ratio is not None and not self.enable_pose_cropping:
+            raise ValueError(
+                "crop_ratio can only be specified when enable_pose_cropping is True"
+            )
+        return self
 
 
 class OutputConfig(BaseModel):

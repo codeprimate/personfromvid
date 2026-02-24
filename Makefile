@@ -1,4 +1,22 @@
-.PHONY: clean build check publish
+.PHONY: clean build check publish test install-dev
+
+# Use .venv if present so tests run in isolated env (avoids system pytest plugin conflicts)
+PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
+PIP := $(if $(wildcard .venv/bin/pip),.venv/bin/pip,pip)
+
+# ==============================================================================
+# Development
+# ==============================================================================
+
+install-dev:
+	$(PYTHON) -m venv .venv 2>/dev/null || $(PYTHON) -m venv .venv
+	$(PIP) install -e ".[dev]"
+
+test:
+	$(PYTHON) -m pytest tests -v -m "not slow"
+
+test-unit:
+	$(PYTHON) -m pytest tests/unit -v
 
 # ==============================================================================
 # Build and Publishing

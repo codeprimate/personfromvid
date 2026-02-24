@@ -30,14 +30,23 @@ def signal_handler(signum: int, frame) -> None:
     sys.exit(1)
 
 
-def get_version():
-    """Get the current version for CLI help."""
+def get_version() -> str:
+    """Return the current package version."""
     from . import __version__
 
     return __version__
 
 
-@click.command()
+class PersonFromVidCommand(click.Command):
+    """Click command that shows version in the help header."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        formatter.write_text(f"Person From Vid v{get_version()}")
+        formatter.write_paragraph()
+        super().format_help(ctx, formatter)
+
+
+@click.command(cls=PersonFromVidCommand)
 @click.version_option(version=get_version(), prog_name="Person From Vid")
 @click.argument(
     "video_path", type=click.Path(exists=True, path_type=Path), required=False
@@ -576,13 +585,17 @@ def validate_inputs(
 
 def show_banner() -> None:
     """Show application banner."""
+    version = get_version()
     banner_text = Text("Person From Vid", style="bold blue")
+    version_text = Text(f"v{version}", style="dim")
     subtitle_text = Text(
         "AI-powered video frame extraction and pose categorization", style="dim"
     )
 
     panel = Panel(
-        f"{banner_text}\n{subtitle_text}", border_style="blue", padding=(1, 2)
+        f"{banner_text}  {version_text}\n{subtitle_text}",
+        border_style="blue",
+        padding=(1, 2),
     )
     console.print(panel)
 

@@ -26,6 +26,11 @@ from rich.progress import (
 
 from ..data import ProcessingResult
 
+try:
+    from personfromvid import __version__
+except ImportError:
+    __version__ = "0.0.0"
+
 
 @dataclass
 class StepTiming:
@@ -97,7 +102,9 @@ class ConsolidatedFormatter:
 
         # Print minimal header
         filename = Path(video_path).name
-        self.console.print(f"\n🎬 Person From Vid - Processing: {filename}")
+        self.console.print(
+            f"\n🎬 Person From Vid v{__version__} - Processing: {filename}"
+        )
 
         # System check (compact)
         status_items = []

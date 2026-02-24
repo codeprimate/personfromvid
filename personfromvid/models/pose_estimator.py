@@ -16,6 +16,7 @@ from ..data.detection_results import PoseDetection
 from ..utils.exceptions import PoseEstimationError
 from .model_configs import ModelConfigs, ModelFormat
 from .model_manager import get_model_manager
+from .pytorch_compat import torch_load_allow_pickle
 
 if TYPE_CHECKING:
     from ..data.config import Config
@@ -185,13 +186,18 @@ class PoseEstimator:
             if "yolo" in self.model_name.lower():
                 from ultralytics import YOLO
 
-                self._model = YOLO(str(self.model_path))
+                with torch_load_allow_pickle():
+                    self._model = YOLO(str(self.model_path))
                 if self.device == "cuda":
                     self._model.to("cuda")
             else:
                 import torch
 
-                self._model = torch.load(str(self.model_path), map_location=self.device)
+                self._model = torch.load(
+                    str(self.model_path),
+                    map_location=self.device,
+                    weights_only=False,
+                )
                 if hasattr(self._model, "eval"):
                     self._model.eval()
 

@@ -25,7 +25,7 @@ def _get_version() -> str:
         pyproject_path = project_root / "pyproject.toml"
 
         if pyproject_path.exists():
-            with open(pyproject_path, "rb") as f:
+            with pyproject_path.open("rb") as f:
                 pyproject = tomllib.load(f)
             return pyproject["project"]["version"]
     except Exception:
