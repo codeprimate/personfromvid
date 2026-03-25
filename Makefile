@@ -1,22 +1,17 @@
 .PHONY: clean build check publish test install-dev
 
-# Use .venv if present so tests run in isolated env (avoids system pytest plugin conflicts)
-PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
-PIP := $(if $(wildcard .venv/bin/pip),.venv/bin/pip,pip)
-
 # ==============================================================================
 # Development
 # ==============================================================================
 
 install-dev:
-	$(PYTHON) -m venv .venv 2>/dev/null || $(PYTHON) -m venv .venv
-	$(PIP) install -e ".[dev]"
+	uv sync --extra dev
 
 test:
-	$(PYTHON) -m pytest tests -v -m "not slow"
+	uv run pytest tests -v -m "not slow"
 
 test-unit:
-	$(PYTHON) -m pytest tests/unit -v
+	uv run pytest tests/unit -v
 
 # ==============================================================================
 # Build and Publishing
@@ -28,12 +23,12 @@ clean:
 
 build:
 	@echo "🔨 Building package..."
-	python -m build
+	uv build
 
 check:
 	@echo "✅ Checking distribution files..."
-	twine check dist/*
+	uvx twine check dist/*
 
 publish: clean build check
 	@echo "🚀 Publishing to PyPI..."
-	twine upload dist/* 
+	uvx twine upload dist/*

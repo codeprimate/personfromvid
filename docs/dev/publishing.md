@@ -24,12 +24,14 @@ After initial setup, each release follows the same simple workflow.
 
 These steps only need to be done once when setting up publishing for the first time.
 
-### 1. Install Dependencies
+### 1. Install uv and tooling
 
-Ensure all project dependencies are installed, including the publishing tools (`build` and `twine`):
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/). The Makefile uses `uv build` and `uvx twine` for releases, so you do not need a separate `pip install build twine` step.
+
+For a full local environment (tests, linters, and publishing tools such as `twine` in the dev extra):
 
 ```bash
-pip install -r requirements.txt
+uv sync --extra dev
 ```
 
 ### 2. Create PyPI Account and API Token
@@ -91,7 +93,7 @@ This command will:
 
 ### Interactive Authentication
 
-When you run `make publish`, `twine` will prompt for credentials:
+When you run `make publish`, `uvx twine` will prompt for credentials:
 - **Username**: Enter `__token__`
 - **Password**: Paste your PyPI API token (including the `pypi-` prefix)
 

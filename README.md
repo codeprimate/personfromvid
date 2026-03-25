@@ -59,13 +59,23 @@ pip install personfromvid
 ```
 
 #### From Source
-Alternatively, to install from source:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then clone and sync:
 ```bash
 git clone https://github.com/personfromvid/personfromvid.git
 cd personfromvid
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
+uv sync
+```
+
+For an editable install with development dependencies (tests, linters, build tools):
+```bash
+uv sync --extra dev
+```
+
+Without uv, you can still use a virtualenv and pip:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
@@ -468,15 +478,14 @@ personfromvid video.mp4 --config config.yaml
 git clone https://github.com/personfromvid/personfromvid.git
 cd personfromvid
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install dependencies (creates .venv, uses uv.lock)
+uv sync --extra dev
 
-# Install development dependencies
-pip install -e ".[dev]"
+# After editing [project] dependencies in pyproject.toml, refresh the lockfile:
+#   uv lock
 
 # Install pre-commit hooks
-pre-commit install
+uv run pre-commit install
 ```
 
 ### Project Structure
@@ -499,14 +508,17 @@ personfromvid/
 ### Running Tests
 
 ```bash
-# Run all tests
-pytest
+# Fast path (excludes slow tests; same as CI-oriented local run)
+make test
+
+# Or run pytest directly via uv
+uv run pytest tests -v -m "not slow"
 
 # Run with coverage
-pytest --cov=personfromvid
+uv run pytest --cov=personfromvid
 
 # Run specific test modules
-pytest tests/unit/test_config.py
+uv run pytest tests/unit/test_config.py
 ```
 
 ### Code Quality

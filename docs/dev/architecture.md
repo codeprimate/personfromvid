@@ -105,10 +105,11 @@ personfromvid/
 │   ├── __init__.py
 │   └── models_tests_README.md        # Testing documentation for models
 ├── LICENSE                           # Project license
-├── Makefile                          # Build and development commands
+├── Makefile                          # Build and development commands (uv-backed)
 ├── pyproject.toml                    # Package configuration and dependencies
+├── uv.lock                           # Locked dependency versions (uv)
 ├── README.md                         # Project overview
-└── requirements.txt                  # Python dependencies
+└── .python-version                   # Default Python version for local uv tooling
 ```
 
 ## Processing Pipeline Workflow
